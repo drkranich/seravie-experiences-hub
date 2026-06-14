@@ -58,7 +58,7 @@ export function Login({ onLoginSuccess }) {
         </form>
 
         <p className="text-center text-gray-600 mt-4 text-sm">
-          Demo: use qualquer email e senha
+          Acesso restrito à administração
         </p>
       </div>
     </div>

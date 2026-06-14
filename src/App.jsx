@@ -6,13 +6,14 @@ import { useAuth } from './hooks/useAuth'
 import { ContactForm } from './components/ContactForm'
 import { Login } from './pages/Login'
 import { AdminDashboard } from './pages/AdminDashboard'
+import { ADMIN_EMAIL } from './config'
 
 export default function App() {
   const [page, setPage] = useState('home') // home, admin
   const { specialties, loading: loadingSpecialties } = useSpecialties()
   const { portfolio, loading: loadingPortfolio } = usePortfolio()
   const { section: heroSection } = useSections('hero')
-  const { user, loading: authLoading, login } = useAuth()
+  const { user, loading: authLoading, logout } = useAuth()
 
   if (authLoading) {
     return <div className="flex items-center justify-center h-screen">Carregando...</div>
@@ -22,6 +23,31 @@ export default function App() {
   if (page === 'admin') {
     if (!user) {
       return <Login onLoginSuccess={() => setPage('admin')} />
+    }
+    // Apenas o super admin autorizado acessa o painel
+    if (user.email !== ADMIN_EMAIL) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4 text-center">
+          <h1 className="text-2xl font-bold mb-2">Acesso não autorizado</h1>
+          <p className="text-gray-600 mb-6">
+            A conta <strong>{user.email}</strong> não tem permissão de administrador.
+          </p>
+          <div className="space-x-3">
+            <button
+              onClick={async () => { await logout() }}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+            >
+              Sair
+            </button>
+            <button
+              onClick={() => setPage('home')}
+              className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-900"
+            >
+              Voltar ao site
+            </button>
+          </div>
+        </div>
+      )
     }
     return (
       <AdminDashboard />
