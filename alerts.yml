@@ -1,0 +1,33 @@
+groups:
+  - name: seravie_alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        annotations:
+          summary: "Taxa de erro alta detectada"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, http_request_duration_seconds) > 1
+        for: 5m
+        annotations:
+          summary: "Latência alta detectada"
+
+      - alert: ServiceDown
+        expr: up{job="seravie-app"} == 0
+        for: 1m
+        annotations:
+          summary: "Serviço Seravie está down"
+
+      - alert: DatabaseConnectionError
+        expr: database_connection_errors_total > 0
+        for: 2m
+        annotations:
+          summary: "Erros de conexão com banco de dados"
+
+      - alert: RateLimitExceeded
+        expr: rate_limit_exceeded_total > 100
+        for: 1m
+        annotations:
+          summary: "Taxa de limit excedida"
