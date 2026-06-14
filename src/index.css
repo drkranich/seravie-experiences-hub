@@ -3,11 +3,13 @@
 @tailwind utilities;
 
 :root {
-  --color-primary: #000000;
-  --color-secondary: #ffffff;
-  --color-accent: #3b82f6;
-  --color-background: #ffffff;
-  --color-text: #000000;
+  --ink: #0b0a08;
+  --moss: #1a211b;
+  --olive: #3e4634;
+  --gold: #b69b5d;
+  --champagne: #d6c49a;
+  --ivory: #f4f0e6;
+  --sand: #e6dfcf;
 }
 
 * {
@@ -16,77 +18,89 @@
   box-sizing: border-box;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: var(--color-background);
-  color: var(--color-text);
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-.animate-slide-in {
-  animation: slideIn 0.3s ease-in-out;
-}
-
-/* Scroll behavior */
 html {
   scroll-behavior: smooth;
 }
 
-/* Focus styles */
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--ink);
+  color: var(--ivory);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
-/* Selection */
+h1,
+h2,
+h3,
+h4 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 400;
+}
+
+/* Organic masks for atmospheric imagery (gota / pedra polida) */
+.organic-mask {
+  border-radius: 62% 38% 54% 46% / 49% 54% 46% 51%;
+  overflow: hidden;
+}
+.organic-mask-soft {
+  border-radius: 48% 52% 46% 54% / 56% 44% 56% 44%;
+  overflow: hidden;
+}
+.organic-pill {
+  border-radius: 240px 240px 0 0 / 120px 120px 0 0;
+  overflow: hidden;
+}
+
+/* Subtle film grain to break digital flatness */
+.grain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Warm cinematic vignette */
+.vignette::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    130% 90% at 50% 28%,
+    transparent 38%,
+    rgba(11, 10, 8, 0.62) 100%
+  );
+}
+
+.text-shadow-soft {
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.55);
+}
+
 ::selection {
-  background: var(--color-accent);
-  color: white;
+  background: var(--gold);
+  color: var(--ink);
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 9px;
 }
-
 ::-webkit-scrollbar-track {
-  background: var(--color-background);
+  background: var(--ink);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--color-accent);
-  border-radius: 5px;
+  background: var(--olive);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
+:focus-visible {
+  outline: 1px solid rgba(182, 155, 93, 0.6);
+  outline-offset: 3px;
 }
