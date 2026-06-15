@@ -8,14 +8,27 @@ import { PortfolioManager } from '../components/admin/PortfolioManager'
 import { MediaLibrary } from '../components/admin/MediaLibrary'
 import { MessagesPanel } from '../components/admin/MessagesPanel'
 import { SettingsPanel } from '../components/admin/SettingsPanel'
+import { CollectionManager } from '../components/admin/CollectionManager'
+import { collectionConfigs } from '../components/admin/collections.config'
+import { NewsletterInbox } from '../components/admin/NewsletterInbox'
 
 const NAV = [
   { key: 'overview', label: 'Visão geral', icon: 'grid' },
   { key: 'content', label: 'Conteúdo', icon: 'layout' },
   { key: 'services', label: 'Serviços', icon: 'spark' },
   { key: 'portfolio', label: 'Portfólio', icon: 'image' },
+  { key: 'process', label: 'Processo', icon: 'check' },
+  { key: 'segments', label: 'Segmentos', icon: 'leaf' },
+  { key: 'jornal', label: 'Jornal', icon: 'book' },
+  { key: 'testimonials', label: 'Depoimentos', icon: 'star' },
+  { key: 'faqs', label: 'FAQ', icon: 'spark' },
+  { key: 'team', label: 'Equipe', icon: 'user' },
+  { key: 'pages', label: 'Páginas', icon: 'layout' },
+  { key: 'menus', label: 'Menus', icon: 'link' },
   { key: 'media', label: 'Mídia', icon: 'folder' },
   { key: 'messages', label: 'Mensagens', icon: 'mail' },
+  { key: 'newsletter', label: 'Newsletter', icon: 'gift' },
+  { key: 'translations', label: 'Traduções', icon: 'external' },
   { key: 'settings', label: 'Configurações', icon: 'gear' },
 ]
 
@@ -40,8 +53,18 @@ export function AdminDashboard({ onExit }) {
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
     portfolio: <PortfolioManager notify={notify} />,
+    process: <CollectionManager {...collectionConfigs.process} notify={notify} />,
+    segments: <CollectionManager {...collectionConfigs.segments} notify={notify} />,
+    jornal: <CollectionManager {...collectionConfigs.posts} notify={notify} />,
+    testimonials: <CollectionManager {...collectionConfigs.testimonials} notify={notify} />,
+    faqs: <CollectionManager {...collectionConfigs.faqs} notify={notify} />,
+    team: <CollectionManager {...collectionConfigs.team} notify={notify} />,
+    pages: <CollectionManager {...collectionConfigs.pages} notify={notify} />,
+    menus: <CollectionManager {...collectionConfigs.menus} notify={notify} />,
     media: <MediaLibrary notify={notify} />,
     messages: <MessagesPanel notify={notify} />,
+    newsletter: <NewsletterInbox notify={notify} />,
+    translations: <CollectionManager {...collectionConfigs.translations} notify={notify} />,
     settings: <SettingsPanel notify={notify} />,
   }
 
