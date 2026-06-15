@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Card, Field, TextInput, TextArea, Toggle, AdminBtn, Icon, Spinner } from './ui'
 import { ImageUpload } from './ImageUpload'
@@ -73,10 +73,10 @@ function FieldInput({ field, value, onChange }) {
   }
 }
 
-function Row({ table, item, fields, onChanged, notify }) {
+function Row({ table, item, fields, onChanged, notify, dragHandle }) {
   const init = {}
   fields.forEach((f) => {
-    init[f.key] = item[f.key]
+    init[f.key] = f.json ? (item.content ? item.content[f.key] : undefined) : item[f.key]
   })
   const [d, setD] = useState(init)
   const [saving, setSaving] = useState(false)
@@ -85,7 +85,19 @@ function Row({ table, item, fields, onChanged, notify }) {
 
   const save = async () => {
     setSaving(true)
-    const { error } = await supabase.from(table).update(d).eq('id', item.id)
+    const update = {}
+    const contentPatch = {}
+    let hasJson = false
+    fields.forEach((f) => {
+      if (f.json) {
+        contentPatch[f.key] = d[f.key]
+        hasJson = true
+      } else {
+        update[f.key] = d[f.key]
+      }
+    })
+    if (hasJson) update.content = { ...(item.content || {}), ...contentPatch }
+    const { error } = await supabase.from(table).update(update).eq('id', item.id)
     setSaving(false)
     if (error) notify('Erro: ' + error.message, 'error')
     else {
@@ -106,6 +118,16 @@ function Row({ table, item, fields, onChanged, notify }) {
 
   return (
     <Card className="p-5">
+      {dragHandle && (
+        <div
+          {...dragHandle}
+          className="cursor-grab active:cursor-grabbing select-none flex items-center gap-2 text-admin-muted/50 text-[10px] tracking-widerx uppercase mb-4"
+        >
+          <Icon name="up" className="w-3 h-3" />
+          <Icon name="down" className="w-3 h-3 -ml-1.5" />
+          arraste para reordenar
+        </div>
+      )}
       <div className="grid md:grid-cols-2 gap-4">
         {fields
           .filter((f) => f.type !== 'toggle')
@@ -146,6 +168,8 @@ function Row({ table, item, fields, onChanged, notify }) {
 export function CollectionManager({ table, title, subtitle, fields, orderColumn = 'sort_order', newDefault, notify }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const dragIndex = useRef(null)
+  const reorderable = orderColumn === 'sort_order'
 
   const load = async () => {
     const { data } = await supabase.from(table).select('*').order(orderColumn, { ascending: true })
@@ -168,6 +192,16 @@ export function CollectionManager({ table, title, subtitle, fields, orderColumn 
     }
   }
 
+  const reorder = async (from, to) => {
+    if (from == null || from === to) return
+    const next = [...items]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    setItems(next)
+    await Promise.all(next.map((it, i) => supabase.from(table).update({ sort_order: i + 1 }).eq('id', it.id)))
+    notify('Ordem atualizada.', 'success')
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -188,8 +222,30 @@ export function CollectionManager({ table, title, subtitle, fields, orderColumn 
         <Card className="p-10 text-center text-admin-muted">Nenhum item ainda. Crie o primeiro.</Card>
       ) : (
         <div className="space-y-5">
-          {items.map((it) => (
-            <Row key={it.id} table={table} item={it} fields={fields} onChanged={load} notify={notify} />
+          {items.map((it, idx) => (
+            <div
+              key={it.id}
+              onDragOver={reorderable ? (e) => e.preventDefault() : undefined}
+              onDrop={reorderable ? () => reorder(dragIndex.current, idx) : undefined}
+            >
+              <Row
+                table={table}
+                item={it}
+                fields={fields}
+                onChanged={load}
+                notify={notify}
+                dragHandle={
+                  reorderable
+                    ? {
+                        draggable: true,
+                        onDragStart: () => {
+                          dragIndex.current = idx
+                        },
+                      }
+                    : null
+                }
+              />
+            </div>
           ))}
         </div>
       )}

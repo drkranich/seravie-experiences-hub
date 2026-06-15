@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import { useSpecialties } from '../hooks/useSpecialties'
 import { usePortfolio } from '../hooks/usePortfolio'
-import { useSections } from '../hooks/useSections'
+import { useSectionsMap } from '../hooks/useSectionsMap'
 import { useCollection } from '../hooks/useCollection'
 import { useSettings } from '../hooks/useSettings'
 import { ExperienceForm } from '../components/ExperienceForm'
 import { NewsletterForm } from '../components/NewsletterForm'
+import { useI18n } from '../i18n/LanguageContext'
 
 /* ----------------------------------------------------------------------------
    Atmospheric gradient backdrops (no photos yet — cinematic amber-lit interiors
@@ -256,20 +257,22 @@ const PORTFOLIO_FALLBACK = [
 ]
 
 const NAV = [
-  { label: 'Home', href: '#topo' },
-  { label: 'Sobre', href: '#sobre' },
-  { label: 'Serviços', href: '#servicos' },
-  { label: 'Portfólio', href: '#portfolio' },
-  { label: 'Processo', href: '#processo' },
-  { label: 'Para quem', href: '#para-quem' },
-  { label: 'Jornal', href: '#jornal' },
-  { label: 'Contato', href: '#contato' },
+  { key: 'nav.home', label: 'Home', href: '#topo' },
+  { key: 'nav.about', label: 'Sobre', href: '#sobre' },
+  { key: 'nav.services', label: 'Serviços', href: '#servicos' },
+  { key: 'nav.portfolio', label: 'Portfólio', href: '#portfolio' },
+  { key: 'nav.process', label: 'Processo', href: '#processo' },
+  { key: 'nav.audience', label: 'Para quem', href: '#para-quem' },
+  { key: 'nav.journal', label: 'Jornal', href: '#jornal' },
+  { key: 'nav.contact', label: 'Contato', href: '#contato' },
 ]
 
 export function Home({ onAdmin }) {
   const { specialties } = useSpecialties()
   const { portfolio } = usePortfolio()
-  const { section: hero } = useSections('hero')
+  const sections = useSectionsMap()
+  const sx = (k) => sections[k] || {}
+  const hero = { content: sx('hero') }
   const { items: processDb } = useCollection('process_steps')
   const { items: segmentsDb } = useCollection('segments')
   const { settings } = useSettings()
@@ -277,6 +280,15 @@ export function Home({ onAdmin }) {
   const { items: faqs } = useCollection('faqs')
   const { items: team } = useCollection('team_members')
   const { items: posts } = useCollection('posts', 'created_at')
+  const { items: menuItems } = useCollection('menu_items')
+  const { locale, setLocale, t } = useI18n()
+
+  const headerMenu = menuItems.filter((m) => m.location === 'header')
+  const footerMenu = menuItems.filter((m) => m.location === 'footer')
+  const navItems =
+    headerMenu.length > 0
+      ? headerMenu.map((m) => ({ label: m.label, href: m.url }))
+      : NAV.map((n) => ({ label: t(n.key, n.label), href: n.href }))
 
   const heroBgUrl = hero?.content?.background_url
   const brand = settings?.brand || {}
@@ -331,16 +343,24 @@ export function Home({ onAdmin }) {
             <div className="text-[9px] tracking-widestx text-gold/80 mt-0.5">EXPERIENCES</div>
           </a>
           <nav className="hidden lg:flex items-center gap-8 text-[11px] tracking-widerx uppercase text-ivory/75">
-            {NAV.map((n) => (
-              <a key={n.label} href={n.href} className="hover:text-gold transition-colors duration-300">
+            {navItems.map((n) => (
+              <a key={n.href} href={n.href} className="hover:text-gold transition-colors duration-300">
                 {n.label}
               </a>
             ))}
           </nav>
-          <div className="flex items-center gap-2 text-[11px] tracking-widerx">
-            <span className="px-2 py-1 bg-gold/90 text-ink rounded-sm">PT</span>
-            <span className="text-ivory/50 hover:text-gold cursor-pointer">EN</span>
-            <span className="text-ivory/50 hover:text-gold cursor-pointer">ES</span>
+          <div className="flex items-center gap-1 text-[11px] tracking-widerx">
+            {['pt', 'en', 'es'].map((l) => (
+              <button
+                key={l}
+                onClick={() => setLocale(l)}
+                className={`px-2 py-1 rounded-sm uppercase transition-colors ${
+                  locale === l ? 'bg-gold/90 text-ink' : 'text-ivory/50 hover:text-gold'
+                }`}
+              >
+                {l}
+              </button>
+            ))}
           </div>
         </div>
       </header>
@@ -433,33 +453,41 @@ export function Home({ onAdmin }) {
         <Icon name="leaf" className="hidden md:block w-40 h-40 text-olive/10 absolute left-0 top-24 -rotate-12" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-12 lg:py-20 grid lg:grid-cols-2 gap-14 items-center">
           <div>
-            <p className="text-[11px] tracking-widestx uppercase text-gold mb-6">Sobre nós</p>
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-6">
+              {sx('about').eyebrow || 'Sobre nós'}
+            </p>
             <h2 className="font-serif text-4xl lg:text-5xl leading-tight text-ink">
-              Especialistas em criar experiências que conectam lugares, marcas e pessoas.
+              {sx('about').title || 'Especialistas em criar experiências que conectam lugares, marcas e pessoas.'}
             </h2>
             <p className="mt-7 text-ink/65 leading-relaxed max-w-md">
-              Unimos design, estratégia e sensibilidade para transformar espaços comuns em
-              destinos que encantam, acolhem e geram valor para o seu negócio.
+              {sx('about').text ||
+                'Unimos design, estratégia e sensibilidade para transformar espaços comuns em destinos que encantam, acolhem e geram valor para o seu negócio.'}
             </p>
             <a
               href="#contato"
               className="mt-8 inline-flex items-center gap-3 text-[11px] tracking-widerx uppercase text-ink hover:text-gold transition-colors"
             >
-              Conhecer nossa história
+              {sx('about').cta_text || 'Conhecer nossa história'}
               <Icon name="arrowR" className="w-4 h-4" />
             </a>
           </div>
           <div className="relative">
-            <div className="organic-mask aspect-[4/5] w-full max-w-md mx-auto grain" style={aboutImgBg} />
+            <div className="organic-mask aspect-[4/5] w-full max-w-md mx-auto grain" style={aboutImgBg}>
+              {sx('about').image_url && (
+                <img src={sx('about').image_url} alt="" className="w-full h-full object-cover" />
+              )}
+            </div>
             <Icon name="leaf" className="w-24 h-24 text-olive/20 absolute -right-2 -bottom-4 rotate-12" />
           </div>
         </div>
 
         {/* ===================== ENTREGÁVEIS ===================== */}
         <div id="servicos" className="max-w-7xl mx-auto px-6 lg:px-10 pb-24 text-center">
-          <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">O que entregamos</p>
+          <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
+            {sx('services').eyebrow || 'O que entregamos'}
+          </p>
           <h2 className="font-serif text-4xl lg:text-5xl text-ink mb-16">
-            Cada projeto, uma experiência completa.
+            {sx('services').title || 'Cada projeto, uma experiência completa.'}
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-10 gap-y-14 text-left">
             {deliverables.map((d, i) => (
@@ -481,18 +509,18 @@ export function Home({ onAdmin }) {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-14">
             <div>
-              <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">Experiências que criamos</p>
+              <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
+                {sx('portfolio').eyebrow || 'Experiências que criamos'}
+              </p>
               <h2 className="font-serif text-4xl lg:text-5xl leading-tight text-ivory">
-                Projetos que inspiram.
-                <br />
-                Experiências que ficam.
+                {sx('portfolio').title || 'Projetos que inspiram. Experiências que ficam.'}
               </h2>
             </div>
             <a
               href="#contato"
               className="inline-flex items-center gap-3 text-[11px] tracking-widerx uppercase text-champagne hover:text-gold transition-colors"
             >
-              Ver todos os projetos
+              {sx('portfolio').cta_text || 'Ver todos os projetos'}
               <Icon name="arrowR" className="w-4 h-4" />
             </a>
           </div>
@@ -527,9 +555,11 @@ export function Home({ onAdmin }) {
       <section id="processo" className="relative grain" style={processBg}>
         <Wave fill="#1a211b" className="-mt-px" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28 text-center">
-          <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">Nosso processo</p>
+          <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
+            {sx('process').eyebrow || 'Nosso processo'}
+          </p>
           <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-20">
-            Do diagnóstico à experiência final.
+            {sx('process').title || 'Do diagnóstico à experiência final.'}
           </h2>
           <div className="relative grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-y-12">
             <div className="hidden lg:block absolute top-7 left-[8%] right-[8%] h-px bg-gold/25" />
@@ -551,9 +581,11 @@ export function Home({ onAdmin }) {
       <section id="para-quem" className="relative bg-ink grain" style={manifestoBg}>
         <Wave fill="#14160f" className="-mt-px" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-24 text-center">
-          <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">Para quem criamos</p>
+          <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
+            {sx('audience').eyebrow || 'Para quem criamos'}
+          </p>
           <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-16">
-            Marcas e destinos que querem ser lembrados.
+            {sx('audience').title || 'Marcas e destinos que querem ser lembrados.'}
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-y-10">
             {segments.map((s) => (
@@ -573,15 +605,15 @@ export function Home({ onAdmin }) {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 pb-24">
           <div className="max-w-3xl">
             <h2 className="font-serif text-3xl lg:text-5xl leading-tight text-ivory">
-              Alguns lugares recebem visitantes.
+              {sx('manifesto').line1 || 'Alguns lugares recebem visitantes.'}
               <br />
-              Outros permanecem na memória.
+              {sx('manifesto').line2 || 'Outros permanecem na memória.'}
               <br />
-              <span className="text-gold italic">Nós projetamos a diferença.</span>
+              <span className="text-gold italic">{sx('manifesto').line3 || 'Nós projetamos a diferença.'}</span>
             </h2>
             <div className="mt-10">
               <Btn variant="secondary" href="#contato">
-                Conheça nossa história
+                {sx('manifesto').cta_text || 'Conheça nossa história'}
               </Btn>
             </div>
           </div>
@@ -593,9 +625,11 @@ export function Home({ onAdmin }) {
         <section className="relative grain" style={portfolioBg}>
           <Wave fill="#0b0a08" className="-mt-px" />
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
-            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">Depoimentos</p>
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">
+              {sx('testimonials').eyebrow || 'Depoimentos'}
+            </p>
             <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-16 text-center">
-              Histórias que ficaram na memória.
+              {sx('testimonials').title || 'Histórias que ficaram na memória.'}
             </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {testimonials.map((t) => (
@@ -622,8 +656,12 @@ export function Home({ onAdmin }) {
         <section id="jornal" className="relative grain" style={manifestoBg}>
           <Wave fill="#14160f" className="-mt-px" />
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
-            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">Jornal</p>
-            <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-14">Histórias e inspirações.</h2>
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
+              {sx('journal').eyebrow || 'Jornal'}
+            </p>
+            <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-14">
+              {sx('journal').title || 'Histórias e inspirações.'}
+            </h2>
             <div className="grid md:grid-cols-3 gap-8">
               {posts.slice(0, 3).map((p) => (
                 <article key={p.id} className="group">
@@ -654,9 +692,11 @@ export function Home({ onAdmin }) {
         <section className="relative grain" style={formBg}>
           <Wave fill="#10130d" className="-mt-px" />
           <div className="max-w-3xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
-            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">Perguntas frequentes</p>
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">
+              {sx('faq').eyebrow || 'Perguntas frequentes'}
+            </p>
             <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-12 text-center">
-              Tudo que você precisa saber.
+              {sx('faq').title || 'Tudo que você precisa saber.'}
             </h2>
             <div className="space-y-3">
               {faqs.map((f) => (
@@ -680,9 +720,11 @@ export function Home({ onAdmin }) {
         <section className="relative bg-ivory text-ink grain">
           <Wave fill="#f4f0e6" className="-mt-px" />
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-24">
-            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">Equipe</p>
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">
+              {sx('team').eyebrow || 'Equipe'}
+            </p>
             <h2 className="font-serif text-4xl lg:text-5xl text-ink mb-14 text-center">
-              Quem cria as experiências.
+              {sx('team').title || 'Quem cria as experiências.'}
             </h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
               {team.map((m) => (
@@ -705,13 +747,15 @@ export function Home({ onAdmin }) {
         <Wave fill="#10130d" className="-mt-px" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28 grid lg:grid-cols-2 gap-14 items-center">
           <div>
-            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">Fale com um especialista</p>
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
+              {sx('contact').eyebrow || 'Fale com um especialista'}
+            </p>
             <h2 className="font-serif text-4xl lg:text-5xl leading-tight text-ivory mb-6">
-              Vamos conversar sobre o seu destino.
+              {sx('contact').title || 'Vamos conversar sobre o seu destino.'}
             </h2>
             <p className="text-ivory/65 leading-relaxed max-w-md mb-10">
-              Conte-nos sobre seu projeto. Responda algumas perguntas rápidas e nossa equipe
-              entrará em contato com você.
+              {sx('contact').text ||
+                'Conte-nos sobre seu projeto. Responda algumas perguntas rápidas e nossa equipe entrará em contato com você.'}
             </p>
             <ul className="space-y-4">
               {[
@@ -729,7 +773,7 @@ export function Home({ onAdmin }) {
               ))}
             </ul>
             <p className="mt-10 font-serif italic text-gold/80 text-xl">
-              Sua história merece o cenário perfeito.
+              {sx('contact').closing || 'Sua história merece o cenário perfeito.'}
             </p>
           </div>
 
@@ -751,9 +795,12 @@ export function Home({ onAdmin }) {
               <NewsletterForm />
             </div>
             <div className="flex flex-col sm:flex-row gap-8 lg:gap-14 text-[11px] tracking-widerx uppercase text-ivory/50">
-              {footerLinks.map((l, i) => (
-                <a key={i} href="#" className="hover:text-gold transition-colors">
-                  {l}
+              {(footerMenu.length > 0
+                ? footerMenu.map((m) => ({ label: m.label, href: m.url }))
+                : footerLinks.map((l) => ({ label: l, href: '#' }))
+              ).map((l, i) => (
+                <a key={i} href={l.href} className="hover:text-gold transition-colors">
+                  {l.label}
                 </a>
               ))}
             </div>

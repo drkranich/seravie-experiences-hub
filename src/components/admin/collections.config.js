@@ -63,12 +63,13 @@ export const collectionConfigs = {
   pages: {
     table: 'pages',
     title: 'Páginas',
-    subtitle: 'Páginas institucionais e legais (corpo de texto em breve).',
+    subtitle: 'Páginas institucionais e legais.',
     orderColumn: 'created_at',
     newDefault: () => ({ slug: 'pagina-' + Date.now(), title: 'Nova página', published: false }),
     fields: [
       { key: 'title', label: 'Título', full: true },
       { key: 'slug', label: 'Slug (URL)' },
+      { key: 'body', label: 'Conteúdo (texto)', type: 'textarea', rows: 10, full: true, json: true },
       { key: 'seo_title', label: 'SEO — título' },
       { key: 'seo_description', label: 'SEO — descrição', type: 'textarea', full: true },
       { key: 'published', label: 'Publicada', type: 'toggle' },

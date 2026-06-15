@@ -14,7 +14,23 @@ function SectionRow({ section, onChanged, notify }) {
 
   const setField = (k, v) => setContent((c) => ({ ...c, [k]: v }))
 
-  const keys = Object.keys(content).filter((k) => typeof content[k] === 'string' && !isImageKey(k))
+  const textKeys = Object.keys(content).filter((k) => typeof content[k] === 'string' && !isImageKey(k))
+  const imageKeys = Object.keys(content).filter((k) => typeof content[k] === 'string' && isImageKey(k))
+  const imgFinal = imageKeys.includes('background_url') ? imageKeys : [...imageKeys, 'background_url']
+  const imgLabel = (k) => (k === 'background_url' ? 'Imagem de fundo' : k === 'image_url' ? 'Imagem' : k)
+  const niceLabel = (k) =>
+    ({
+      eyebrow: 'Sobrelinha',
+      title: 'Título',
+      subtitle: 'Subtítulo',
+      text: 'Texto',
+      cta_text: 'Botão (texto)',
+      cta_secondary: 'Botão secundário',
+      closing: 'Frase de encerramento',
+      line1: 'Linha 1',
+      line2: 'Linha 2',
+      line3: 'Linha 3',
+    }[k] || k)
 
   const save = async () => {
     setSaving(true)
@@ -45,8 +61,8 @@ function SectionRow({ section, onChanged, notify }) {
           <TextInput value={title} onChange={(e) => setTitle(e.target.value)} />
         </Field>
 
-        {keys.map((k) => (
-          <Field key={k} label={k}>
+        {textKeys.map((k) => (
+          <Field key={k} label={niceLabel(k)}>
             {isLongKey(k) ? (
               <TextArea rows="2" value={content[k]} onChange={(e) => setField(k, e.target.value)} />
             ) : (
@@ -55,11 +71,14 @@ function SectionRow({ section, onChanged, notify }) {
           </Field>
         ))}
 
-        <ImageUpload
-          value={content.background_url || ''}
-          onChange={(url) => setField('background_url', url)}
-          label="Imagem de fundo (opcional)"
-        />
+        {imgFinal.map((k) => (
+          <ImageUpload
+            key={k}
+            value={content[k] || ''}
+            onChange={(url) => setField(k, url)}
+            label={imgLabel(k)}
+          />
+        ))}
       </div>
 
       <div className="mt-6 flex justify-end">
