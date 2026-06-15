@@ -262,6 +262,7 @@ const NAV = [
   { label: 'Portfólio', href: '#portfolio' },
   { label: 'Processo', href: '#processo' },
   { label: 'Para quem', href: '#para-quem' },
+  { label: 'Jornal', href: '#jornal' },
   { label: 'Contato', href: '#contato' },
 ]
 
@@ -272,6 +273,10 @@ export function Home({ onAdmin }) {
   const { items: processDb } = useCollection('process_steps')
   const { items: segmentsDb } = useCollection('segments')
   const { settings } = useSettings()
+  const { items: testimonials } = useCollection('testimonials')
+  const { items: faqs } = useCollection('faqs')
+  const { items: team } = useCollection('team_members')
+  const { items: posts } = useCollection('posts', 'created_at')
 
   const heroBgUrl = hero?.content?.background_url
   const brand = settings?.brand || {}
@@ -582,6 +587,118 @@ export function Home({ onAdmin }) {
           </div>
         </div>
       </section>
+
+      {/* ============================== DEPOIMENTOS ============================== */}
+      {testimonials.length > 0 && (
+        <section className="relative grain" style={portfolioBg}>
+          <Wave fill="#0b0a08" className="-mt-px" />
+          <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">Depoimentos</p>
+            <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-16 text-center">
+              Histórias que ficaram na memória.
+            </h2>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {testimonials.map((t) => (
+                <div key={t.id} className="border border-gold/15 rounded-2xl p-8 bg-ink/30">
+                  <p className="font-serif italic text-xl text-ivory/85 leading-relaxed mb-6">“{t.quote}”</p>
+                  <div className="flex items-center gap-4">
+                    {t.avatar_url && (
+                      <img src={t.avatar_url} alt={t.author_name} className="w-12 h-12 rounded-full object-cover" />
+                    )}
+                    <div>
+                      <div className="text-ivory text-sm">{t.author_name}</div>
+                      {t.author_role && <div className="text-gold/70 text-xs">{t.author_role}</div>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ============================== JORNAL ============================== */}
+      {posts.length > 0 && (
+        <section id="jornal" className="relative grain" style={manifestoBg}>
+          <Wave fill="#14160f" className="-mt-px" />
+          <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">Jornal</p>
+            <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-14">Histórias e inspirações.</h2>
+            <div className="grid md:grid-cols-3 gap-8">
+              {posts.slice(0, 3).map((p) => (
+                <article key={p.id} className="group">
+                  <div
+                    className="organic-pill aspect-[4/3] overflow-hidden mb-5"
+                    style={{ background: tilePalette[0] }}
+                  >
+                    {p.cover_image && (
+                      <img
+                        src={p.cover_image}
+                        alt={p.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      />
+                    )}
+                  </div>
+                  {p.category && <p className="text-[10px] tracking-widerx uppercase text-gold/90 mb-2">{p.category}</p>}
+                  <h3 className="font-serif text-2xl text-ivory mb-2 leading-tight">{p.title}</h3>
+                  <p className="text-ivory/55 text-sm leading-relaxed">{p.excerpt}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ============================== FAQ ============================== */}
+      {faqs.length > 0 && (
+        <section className="relative grain" style={formBg}>
+          <Wave fill="#10130d" className="-mt-px" />
+          <div className="max-w-3xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">Perguntas frequentes</p>
+            <h2 className="font-serif text-4xl lg:text-5xl text-ivory mb-12 text-center">
+              Tudo que você precisa saber.
+            </h2>
+            <div className="space-y-3">
+              {faqs.map((f) => (
+                <details key={f.id} className="border border-gold/15 rounded-xl px-6 py-4">
+                  <summary className="cursor-pointer list-none flex items-center justify-between gap-4 text-ivory font-serif text-xl">
+                    {f.question}
+                    <span className="faq-icon text-gold shrink-0">
+                      <Icon name="plus" className="w-5 h-5" />
+                    </span>
+                  </summary>
+                  <p className="text-ivory/60 text-sm leading-relaxed mt-4">{f.answer}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ============================== EQUIPE ============================== */}
+      {team.length > 0 && (
+        <section className="relative bg-ivory text-ink grain">
+          <Wave fill="#f4f0e6" className="-mt-px" />
+          <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-24">
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">Equipe</p>
+            <h2 className="font-serif text-4xl lg:text-5xl text-ink mb-14 text-center">
+              Quem cria as experiências.
+            </h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
+              {team.map((m) => (
+                <div key={m.id} className="text-center">
+                  <div className="organic-mask-soft aspect-square w-40 mx-auto mb-5 bg-sand overflow-hidden">
+                    {m.photo_url && <img src={m.photo_url} alt={m.name} className="w-full h-full object-cover" />}
+                  </div>
+                  <h3 className="font-serif text-2xl text-ink">{m.name}</h3>
+                  {m.role && <p className="text-gold text-[11px] tracking-widerx uppercase mt-1">{m.role}</p>}
+                  {m.bio && <p className="text-ink/55 text-sm mt-3 leading-relaxed">{m.bio}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ============================== CONTATO / FORM ============================== */}
       <section id="contato" className="relative grain vignette" style={formBg}>
