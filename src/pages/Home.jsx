@@ -9,6 +9,7 @@ import { NewsletterForm } from '../components/NewsletterForm'
 import { useI18n } from '../i18n/LanguageContext'
 import { useHashRoute } from '../hooks/useHashRoute'
 import { LegalPage } from '../components/LegalPage'
+import { ProjectPage } from '../components/ProjectPage'
 
 /* ----------------------------------------------------------------------------
    Atmospheric gradient backdrops (no photos yet — cinematic amber-lit interiors
@@ -278,6 +279,7 @@ export function Home({ onAdmin }) {
   const route = useHashRoute()
   const isHome = route === 'home'
   const isPage = route.startsWith('pagina/')
+  const isProject = route.startsWith('projeto/')
   const vis = (list) => (isHome || list.includes(route) ? undefined : 'none')
   const legalSlugs = {
     'Política de Privacidade': 'politica-de-privacidade',
@@ -350,7 +352,7 @@ export function Home({ onAdmin }) {
       : PORTFOLIO_FALLBACK
 
   return (
-    <div id="topo" className="bg-ink text-ivory" style={{ paddingTop: isHome || isPage ? 0 : '5.5rem' }}>
+    <div id="topo" className="bg-ink text-ivory" style={{ paddingTop: isHome || isPage || isProject ? 0 : '5.5rem' }}>
       {/* ============================== NAV ============================== */}
       <header className="fixed top-0 inset-x-0 z-50">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
@@ -382,6 +384,7 @@ export function Home({ onAdmin }) {
       </header>
 
       {isPage && <LegalPage slug={route.slice(7)} />}
+      {isProject && <ProjectPage id={route.slice(8)} />}
 
       {/* ============================== HERO ============================== */}
       <section
@@ -556,9 +559,7 @@ export function Home({ onAdmin }) {
             {projects.map((item, i) => (
               <a
                 key={item.id || i}
-                href={item.link || '#'}
-                target={item.link ? '_blank' : undefined}
-                rel="noreferrer"
+                href={item.id && String(item.id).includes('-') ? `#/projeto/${item.id}` : '#'}
                 className="group relative organic-pill aspect-[3/4] grain overflow-hidden block"
                 style={{ background: tilePalette[i % tilePalette.length] }}
               >
