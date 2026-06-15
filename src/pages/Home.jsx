@@ -1,7 +1,11 @@
+import { useEffect } from 'react'
 import { useSpecialties } from '../hooks/useSpecialties'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { useSections } from '../hooks/useSections'
+import { useCollection } from '../hooks/useCollection'
+import { useSettings } from '../hooks/useSettings'
 import { ExperienceForm } from '../components/ExperienceForm'
+import { NewsletterForm } from '../components/NewsletterForm'
 
 /* ----------------------------------------------------------------------------
    Atmospheric gradient backdrops (no photos yet — cinematic amber-lit interiors
@@ -265,6 +269,41 @@ export function Home({ onAdmin }) {
   const { specialties } = useSpecialties()
   const { portfolio } = usePortfolio()
   const { section: hero } = useSections('hero')
+  const { items: processDb } = useCollection('process_steps')
+  const { items: segmentsDb } = useCollection('segments')
+  const { settings } = useSettings()
+
+  const heroBgUrl = hero?.content?.background_url
+  const brand = settings?.brand || {}
+  const social = settings?.social || {}
+  const footerLinks =
+    settings?.footer_links && settings.footer_links.length
+      ? settings.footer_links
+      : ['Política de Privacidade', 'Termos de Uso', 'Cookies', 'Mapa do Site']
+
+  useEffect(() => {
+    const seo = settings?.seo || {}
+    if (seo.title) document.title = seo.title
+    if (seo.description) {
+      let m = document.querySelector('meta[name="description"]')
+      if (!m) {
+        m = document.createElement('meta')
+        m.setAttribute('name', 'description')
+        document.head.appendChild(m)
+      }
+      m.setAttribute('content', seo.description)
+    }
+  }, [settings])
+
+  const process =
+    processDb && processDb.length > 0
+      ? processDb.map((p) => ({ n: p.step_number, icon: p.icon, title: p.title, description: p.description }))
+      : PROCESS
+
+  const segments =
+    segmentsDb && segmentsDb.length > 0
+      ? segmentsDb.map((s) => ({ icon: s.icon, label: s.title }))
+      : SEGMENTS
 
   const deliverables =
     specialties && specialties.length > 0
@@ -306,6 +345,15 @@ export function Home({ onAdmin }) {
         className="relative min-h-screen flex items-center grain vignette overflow-hidden"
         style={heroBg}
       >
+        {heroBgUrl && (
+          <div className="absolute inset-0">
+            <img src={heroBgUrl} alt="" className="w-full h-full object-cover" />
+            <div
+              className="absolute inset-0"
+              style={{ background: 'linear-gradient(150deg, rgba(26,33,27,0.82), rgba(11,10,8,0.9))' }}
+            />
+          </div>
+        )}
         <Particles count={18} />
         {/* vertical words */}
         <div className="hidden md:flex flex-col items-end gap-2 absolute right-8 top-1/2 -translate-y-1/2 text-[10px] tracking-widestx text-gold/70">
@@ -317,8 +365,14 @@ export function Home({ onAdmin }) {
         <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-10 w-full">
           <div className="max-w-2xl">
             <h1 className="font-serif text-5xl sm:text-6xl lg:text-7xl leading-[1.05] text-ivory text-shadow-soft">
-              Transformamos espaços em{' '}
-              <span className="italic text-champagne">destinos memoráveis.</span>
+              {hero?.content?.title ? (
+                hero.content.title
+              ) : (
+                <>
+                  Transformamos espaços em{' '}
+                  <span className="italic text-champagne">destinos memoráveis.</span>
+                </>
+              )}
             </h1>
             <p className="mt-8 text-ivory/75 text-lg leading-relaxed max-w-md font-light">
               {hero?.content?.subtitle ||
@@ -474,7 +528,7 @@ export function Home({ onAdmin }) {
           </h2>
           <div className="relative grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-y-12">
             <div className="hidden lg:block absolute top-7 left-[8%] right-[8%] h-px bg-gold/25" />
-            {PROCESS.map((step) => (
+            {process.map((step) => (
               <div key={step.n} className="relative flex flex-col items-center px-3">
                 <span className="w-14 h-14 rounded-full bg-ink/60 border border-gold/40 flex items-center justify-center text-gold backdrop-blur-sm">
                   <Icon name={step.icon} className="w-6 h-6" />
@@ -497,7 +551,7 @@ export function Home({ onAdmin }) {
             Marcas e destinos que querem ser lembrados.
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-y-10">
-            {SEGMENTS.map((s) => (
+            {segments.map((s) => (
               <div key={s.label} className="flex flex-col items-center gap-3 px-2">
                 <span className="text-gold">
                   <Icon name={s.icon} className="w-8 h-8" />
@@ -570,24 +624,39 @@ export function Home({ onAdmin }) {
       <footer className="bg-ink border-t border-gold/10">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-14">
           <div className="flex flex-col lg:flex-row justify-between gap-10">
-            <div>
-              <div className="font-serif text-2xl text-ivory tracking-wide">Seravie</div>
-              <div className="text-[9px] tracking-widestx text-gold/80 mt-0.5 mb-4">EXPERIENCES</div>
-              <p className="text-ivory/45 text-sm max-w-xs leading-relaxed">
-                Transformamos espaços em destinos memoráveis.
+            <div className="max-w-xs">
+              <div className="font-serif text-2xl text-ivory tracking-wide">{brand.name || 'Seravie'}</div>
+              <div className="text-[9px] tracking-widestx text-gold/80 mt-0.5 mb-4">{brand.suffix || 'EXPERIENCES'}</div>
+              <p className="text-ivory/45 text-sm leading-relaxed mb-6">
+                {brand.tagline || 'Transformamos espaços em destinos memoráveis.'}
               </p>
+              <p className="text-[10px] tracking-widerx uppercase text-gold/70 mb-3">Receba nossas experiências</p>
+              <NewsletterForm />
             </div>
             <div className="flex flex-col sm:flex-row gap-8 lg:gap-14 text-[11px] tracking-widerx uppercase text-ivory/50">
-              <a href="#" className="hover:text-gold transition-colors">Política de Privacidade</a>
-              <a href="#" className="hover:text-gold transition-colors">Termos de Uso</a>
-              <a href="#" className="hover:text-gold transition-colors">Cookies</a>
-              <a href="#" className="hover:text-gold transition-colors">Mapa do Site</a>
+              {footerLinks.map((l, i) => (
+                <a key={i} href="#" className="hover:text-gold transition-colors">
+                  {l}
+                </a>
+              ))}
             </div>
             <div className="flex items-start gap-4 text-gold">
-              <a href="#" aria-label="Instagram" className="w-10 h-10 rounded-full border border-gold/30 flex items-center justify-center hover:bg-gold/10 transition-colors">
+              <a
+                href={social.instagram || '#'}
+                target={social.instagram ? '_blank' : undefined}
+                rel="noreferrer"
+                aria-label="Instagram"
+                className="w-10 h-10 rounded-full border border-gold/30 flex items-center justify-center hover:bg-gold/10 transition-colors"
+              >
                 <Icon name="instagram" className="w-5 h-5" />
               </a>
-              <a href="#" aria-label="Pinterest" className="w-10 h-10 rounded-full border border-gold/30 flex items-center justify-center hover:bg-gold/10 transition-colors">
+              <a
+                href={social.pinterest || '#'}
+                target={social.pinterest ? '_blank' : undefined}
+                rel="noreferrer"
+                aria-label="Pinterest"
+                className="w-10 h-10 rounded-full border border-gold/30 flex items-center justify-center hover:bg-gold/10 transition-colors"
+              >
                 <Icon name="pinterest" className="w-5 h-5" />
               </a>
             </div>
