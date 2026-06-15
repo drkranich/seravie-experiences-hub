@@ -45,6 +45,15 @@ export function ProjectPage({ id }) {
                 {p.description}
               </p>
             )}
+            {Array.isArray(p.gallery) && p.gallery.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
+                {p.gallery.map((url, i) => (
+                  <div key={i} className="rounded-xl overflow-hidden aspect-square">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            )}
             {p.link && (
               <a
                 href={p.link}

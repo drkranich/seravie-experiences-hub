@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Card, Field, TextInput, TextArea, Toggle, AdminBtn, Spinner } from './ui'
 import { ImageUpload } from './ImageUpload'
+import { MultiImageUpload } from './MultiImageUpload'
 
 function PortfolioRow({ item, onChanged, notify }) {
   const [d, setD] = useState({
@@ -10,6 +11,7 @@ function PortfolioRow({ item, onChanged, notify }) {
     category: item.category || '',
     link: item.link || '',
     image_url: item.image_url || '',
+    gallery: Array.isArray(item.gallery) ? item.gallery : [],
     featured: !!item.featured,
     published: !!item.published,
   })
@@ -39,7 +41,7 @@ function PortfolioRow({ item, onChanged, notify }) {
   return (
     <Card className="p-5">
       <div className="grid lg:grid-cols-2 gap-5">
-        <ImageUpload value={d.image_url} onChange={(url) => setD({ ...d, image_url: url })} label="Imagem do projeto" />
+        <ImageUpload value={d.image_url} onChange={(url) => setD({ ...d, image_url: url })} label="Imagem de capa (placeholder)" />
         <div className="space-y-4">
           <Field label="Título">
             <TextInput value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} />
@@ -58,6 +60,13 @@ function PortfolioRow({ item, onChanged, notify }) {
         <Field label="Descrição">
           <TextArea rows="2" value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} />
         </Field>
+      </div>
+      <div className="mt-4">
+        <MultiImageUpload
+          value={d.gallery}
+          onChange={(g) => setD({ ...d, gallery: g })}
+          label="Galeria (aparece ao abrir a página do projeto)"
+        />
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-6">
