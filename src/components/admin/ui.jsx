@@ -75,17 +75,17 @@ export function Icon({ name, className = 'w-5 h-5' }) {
 
 export function AdminBtn({ children, onClick, variant = 'primary', type = 'button', disabled, className = '', icon }) {
   const styles = {
-    primary: 'bg-gold text-ink hover:bg-champagne',
-    ghost: 'border border-gold/30 text-champagne hover:bg-gold/10',
-    danger: 'border border-red-500/40 text-red-300 hover:bg-red-500/10',
-    subtle: 'text-ivory/55 hover:text-gold',
+    primary: 'btn-gradient font-medium',
+    ghost: 'border border-admin-champ/20 text-admin-champ hover:bg-white/5',
+    danger: 'border border-admin-rose/40 text-admin-rose hover:bg-admin-rose/10',
+    subtle: 'text-admin-muted hover:text-admin-champ',
   }[variant]
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 px-4 py-2.5 text-[11px] tracking-widerx uppercase transition-colors rounded-md disabled:opacity-50 ${styles} ${className}`}
+      className={`inline-flex items-center gap-2 px-5 py-2.5 text-[11px] tracking-widerx uppercase transition-all duration-300 rounded-xl disabled:opacity-50 ${styles} ${className}`}
     >
       {icon && <Icon name={icon} className="w-4 h-4" />}
       {children}
@@ -94,14 +94,14 @@ export function AdminBtn({ children, onClick, variant = 'primary', type = 'butto
 }
 
 const inputCls =
-  'w-full bg-ink/50 border border-gold/15 focus:border-gold/50 rounded-md px-3 py-2.5 text-ivory placeholder-ivory/25 outline-none transition-colors text-sm'
+  'w-full glass-input rounded-xl px-3.5 py-2.5 text-admin-text placeholder-admin-muted/40 outline-none text-sm'
 
 export function Field({ label, children, hint }) {
   return (
     <label className="block">
-      <span className="block text-[10px] tracking-widerx uppercase text-ivory/45 mb-2">{label}</span>
+      <span className="block text-[10px] tracking-widerx uppercase text-admin-muted/70 mb-2">{label}</span>
       {children}
-      {hint && <span className="block text-[11px] text-ivory/30 mt-1">{hint}</span>}
+      {hint && <span className="block text-[11px] text-admin-muted/50 mt-1">{hint}</span>}
     </label>
   )
 }
@@ -115,7 +115,7 @@ export function TextArea({ className = '', ...rest }) {
 }
 
 export function Card({ children, className = '' }) {
-  return <div className={`bg-moss/30 border border-gold/10 rounded-xl ${className}`}>{children}</div>
+  return <div className={`glass rounded-2xl ${className}`}>{children}</div>
 }
 
 export function Toggle({ checked, onChange }) {
@@ -123,10 +123,14 @@ export function Toggle({ checked, onChange }) {
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${checked ? 'bg-gold' : 'bg-ivory/20'}`}
+      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+        checked ? 'bg-admin-champ' : 'bg-white/10'
+      }`}
     >
       <span
-        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-ink transition-transform ${checked ? 'translate-x-5' : ''}`}
+        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-admin-bg transition-transform ${
+          checked ? 'translate-x-5' : ''
+        }`}
       />
     </button>
   )

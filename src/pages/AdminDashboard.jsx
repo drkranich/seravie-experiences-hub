@@ -45,51 +45,62 @@ export function AdminDashboard({ onExit }) {
     settings: <SettingsPanel notify={notify} />,
   }
 
+  const NavButton = ({ n, mobile }) => (
+    <button
+      onClick={() => go(n.key)}
+      className={`relative w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all duration-300 ${
+        active === n.key
+          ? 'bg-admin-champ/12 text-admin-champ'
+          : 'text-admin-muted hover:text-admin-text hover:bg-white/[0.03]'
+      }`}
+    >
+      {active === n.key && !mobile && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-0.5 rounded-full bg-admin-champ" />
+      )}
+      <Icon name={n.icon} className="w-5 h-5" />
+      {n.label}
+    </button>
+  )
+
   return (
-    <div className="min-h-screen bg-ink text-ivory flex">
+    <div className="min-h-screen admin-bg text-admin-text flex">
       {/* Sidebar (desktop) */}
-      <aside className="hidden lg:flex flex-col w-64 border-r border-gold/10 bg-moss/20 sticky top-0 h-screen">
-        <div className="p-6 border-b border-gold/10">
-          <div className="font-serif text-2xl">Seravie</div>
-          <div className="text-[9px] tracking-widestx text-gold/80">EXPERIENCES · CMS</div>
+      <aside className="hidden lg:flex flex-col w-64 bg-admin-side/70 backdrop-blur-xl border-r border-admin-champ/10 sticky top-0 h-screen">
+        <div className="p-7 border-b border-admin-champ/10">
+          <div className="font-serif text-3xl text-admin-text leading-none">Seravie</div>
+          <div className="text-[9px] tracking-widestx text-admin-champ/80 mt-1.5">EXPERIENCES · CMS</div>
         </div>
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {NAV.map((n) => (
-            <button
-              key={n.key}
-              onClick={() => go(n.key)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors ${
-                active === n.key ? 'bg-gold/15 text-gold' : 'text-ivory/60 hover:text-ivory hover:bg-ivory/5'
-              }`}
-            >
-              <Icon name={n.icon} className="w-5 h-5" />
-              {n.label}
-            </button>
+            <NavButton key={n.key} n={n} />
           ))}
         </nav>
+        <div className="p-4 border-t border-admin-champ/10 text-[10px] tracking-widerx uppercase text-admin-muted/50">
+          Backstage Seravie
+        </div>
       </aside>
 
       {/* Main */}
       <div className="flex-1 min-w-0">
-        <header className="sticky top-0 z-30 bg-ink/90 backdrop-blur border-b border-gold/10 px-6 py-4 flex items-center justify-between">
-          <button className="lg:hidden text-ivory/70" onClick={() => setNavOpen((o) => !o)}>
+        <header className="sticky top-0 z-30 bg-admin-side/40 backdrop-blur-xl border-b border-admin-champ/10 px-6 py-4 flex items-center justify-between">
+          <button className="lg:hidden text-admin-muted" onClick={() => setNavOpen((o) => !o)}>
             <Icon name="grid" className="w-6 h-6" />
           </button>
-          <div className="hidden lg:block text-[11px] tracking-widerx uppercase text-ivory/40">
+          <div className="hidden lg:block text-[11px] tracking-widerx uppercase text-admin-muted/50">
             Painel administrativo
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-ivory/45 text-sm hidden sm:block">{user?.email}</span>
+            <span className="text-admin-muted text-sm hidden sm:block">{user?.email}</span>
             <button
               onClick={onExit}
-              className="inline-flex items-center gap-2 px-3 py-2 text-[10px] tracking-widerx uppercase border border-gold/30 text-champagne rounded-md hover:bg-gold/10 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 text-[10px] tracking-widerx uppercase border border-admin-champ/25 text-admin-champ rounded-xl hover:bg-white/5 transition-colors"
             >
               <Icon name="eye" className="w-4 h-4" />
               Ver site
             </button>
             <button
               onClick={logout}
-              className="inline-flex items-center gap-2 px-3 py-2 text-[10px] tracking-widerx uppercase text-ivory/50 hover:text-red-300 transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-2 text-[10px] tracking-widerx uppercase text-admin-muted hover:text-admin-rose transition-colors"
             >
               <Icon name="logout" className="w-4 h-4" />
               Sair
@@ -98,38 +109,26 @@ export function AdminDashboard({ onExit }) {
         </header>
 
         {navOpen && (
-          <div className="lg:hidden border-b border-gold/10 bg-moss/30 p-3 grid grid-cols-2 gap-2">
+          <div className="lg:hidden border-b border-admin-champ/10 bg-admin-side/80 backdrop-blur-xl p-3 grid grid-cols-2 gap-2">
             {NAV.map((n) => (
-              <button
-                key={n.key}
-                onClick={() => go(n.key)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm ${
-                  active === n.key ? 'bg-gold/15 text-gold' : 'text-ivory/60'
-                }`}
-              >
-                <Icon name={n.icon} className="w-4 h-4" />
-                {n.label}
-              </button>
+              <NavButton key={n.key} n={n} mobile />
             ))}
           </div>
         )}
 
-        <main className="p-6 lg:p-10 max-w-6xl">{modules[active]}</main>
+        <main className="p-6 lg:p-12 max-w-6xl">{modules[active]}</main>
       </div>
 
       {/* Toasts */}
-      <div className="fixed bottom-6 right-6 z-50 space-y-2">
+      <div className="fixed bottom-6 right-6 z-50 space-y-3">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`px-5 py-3 rounded-lg text-sm shadow-xl border ${
-              t.type === 'error'
-                ? 'bg-red-950/90 border-red-500/40 text-red-200'
-                : t.type === 'success'
-                ? 'bg-moss/95 border-gold/40 text-champagne'
-                : 'bg-moss/95 border-gold/20 text-ivory'
+            className={`glass rounded-2xl px-5 py-3.5 text-sm flex items-center gap-3 ${
+              t.type === 'error' ? 'text-admin-rose' : t.type === 'success' ? 'text-admin-champ' : 'text-admin-text'
             }`}
           >
+            <Icon name={t.type === 'error' ? 'x' : 'check'} className="w-4 h-4 shrink-0" />
             {t.message}
           </div>
         ))}

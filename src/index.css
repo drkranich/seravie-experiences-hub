@@ -104,3 +104,58 @@ h4 {
   outline: 1px solid rgba(182, 155, 93, 0.6);
   outline-offset: 3px;
 }
+
+/* =====================================================================
+   CMS — identidade "vidro fumê" / hospitalidade premium
+   ===================================================================== */
+.admin-bg {
+  background:
+    radial-gradient(55% 45% at 82% -5%, rgba(184, 156, 97, 0.10), transparent 60%),
+    radial-gradient(45% 40% at -5% 105%, rgba(183, 116, 94, 0.08), transparent 60%),
+    #121512;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(220, 203, 167, 0.12);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+}
+
+.glass-soft {
+  background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(220, 203, 167, 0.1);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(220, 203, 167, 0.15);
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+.glass-input:focus {
+  border-color: rgba(220, 203, 167, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+  border-color: rgba(220, 203, 167, 0.22);
+}
+
+.btn-gradient {
+  background: linear-gradient(180deg, #dccba7, #b89c61);
+  color: #121512;
+  transition: background 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+}
+.btn-gradient:hover {
+  background: linear-gradient(180deg, #e5d8b8, #c1835b);
+  box-shadow: 0 10px 30px rgba(184, 156, 97, 0.25);
+}

@@ -5,27 +5,29 @@ export function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const { login } = useAuth()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-
+    setLoading(true)
     const result = await login(email, password)
-    if (result.error) {
-      setError(result.error)
-    } else {
-      onLoginSuccess()
-    }
+    setLoading(false)
+    if (result.error) setError(result.error)
+    else onLoginSuccess()
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black to-gray-900 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
-        <h1 className="text-3xl font-bold mb-8 text-center text-black">Admin Panel</h1>
+    <div className="min-h-screen admin-bg flex items-center justify-center p-4">
+      <div className="glass rounded-3xl p-9 w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="font-serif text-4xl text-admin-text leading-none">Seravie</div>
+          <div className="text-[9px] tracking-widestx text-admin-champ/80 mt-2">EXPERIENCES · CMS</div>
+        </div>
 
         {error && (
-          <div className="bg-red-100 text-red-800 p-4 rounded mb-4">
+          <div className="bg-admin-rose/10 border border-admin-rose/30 text-admin-rose text-sm p-3.5 rounded-xl mb-5">
             {error}
           </div>
         )}
@@ -33,31 +35,30 @@ export function Login({ onLoginSuccess }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
-            placeholder="Email"
+            placeholder="E-mail"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full glass-input rounded-xl px-4 py-3 text-admin-text placeholder-admin-muted/40 outline-none"
           />
-
           <input
             type="password"
             placeholder="Senha"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full glass-input rounded-xl px-4 py-3 text-admin-text placeholder-admin-muted/40 outline-none"
           />
-
           <button
             type="submit"
-            className="w-full bg-black text-white p-3 rounded font-bold hover:bg-gray-800"
+            disabled={loading}
+            className="btn-gradient w-full py-3.5 rounded-xl text-[12px] tracking-widerx uppercase font-medium disabled:opacity-60"
           >
-            Entrar
+            {loading ? 'Entrando…' : 'Entrar'}
           </button>
         </form>
 
-        <p className="text-center text-gray-600 mt-4 text-sm">
+        <p className="text-center text-admin-muted/50 mt-6 text-xs tracking-widerx uppercase">
           Acesso restrito à administração
         </p>
       </div>

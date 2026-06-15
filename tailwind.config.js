@@ -10,6 +10,23 @@ export default {
         champagne: '#D6C49A',
         ivory: '#F4F0E6',
         sand: '#E6DFCF',
+        admin: {
+          bg: '#121512',
+          side: '#181D19',
+          panel: '#1F241F',
+          champ: '#DCCBA7',
+          'champ-light': '#E5D8B8',
+          gold: '#B89C61',
+          rose: '#B7745E',
+          copper: '#C1835B',
+          sage: '#55634D',
+          text: '#F4F1EA',
+          muted: '#BEB8AC',
+        },
+      },
+      boxShadow: {
+        depth: '0 25px 80px rgba(0,0,0,0.35)',
+        'depth-sm': '0 15px 40px rgba(0,0,0,0.25)',
       },
       fontFamily: {
         serif: ['"Cormorant Garamond"', 'Georgia', 'serif'],
