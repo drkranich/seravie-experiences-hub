@@ -47,7 +47,7 @@ export default function App() {
         </div>
       )
     }
-    return <AdminDashboard />
+    return <AdminDashboard onExit={() => setPage('home')} />
   }
 
   // Home (landing)
