@@ -7,6 +7,8 @@ import { useSettings } from '../hooks/useSettings'
 import { ExperienceForm } from '../components/ExperienceForm'
 import { NewsletterForm } from '../components/NewsletterForm'
 import { useI18n } from '../i18n/LanguageContext'
+import { useHashRoute } from '../hooks/useHashRoute'
+import { LegalPage } from '../components/LegalPage'
 
 /* ----------------------------------------------------------------------------
    Atmospheric gradient backdrops (no photos yet — cinematic amber-lit interiors
@@ -273,6 +275,15 @@ export function Home({ onAdmin }) {
   const sections = useSectionsMap()
   const sx = (k) => sections[k] || {}
   const hero = { content: sx('hero') }
+  const route = useHashRoute()
+  const isHome = route === 'home'
+  const isPage = route.startsWith('pagina/')
+  const vis = (list) => (isHome || list.includes(route) ? undefined : 'none')
+  const legalSlugs = {
+    'Política de Privacidade': 'politica-de-privacidade',
+    'Termos de Uso': 'termos-de-uso',
+    Cookies: 'cookies',
+  }
   const { items: processDb } = useCollection('process_steps')
   const { items: segmentsDb } = useCollection('segments')
   const { settings } = useSettings()
@@ -331,10 +342,15 @@ export function Home({ onAdmin }) {
         }))
       : DELIVERABLES_FALLBACK
 
-  const projects = portfolio && portfolio.length > 0 ? portfolio.slice(0, 4) : PORTFOLIO_FALLBACK
+  const projects =
+    portfolio && portfolio.length > 0
+      ? route === 'portfolio'
+        ? portfolio
+        : portfolio.slice(0, 4)
+      : PORTFOLIO_FALLBACK
 
   return (
-    <div id="topo" className="bg-ink text-ivory">
+    <div id="topo" className="bg-ink text-ivory" style={{ paddingTop: isHome || isPage ? 0 : '5.5rem' }}>
       {/* ============================== NAV ============================== */}
       <header className="fixed top-0 inset-x-0 z-50">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
@@ -365,10 +381,12 @@ export function Home({ onAdmin }) {
         </div>
       </header>
 
+      {isPage && <LegalPage slug={route.slice(7)} />}
+
       {/* ============================== HERO ============================== */}
       <section
         className="relative min-h-screen flex items-center grain vignette overflow-hidden"
-        style={heroBg}
+        style={{ ...heroBg, display: isHome ? undefined : 'none' }}
       >
         {heroBgUrl && (
           <div className="absolute inset-0">
@@ -423,7 +441,7 @@ export function Home({ onAdmin }) {
       </section>
 
       {/* ===================== SPECIALTIES BAR ===================== */}
-      <section style={specialtiesBg} className="relative">
+      <section style={{ ...specialtiesBg, display: vis(['servicos']) }} className="relative">
         <Wave fill="#0e110d" className="-mt-px" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 pb-16 -mt-6">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
@@ -447,7 +465,7 @@ export function Home({ onAdmin }) {
       </section>
 
       {/* ============================== SOBRE ============================== */}
-      <section id="sobre" className="relative bg-ivory text-ink grain">
+      <section id="sobre" className="relative bg-ivory text-ink grain" style={{ display: vis(['sobre', 'servicos']) }}>
         <Wave fill="#f4f0e6" className="-mt-px" />
         {/* botanical accents */}
         <Icon name="leaf" className="hidden md:block w-40 h-40 text-olive/10 absolute left-0 top-24 -rotate-12" />
@@ -473,8 +491,12 @@ export function Home({ onAdmin }) {
           </div>
           <div className="relative">
             <div className="organic-mask aspect-[4/5] w-full max-w-md mx-auto grain" style={aboutImgBg}>
-              {sx('about').image_url && (
-                <img src={sx('about').image_url} alt="" className="w-full h-full object-cover" />
+              {(sx('about').image_url || sx('about').background_url) && (
+                <img
+                  src={sx('about').image_url || sx('about').background_url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
               )}
             </div>
             <Icon name="leaf" className="w-24 h-24 text-olive/20 absolute -right-2 -bottom-4 rotate-12" />
@@ -504,7 +526,13 @@ export function Home({ onAdmin }) {
       </section>
 
       {/* ============================== PORTFÓLIO ============================== */}
-      <section id="portfolio" className="relative grain vignette" style={portfolioBg}>
+      <section id="portfolio" className="relative grain vignette" style={{ ...portfolioBg, display: vis(['portfolio']) }}>
+        {sx('portfolio').background_url && (
+          <div className="absolute inset-0">
+            <img src={sx('portfolio').background_url} alt="" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-ink/75" />
+          </div>
+        )}
         <Wave fill="#0b0a08" className="-mt-px" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-14">
@@ -526,9 +554,12 @@ export function Home({ onAdmin }) {
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
             {projects.map((item, i) => (
-              <div
+              <a
                 key={item.id || i}
-                className="group relative organic-pill aspect-[3/4] grain overflow-hidden"
+                href={item.link || '#'}
+                target={item.link ? '_blank' : undefined}
+                rel="noreferrer"
+                className="group relative organic-pill aspect-[3/4] grain overflow-hidden block"
                 style={{ background: tilePalette[i % tilePalette.length] }}
               >
                 {item.image_url && (
@@ -545,14 +576,20 @@ export function Home({ onAdmin }) {
                   )}
                   <h3 className="font-serif text-2xl text-ivory leading-tight">{item.title}</h3>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
       </section>
 
       {/* ============================== PROCESSO ============================== */}
-      <section id="processo" className="relative grain" style={processBg}>
+      <section id="processo" className="relative grain" style={{ ...processBg, display: vis(['processo']) }}>
+        {sx('process').background_url && (
+          <div className="absolute inset-0">
+            <img src={sx('process').background_url} alt="" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-ink/75" />
+          </div>
+        )}
         <Wave fill="#1a211b" className="-mt-px" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28 text-center">
           <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
@@ -578,7 +615,7 @@ export function Home({ onAdmin }) {
       </section>
 
       {/* ============================== PARA QUEM ============================== */}
-      <section id="para-quem" className="relative bg-ink grain" style={manifestoBg}>
+      <section id="para-quem" className="relative bg-ink grain" style={{ ...manifestoBg, display: vis(['para-quem']) }}>
         <Wave fill="#14160f" className="-mt-px" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-24 text-center">
           <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
@@ -622,7 +659,7 @@ export function Home({ onAdmin }) {
 
       {/* ============================== DEPOIMENTOS ============================== */}
       {testimonials.length > 0 && (
-        <section className="relative grain" style={portfolioBg}>
+        <section className="relative grain" style={{ ...portfolioBg, display: vis([]) }}>
           <Wave fill="#0b0a08" className="-mt-px" />
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
             <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">
@@ -653,7 +690,7 @@ export function Home({ onAdmin }) {
 
       {/* ============================== JORNAL ============================== */}
       {posts.length > 0 && (
-        <section id="jornal" className="relative grain" style={manifestoBg}>
+        <section id="jornal" className="relative grain" style={{ ...manifestoBg, display: vis(['jornal']) }}>
           <Wave fill="#14160f" className="-mt-px" />
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
             <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">
@@ -689,7 +726,7 @@ export function Home({ onAdmin }) {
 
       {/* ============================== FAQ ============================== */}
       {faqs.length > 0 && (
-        <section className="relative grain" style={formBg}>
+        <section className="relative grain" style={{ ...formBg, display: vis(['contato']) }}>
           <Wave fill="#10130d" className="-mt-px" />
           <div className="max-w-3xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
             <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">
@@ -717,7 +754,7 @@ export function Home({ onAdmin }) {
 
       {/* ============================== EQUIPE ============================== */}
       {team.length > 0 && (
-        <section className="relative bg-ivory text-ink grain">
+        <section className="relative bg-ivory text-ink grain" style={{ display: vis(['sobre']) }}>
           <Wave fill="#f4f0e6" className="-mt-px" />
           <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-24">
             <p className="text-[11px] tracking-widestx uppercase text-gold mb-5 text-center">
@@ -743,7 +780,13 @@ export function Home({ onAdmin }) {
       )}
 
       {/* ============================== CONTATO / FORM ============================== */}
-      <section id="contato" className="relative grain vignette" style={formBg}>
+      <section id="contato" className="relative grain vignette" style={{ ...formBg, display: vis(['contato']) }}>
+        {sx('contact').background_url && (
+          <div className="absolute inset-0">
+            <img src={sx('contact').background_url} alt="" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-ink/80" />
+          </div>
+        )}
         <Wave fill="#10130d" className="-mt-px" />
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28 grid lg:grid-cols-2 gap-14 items-center">
           <div>
@@ -797,7 +840,7 @@ export function Home({ onAdmin }) {
             <div className="flex flex-col sm:flex-row gap-8 lg:gap-14 text-[11px] tracking-widerx uppercase text-ivory/50">
               {(footerMenu.length > 0
                 ? footerMenu.map((m) => ({ label: m.label, href: m.url }))
-                : footerLinks.map((l) => ({ label: l, href: '#' }))
+                : footerLinks.map((l) => ({ label: l, href: legalSlugs[l] ? '#/pagina/' + legalSlugs[l] : '#' }))
               ).map((l, i) => (
                 <a key={i} href={l.href} className="hover:text-gold transition-colors">
                   {l.label}
