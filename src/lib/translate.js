@@ -15,6 +15,10 @@ function decodeEntities(s) {
 
 // Termos curtos/ambíguos (menu, rótulos) com tradução garantida.
 const GLOSSARY = {
+  // Marca — nunca traduzir
+  Seravie: { en: 'Seravie', es: 'Seravie' },
+  EXPERIENCES: { en: 'EXPERIENCES', es: 'EXPERIENCES' },
+  'Seravie Experiences': { en: 'Seravie Experiences', es: 'Seravie Experiences' },
   Home: { en: 'Home', es: 'Inicio' },
   Sobre: { en: 'About', es: 'Acerca' },
   'Sobre nós': { en: 'About us', es: 'Sobre nosotros' },

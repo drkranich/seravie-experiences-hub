@@ -356,7 +356,7 @@ export function Home({ onAdmin }) {
       {/* ============================== NAV ============================== */}
       <header className="fixed top-0 inset-x-0 z-50">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
-          <a href="#topo" className="leading-none">
+          <a href="#topo" className="leading-none" data-no-translate>
             <div className="font-serif text-2xl text-ivory tracking-wide">Seravie</div>
             <div className="text-[9px] tracking-widestx text-gold/80 mt-0.5">EXPERIENCES</div>
           </a>
