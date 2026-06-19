@@ -294,14 +294,14 @@ export function Home({ onAdmin }) {
   const { items: team } = useCollection('team_members')
   const { items: posts } = useCollection('posts', 'created_at')
   const { items: menuItems } = useCollection('menu_items')
-  const { locale, setLocale, t } = useI18n()
+  const { locale, setLocale } = useI18n()
 
   const headerMenu = menuItems.filter((m) => m.location === 'header')
   const footerMenu = menuItems.filter((m) => m.location === 'footer')
   const navItems =
     headerMenu.length > 0
       ? headerMenu.map((m) => ({ label: m.label, href: m.url }))
-      : NAV.map((n) => ({ label: t(n.key, n.label), href: n.href }))
+      : NAV.map((n) => ({ label: n.label, href: n.href }))
 
   const heroBgUrl = hero?.content?.background_url
   const brand = settings?.brand || {}
@@ -367,7 +367,7 @@ export function Home({ onAdmin }) {
               </a>
             ))}
           </nav>
-          <div className="flex items-center gap-1 text-[11px] tracking-widerx">
+          <div className="flex items-center gap-1 text-[11px] tracking-widerx" data-no-translate>
             {['pt', 'en', 'es'].map((l) => (
               <button
                 key={l}

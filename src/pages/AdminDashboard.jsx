@@ -28,7 +28,6 @@ const NAV = [
   { key: 'media', label: 'Mídia', icon: 'folder' },
   { key: 'messages', label: 'Mensagens', icon: 'mail' },
   { key: 'newsletter', label: 'Newsletter', icon: 'gift' },
-  { key: 'translations', label: 'Traduções', icon: 'external' },
   { key: 'settings', label: 'Configurações', icon: 'gear' },
 ]
 
@@ -64,7 +63,6 @@ export function AdminDashboard({ onExit }) {
     media: <MediaLibrary notify={notify} />,
     messages: <MessagesPanel notify={notify} />,
     newsletter: <NewsletterInbox notify={notify} />,
-    translations: <CollectionManager {...collectionConfigs.translations} notify={notify} />,
     settings: <SettingsPanel notify={notify} />,
   }
 
@@ -86,7 +84,7 @@ export function AdminDashboard({ onExit }) {
   )
 
   return (
-    <div className="min-h-screen admin-bg text-admin-text flex">
+    <div className="min-h-screen admin-bg text-admin-text flex" data-no-translate>
       {/* Sidebar (desktop) */}
       <aside className="hidden lg:flex flex-col w-64 bg-admin-side/70 backdrop-blur-xl border-r border-admin-champ/10 sticky top-0 h-screen">
         <div className="p-7 border-b border-admin-champ/10">

@@ -136,7 +136,6 @@ export function ExperienceForm() {
             </div>
           ) : current.type === 'textarea' ? (
             <textarea
-              autoFocus
               rows="3"
               value={data[current.key]}
               onChange={(e) => update(e.target.value)}
@@ -145,7 +144,6 @@ export function ExperienceForm() {
             />
           ) : (
             <input
-              autoFocus
               type={current.type}
               value={data[current.key]}
               onChange={(e) => update(e.target.value)}
