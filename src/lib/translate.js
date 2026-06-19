@@ -2,7 +2,16 @@
 // Fonte sempre PT; alvo en/es. Em erro, devolve o texto original.
 
 const mem = {}
-const VER = 'tr2:' // bump => invalida cache anterior (qualidade ruim do MyMemory)
+const VER = 'tr3:' // bump => invalida cache anterior
+
+// Google às vezes devolve entidades HTML (&#10;, &#39;...). Decodifica para texto limpo.
+let _ta
+function decodeEntities(s) {
+  if (typeof document === 'undefined' || !s) return s
+  if (!_ta) _ta = document.createElement('textarea')
+  _ta.innerHTML = s
+  return _ta.value
+}
 
 // Termos curtos/ambíguos (menu, rótulos) com tradução garantida.
 const GLOSSARY = {
@@ -50,7 +59,7 @@ async function translateOne(text, target) {
       encodeURIComponent(text)
     const r = await fetch(url)
     const j = await r.json()
-    const tr = j && j[0] ? j[0].map((s) => s[0]).join('') : text
+    const tr = decodeEntities(j && j[0] ? j[0].map((s) => s[0]).join('') : text)
     mem[k] = tr
     try {
       localStorage.setItem(k, tr)
