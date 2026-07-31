@@ -44,6 +44,7 @@ export const CORE_SECTIONS = [
       ]},
       { key: 'conversations', label: 'Central de Conversas', icon: 'mail', route: 'conversations', pages: [
         { key: 'conv.all', label: 'Caixa Geral', route: 'conversations' },
+        { key: 'conv.channels', label: 'Canais de Atendimento', route: 'msgchannels' },
         { key: 'conv.whatsapp', label: 'WhatsApp' },
         { key: 'conv.instagram', label: 'Instagram' },
         { key: 'conv.messenger', label: 'Messenger' },
