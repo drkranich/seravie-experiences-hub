@@ -65,6 +65,7 @@ export function Overview({ go }) {
         tourism: async () => ({ title: 'Turismo', icon: 'map', route: 'tourism', stats: [['Passeios', await cnt(sbCount('tours'))]] }),
         architecture: async () => ({ title: 'Arquitetura', icon: 'layout', route: 'architecture', stats: [['Projetos', await cnt(sbCount('projects'))], ['Em execução', await cnt(sbCount('projects').eq('status', 'execution'))]] }),
         gift: async () => ({ title: 'Presentes', icon: 'gift', route: 'gift', stats: [['Itens', await cnt(sbCount('gift_items'))]] }),
+        artesanato: async () => ({ title: 'Artesanato', icon: 'palette', route: 'artesanato', stats: [['Peças', await cnt(sbCount('craft_items'))], ['Encomendas', await cnt(sbCount('craft_commissions'))]] }),
         brewery: catalog('brewery', 'Cervejaria', 'cup'),
         bakery: catalog('bakery', 'Padaria', 'cup'),
         floriculture: catalog('floriculture', 'Floricultura', 'leaf'),

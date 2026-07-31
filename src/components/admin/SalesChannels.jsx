@@ -57,6 +57,18 @@ export const CHANNELS = [
     ],
   },
   {
+    key: 'magalu', name: 'Magalu', color: '#0086ff', tint: '#0086ff18', letter: 'MG',
+    blurb: 'Venda no marketplace da Magazine Luiza (Magalu).',
+    help: 'No Portal do Parceiro Magalu, crie o app/integração e gere o Access Token do vendedor.',
+    primary: 'access_token',
+    fields: [
+      { key: 'seller_id', label: 'Seller ID / Loja' },
+      { key: 'client_id', label: 'Client ID' },
+      { key: 'client_secret', label: 'Client Secret', secret: true },
+      { key: 'access_token', label: 'Access Token', secret: true },
+    ],
+  },
+  {
     key: 'instagram_shop', name: 'Instagram Shop', color: '#e1306c', tint: '#e1306c18', letter: 'IG',
     blurb: 'Publique produtos no Instagram/Facebook via catálogo da Meta.',
     help: 'Use o Meta Business e um token da Graph API com permissão de catálogo.',
