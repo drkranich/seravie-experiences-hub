@@ -173,7 +173,7 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
         <Icon name={open ? 'up' : 'down'} className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
       {open && (
-        <div className="absolute z-[60] mt-2 w-full glass rounded-xl p-1 max-h-64 overflow-auto">
+        <div className="absolute z-[60] mt-2 w-full glass-pop rounded-xl p-1 max-h-64 overflow-auto">
           {opts.length === 0 && <p className="px-3.5 py-2 text-sm text-admin-muted/40">Sem opções</p>}
           {opts.map((o) => (
             <button

@@ -21,6 +21,7 @@ import { TeamPanel } from '../components/admin/TeamPanel'
 import { KnowledgeHub } from '../components/admin/KnowledgeHub'
 import { MarketingPanel } from '../components/admin/MarketingPanel'
 import { CatalogPanel } from '../components/admin/CatalogPanel'
+import { POSPanel } from '../components/admin/POSPanel'
 import { VerticalsPanel } from '../components/admin/VerticalsPanel'
 import { AIPanel } from '../components/admin/AIPanel'
 import { AnalyticsPanel } from '../components/admin/AnalyticsPanel'
@@ -48,6 +49,7 @@ const NAV_GROUPS = [
     { key: 'knowledge', label: 'Conhecimento', icon: 'book' },
   ]},
   { group: 'Comercial', items: [
+    { key: 'pos', label: 'PDV', icon: 'tag' },
     { key: 'marketing', label: 'Marketing', icon: 'star' },
     { key: 'catalog', label: 'Catálogo', icon: 'image' },
   ]},
@@ -75,7 +77,7 @@ const NAV_GROUPS = [
   ]},
 ]
 
-const FULLSCREEN = ['conversations', 'helpdesk']
+const FULLSCREEN = ['conversations', 'helpdesk', 'pos']
 
 export function AdminDashboard({ onExit }) {
   const { user, logout } = useAuth()
@@ -105,6 +107,7 @@ export function AdminDashboard({ onExit }) {
     knowledge: <KnowledgeHub notify={notify} />,
     marketing: <MarketingPanel notify={notify} />,
     catalog: <CatalogPanel notify={notify} />,
+    pos: <POSPanel notify={notify} />,
     verticals: <VerticalsPanel notify={notify} />,
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
