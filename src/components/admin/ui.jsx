@@ -1,3 +1,5 @@
+import { useState, useRef, useEffect } from 'react'
+
 export function Icon({ name, className = 'w-5 h-5' }) {
   const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' }
   const s = {
@@ -133,6 +135,63 @@ export function Toggle({ checked, onChange }) {
         }`}
       />
     </button>
+  )
+}
+
+/**
+ * GlassSelect — dropdown do design system Seravie.
+ * Regra geral: todo formulário usa glassmorphism, inclusive a lista de opções
+ * (impossível com <select> nativo, que herda a aparência do sistema operacional).
+ *
+ * options: array de strings OU de { value, label }.
+ * onChange: recebe o VALOR selecionado diretamente (não o evento).
+ */
+export function GlassSelect({ value, onChange, options = [], placeholder = 'Selecione', className = '', disabled }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
+  const current = opts.find((o) => String(o.value) === String(value))
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onEsc)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc) }
+  }, [open])
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none flex items-center justify-between gap-2 text-left disabled:opacity-50"
+      >
+        <span className={`truncate ${current ? '' : 'text-admin-muted/40'}`}>{current ? current.label : placeholder}</span>
+        <Icon name={open ? 'up' : 'down'} className="w-4 h-4 text-admin-champ/60 shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute z-[60] mt-2 w-full glass rounded-xl p-1 max-h-64 overflow-auto">
+          {opts.length === 0 && <p className="px-3.5 py-2 text-sm text-admin-muted/40">Sem opções</p>}
+          {opts.map((o) => (
+            <button
+              key={String(o.value)}
+              type="button"
+              onClick={() => { onChange(o.value); setOpen(false) }}
+              className={`w-full text-left px-3.5 py-2 rounded-lg text-sm transition-colors ${
+                String(o.value) === String(value)
+                  ? 'bg-admin-champ/15 text-admin-champ'
+                  : 'text-admin-text hover:bg-white/[0.06]'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

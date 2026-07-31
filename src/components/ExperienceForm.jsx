@@ -9,7 +9,7 @@ const STEPS = [
     key: 'projectType',
     q: 'Que tipo de espaço você quer transformar?',
     type: 'choice',
-    options: ['Empório / Loja', 'Cafeteria / Restaurante', 'Pousada / Hotel', 'Vinícola / Fazenda', 'Outro'],
+    options: ['Empório / Loja', 'Cafeteria / Restaurante', 'Vinícola / Fazenda', 'Outro'],
     required: false,
   },
   { key: 'details', q: 'Conte um pouco sobre o seu destino.', type: 'textarea', ph: 'Sua visão, prazos, localização...', required: true },

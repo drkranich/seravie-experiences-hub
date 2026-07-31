@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 export function FranchisePanel({ notify }) {
   const { profile } = useTenant()
@@ -211,15 +211,13 @@ export function FranchisePanel({ notify }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label>
-                  <select value={commForm.type} onChange={e => setCommForm(f => ({ ...f, type: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-                    {Object.entries(COMM_TYPE_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
+                  <GlassSelect value={commForm.type} onChange={v => setCommForm(f => ({ ...f, type: v }))}
+                    options={Object.entries(COMM_TYPE_LABELS).map(([value,label]) => ({value,label}))} />
                 </div>
                 <div>
                   <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Prioridade</label>
-                  <select value={commForm.priority} onChange={e => setCommForm(f => ({ ...f, priority: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-                    {['low','normal','high','urgent'].map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  <GlassSelect value={commForm.priority} onChange={v => setCommForm(f => ({ ...f, priority: v }))}
+                    options={['low','normal','high','urgent']} />
                 </div>
               </div>
               <div>

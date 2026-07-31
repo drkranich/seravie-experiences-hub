@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 export function SuperAdminPanel({ notify }) {
   const { profile, isSuperAdmin } = useTenant()
@@ -111,7 +111,7 @@ export function SuperAdminPanel({ notify }) {
             <div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">Convidar usuário</h2><button onClick={() => setShowInvite(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
             <div className="space-y-4">
               <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">E-mail *</label><input type="email" value={inviteForm.email} onChange={e => setInviteForm(f => ({...f, email: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
-              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Papel</label><select value={inviteForm.role_slug} onChange={e => setInviteForm(f => ({...f, role_slug: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">{['admin','manager','attendant','collaborator'].map(r => <option key={r} value={r}>{r}</option>)}</select></div>
+              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Papel</label><GlassSelect value={inviteForm.role_slug} onChange={v => setInviteForm(f => ({...f, role_slug: v}))} options={['admin','manager','attendant','collaborator']} /></div>
             </div>
             <div className="flex gap-3 mt-6"><button onClick={invite} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Enviar convite</button><button onClick={() => setShowInvite(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
           </div>

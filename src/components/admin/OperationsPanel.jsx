@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 const CATEGORY_LABELS = { opening:'Abertura', closing:'Fechamento', daily:'Diário', weekly:'Semanal', monthly:'Mensal', custom:'Personalizado' }
 
@@ -216,9 +216,8 @@ export function OperationsPanel({ notify }) {
               </div>
               <div>
                 <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Categoria</label>
-                <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-                  {Object.entries(CATEGORY_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <GlassSelect value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))}
+                  options={Object.entries(CATEGORY_LABELS).map(([value,label]) => ({value,label}))} />
               </div>
               <div>
                 <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Descrição</label>
@@ -249,15 +248,13 @@ export function OperationsPanel({ notify }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label>
-                  <select value={incidentForm.type} onChange={e => setIncidentForm(f => ({ ...f, type: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-                    {['operational','security','maintenance','quality','customer','other'].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                  <GlassSelect value={incidentForm.type} onChange={v => setIncidentForm(f => ({ ...f, type: v }))}
+                    options={['operational','security','maintenance','quality','customer','other']} />
                 </div>
                 <div>
                   <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Severidade</label>
-                  <select value={incidentForm.severity} onChange={e => setIncidentForm(f => ({ ...f, severity: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-                    {['low','medium','high','critical'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <GlassSelect value={incidentForm.severity} onChange={v => setIncidentForm(f => ({ ...f, severity: v }))}
+                    options={['low','medium','high','critical']} />
                 </div>
               </div>
               <div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 export function MarketingPanel({ notify }) {
   const { profile } = useTenant()
@@ -80,7 +80,7 @@ export function MarketingPanel({ notify }) {
             {tab === 'campaigns' ? (
               <div className="space-y-4">
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Título *</label><input value={campForm.title} onChange={e => setCampForm(f => ({ ...f, title: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
-                <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Canal</label><select value={campForm.type} onChange={e => setCampForm(f => ({ ...f, type: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">{['email','whatsapp','sms','social','push','mixed'].map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Canal</label><GlassSelect value={campForm.type} onChange={v => setCampForm(f => ({ ...f, type: v }))} options={['email','whatsapp','sms','social','push','mixed']} /></div>
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Descrição</label><textarea value={campForm.description} onChange={e => setCampForm(f => ({ ...f, description: e.target.value }))} rows={3} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" /></div>
                 <div className="flex gap-3"><button onClick={saveCampaign} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Criar</button><button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
               </div>
@@ -88,7 +88,7 @@ export function MarketingPanel({ notify }) {
               <div className="space-y-4">
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Código *</label><input value={couponForm.code} onChange={e => setCouponForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none font-mono" placeholder="EX: VERAO20" /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label><select value={couponForm.type} onChange={e => setCouponForm(f => ({ ...f, type: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">{['percentage','fixed'].map(t => <option key={t} value={t}>{t === 'percentage' ? 'Percentual' : 'Fixo'}</option>)}</select></div>
+                  <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label><GlassSelect value={couponForm.type} onChange={v => setCouponForm(f => ({ ...f, type: v }))} options={[{value:'percentage',label:'Percentual'},{value:'fixed',label:'Fixo'}]} /></div>
                   <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Valor</label><input type="number" value={couponForm.value} onChange={e => setCouponForm(f => ({ ...f, value: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
                 </div>
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Usos máximos</label><input type="number" value={couponForm.max_uses} onChange={e => setCouponForm(f => ({ ...f, max_uses: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="Ilimitado" /></div>

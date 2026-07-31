@@ -76,7 +76,7 @@ export function ConversationsInbox({ notify }) {
   }
 
   return (
-    <div className="flex gap-0 h-[calc(100vh-140px)] -mx-6 lg:-mx-10">
+    <div className="flex gap-0 h-[calc(100vh-64px)]">
       {/* Lista de conversas */}
       <div className="w-72 shrink-0 border-r border-white/[0.06] flex flex-col">
         <div className="p-4 border-b border-white/[0.06]">

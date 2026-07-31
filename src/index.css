@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Manrope:wght@300;400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -141,6 +143,36 @@ h4 {
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* =====================================================================
+   GLASSMORPHISM — REGRA GERAL DE FORMULÁRIOS
+   Todo formulário do projeto (site público + painel) segue o tema glass.
+   Este baseline garante que qualquer <select> nativo NÃO exiba a lista de
+   opções branca do sistema operacional. Os selects do painel usam o
+   componente <GlassSelect>, mas este fallback cobre selects nativos
+   remanescentes e formulários futuros.
+   ===================================================================== */
+:root { color-scheme: dark; }
+
+/* Campo de select com seta própria — sem aparência do SO */
+select.glass-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  color-scheme: dark;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23DCCBA7' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 1rem;
+  padding-right: 2.4rem;
+}
+
+/* Lista de opções nativas em tema escuro (fallback on-theme) */
+select option,
+select optgroup {
+  background-color: #181d19;
+  color: #f4f1ea;
+}
+
 .lift {
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
@@ -172,8 +204,7 @@ details[open] .faq-icon {
    Verde-musgo · Champanhe · Cobre refinado · Glassmorphism fumê
    ============================================================ */
 
-/* Fontes premium */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Manrope:wght@300;400;500;600&display=swap');
+/* Fontes premium — importadas no topo do arquivo (regra CSS @import) */
 
 :root {
   /* Canvas */

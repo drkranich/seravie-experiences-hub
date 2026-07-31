@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 const VERTICALS = [
   { key: 'franchise', label: 'Franchise Experience', icon: 'leaf', desc: 'Rede, unidades, auditorias, VM, comunicados' },
@@ -135,7 +135,7 @@ export function VerticalsPanel({ notify }) {
             <div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">Nova linha</h2><button onClick={() => setShowForm(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
             <div className="space-y-4">
               <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome *</label><input value={form.name||''} onChange={e => setForm(f => ({...f, name: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
-              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Sazonalidade</label><select value={form.season||''} onChange={e => setForm(f => ({...f, season: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none"><option value="">Ano todo</option>{Object.entries(SEASON_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Sazonalidade</label><GlassSelect value={form.season||''} onChange={v => setForm(f => ({...f, season: v}))} placeholder="Ano todo" options={[{value:'',label:'Ano todo'}, ...Object.entries(SEASON_LABELS).map(([value,label]) => ({value,label}))]} /></div>
               <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Descrição</label><textarea value={form.description||''} onChange={e => setForm(f => ({...f, description: e.target.value}))} rows={2} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" /></div>
             </div>
             <div className="flex gap-3 mt-6"><button onClick={saveChocolateLine} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Criar</button><button onClick={() => setShowForm(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
@@ -150,7 +150,7 @@ export function VerticalsPanel({ notify }) {
             <div className="space-y-4">
               <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Título *</label><input value={form.title||''} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label><select value={form.type||'wedding'} onChange={e => setForm(f => ({...f, type: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">{['wedding','corporate','birthday','graduation','other'].map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label><GlassSelect value={form.type||'wedding'} onChange={v => setForm(f => ({...f, type: v}))} options={['wedding','corporate','birthday','graduation','other']} /></div>
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Data</label><input type="date" value={form.event_date||''} onChange={e => setForm(f => ({...f, event_date: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">

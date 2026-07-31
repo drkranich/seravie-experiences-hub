@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
@@ -70,11 +70,8 @@ export function CRMPanel({ notify }) {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar contatos…"
             className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
         </div>
-        <select value={filterType} onChange={e => setFilterType(e.target.value)}
-          className="glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-          <option value="">Todos os tipos</option>
-          {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        <GlassSelect value={filterType} onChange={v => setFilterType(v)} className="min-w-44"
+          options={[{value:'',label:'Todos os tipos'}, ...Object.entries(TYPE_LABELS).map(([value, label]) => ({value,label}))]} />
       </div>
 
       {/* Lista */}
@@ -141,10 +138,8 @@ export function CRMPanel({ notify }) {
               </div>
               <div>
                 <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label>
-                <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                  className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-                  {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <GlassSelect value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
+                  options={Object.entries(TYPE_LABELS).map(([value, label]) => ({value,label}))} />
               </div>
               <div>
                 <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Notas</label>

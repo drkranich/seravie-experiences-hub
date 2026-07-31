@@ -185,7 +185,6 @@ select * from (values
   ('Destinos Turísticos','map',2,true),
   ('Empórios Gourmet','cup',3,true),
   ('Cafeterias & Bistrôs','book',4,true),
-  ('Pousadas & Hotéis','home',5,true),
   ('Vinícolas','wine',6,true),
   ('Fazendas Históricas','leaf',7,true),
   ('Marcas Artesanais','heart',8,true)

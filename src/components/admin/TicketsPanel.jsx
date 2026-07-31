@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 const PRIORITY_COLORS = { low:'text-admin-muted/50', normal:'text-admin-sage', high:'text-admin-gold', urgent:'text-admin-rose', critical:'text-red-400' }
 const STATUS_LABELS = { open:'Aberto', pending:'Pendente', in_progress:'Em andamento', resolved:'Resolvido', closed:'Fechado', cancelled:'Cancelado' }
@@ -65,7 +65,7 @@ export function TicketsPanel({ notify }) {
   const priorityBadge = (p) => <span className={`text-[10px] font-medium ${PRIORITY_COLORS[p]}`}>{p?.toUpperCase()}</span>
 
   return (
-    <div className="flex gap-0 h-[calc(100vh-140px)] -mx-6 lg:-mx-10">
+    <div className="flex gap-0 h-[calc(100vh-64px)]">
       {/* Lista de tickets */}
       <div className="w-80 shrink-0 border-r border-white/[0.06] flex flex-col">
         <div className="p-4 border-b border-white/[0.06]">
@@ -186,17 +186,13 @@ export function TicketsPanel({ notify }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label>
-                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-                    {Object.entries(TYPE_LABELS).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
+                  <GlassSelect value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
+                    options={Object.entries(TYPE_LABELS).map(([value,label]) => ({value,label}))} />
                 </div>
                 <div>
                   <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Prioridade</label>
-                  <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none">
-                    {['low','normal','high','urgent','critical'].map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  <GlassSelect value={form.priority} onChange={v => setForm(f => ({ ...f, priority: v }))}
+                    options={['low','normal','high','urgent','critical']} />
                 </div>
               </div>
               <div>

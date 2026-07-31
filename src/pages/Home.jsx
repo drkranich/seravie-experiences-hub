@@ -214,7 +214,6 @@ function Btn({ children, variant = 'primary', href = '#', onClick }) {
 
 const SPECIALTY_BAR = [
   { icon: 'building', label: 'Retail Design' },
-  { icon: 'home', label: 'Hospitality Design' },
   { icon: 'tag', label: 'Visual Merchandising' },
   { icon: 'book', label: 'Storytelling Espacial' },
   { icon: 'leaf', label: 'Curadoria de Materiais' },
@@ -246,7 +245,6 @@ const SEGMENTS = [
   { icon: 'map', label: 'Destinos Turísticos' },
   { icon: 'cup', label: 'Empórios Gourmet' },
   { icon: 'book', label: 'Cafeterias & Bistrôs' },
-  { icon: 'home', label: 'Pousadas & Hotéis' },
   { icon: 'wine', label: 'Vinícolas' },
   { icon: 'leaf', label: 'Fazendas Históricas' },
   { icon: 'heart', label: 'Marcas Artesanais' },
@@ -254,8 +252,7 @@ const SEGMENTS = [
 
 const PORTFOLIO_FALLBACK = [
   { id: 'f1', title: 'Empórios Gourmet', category: 'Retail' },
-  { id: 'f2', title: 'Cafeterias Artesanais', category: 'Hospitality' },
-  { id: 'f3', title: 'Pousadas & Hotéis Boutique', category: 'Hospitality' },
+  { id: 'f2', title: 'Cafeterias Artesanais', category: 'Gastronomia' },
   { id: 'f4', title: 'Lojas Turísticas', category: 'Retail' },
 ]
 
