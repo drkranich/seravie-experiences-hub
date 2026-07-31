@@ -36,6 +36,10 @@ export default function App() {
   const isStoreRoute = window.location.hash.startsWith('#loja') || /[?&](store|loja)=/.test(window.location.search)
   if (isStoreRoute) return <Storefront />
 
+  // Rota do site público (precedência sobre o admin, mesmo logado — "Ver site")
+  const isSiteRoute = window.location.hash === '#site'
+  if (isSiteRoute) return <Home onAdmin={() => { window.location.hash = '#admin'; window.location.reload() }} />
+
   // Rota admin
   const isAdminRoute = window.location.hash === '#admin' || window.location.search.includes('admin')
 
@@ -78,7 +82,7 @@ export default function App() {
       )
     }
 
-    return <AdminDashboard onExit={() => window.location.href = '/'} />
+    return <AdminDashboard onExit={() => { window.location.hash = '#site'; window.location.reload() }} />
   }
 
   // Home (landing pública)
