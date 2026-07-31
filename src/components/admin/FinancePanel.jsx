@@ -40,10 +40,12 @@ export function FinancePanel({ notify }) {
 
   const save = async () => {
     if (!form.amount || Number(form.amount) <= 0) return notify('Informe um valor', 'error')
+    const status = form.status || 'paid'
     const base = {
       type: form.type || 'expense', category: form.category || 'outro', description: form.description,
       amount: Number(form.amount), date: form.date || new Date().toISOString().slice(0, 10),
       payment_method: form.payment_method || 'dinheiro',
+      status, due_date: status === 'pending' ? (form.due_date || null) : null,
     }
     const { error } = editing
       ? await supabase.from('financial_entries').update(base).eq('id', editing.id)
@@ -52,7 +54,7 @@ export function FinancePanel({ notify }) {
     notify(editing ? 'Lançamento atualizado' : 'Lançamento registrado', 'success'); setModal(false); setEditing(null); setForm({}); load()
   }
 
-  const openEdit = (e) => { setEditing(e); setForm({ type: e.type, category: e.category, description: e.description || '', amount: String(e.amount), date: e.date, payment_method: e.payment_method }); setModal(true) }
+  const openEdit = (e) => { setEditing(e); setForm({ type: e.type, category: e.category, description: e.description || '', amount: String(e.amount), date: e.date, payment_method: e.payment_method, status: e.status || 'paid', due_date: e.due_date || '' }); setModal(true) }
   const remove = async (e) => {
     const { error } = await supabase.from('financial_entries').delete().eq('id', e.id)
     setConfirmDel(null)
@@ -66,7 +68,7 @@ export function FinancePanel({ notify }) {
     return [...set].sort().reverse()
   }, [entries])
 
-  const monthEntries = entries.filter((e) => (e.date || '').slice(0, 7) === month)
+  const monthEntries = entries.filter((e) => (e.date || '').slice(0, 7) === month && (e.status || 'paid') === 'paid')
   const revenue = monthEntries.filter((e) => e.type === 'revenue').reduce((s, e) => s + Number(e.amount), 0)
   const expense = monthEntries.filter((e) => e.type === 'expense').reduce((s, e) => s + Number(e.amount), 0)
   const balance = revenue - expense
@@ -82,7 +84,7 @@ export function FinancePanel({ notify }) {
     return Object.entries(m).sort((a, b) => b[1] - a[1])
   }
 
-  const openNew = (type) => { setEditing(null); setForm({ type, category: type === 'revenue' ? 'venda' : 'fornecedor', payment_method: 'dinheiro', date: new Date().toISOString().slice(0, 10) }); setModal(true) }
+  const openNew = (type) => { setEditing(null); setForm({ type, category: type === 'revenue' ? 'venda' : 'fornecedor', payment_method: 'dinheiro', date: new Date().toISOString().slice(0, 10), status: 'paid', due_date: '' }); setModal(true) }
   const cats = (form.type === 'revenue' ? REV_CATS : EXP_CATS)
 
   return (
@@ -148,7 +150,12 @@ export function FinancePanel({ notify }) {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3"><Fld label="Tipo"><GlassSelect value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v, category: v === 'revenue' ? 'venda' : 'fornecedor' }))} options={[{ value: 'revenue', label: 'Receita' }, { value: 'expense', label: 'Despesa' }]} /></Fld><Fld label="Valor (R$)"><input type="number" value={form.amount || ''} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className={inputCls} /></Fld></div>
             <div className="grid grid-cols-2 gap-3"><Fld label="Categoria"><GlassSelect value={form.category} onChange={(v) => setForm((f) => ({ ...f, category: v }))} options={cats.map((c) => ({ value: c, label: c }))} /></Fld><Fld label="Forma"><GlassSelect value={form.payment_method} onChange={(v) => setForm((f) => ({ ...f, payment_method: v }))} options={Object.entries(METHODS).map(([value, label]) => ({ value, label }))} /></Fld></div>
-            <Fld label="Data"><GlassDate value={form.date || ''} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></Fld>
+            <div className="grid grid-cols-2 gap-3">
+              <Fld label="Situação"><GlassSelect value={form.status || 'paid'} onChange={(v) => setForm((f) => ({ ...f, status: v }))} options={[{ value: 'paid', label: 'Realizado' }, { value: 'pending', label: form.type === 'revenue' ? 'A receber' : 'A pagar' }]} /></Fld>
+              {form.status === 'pending'
+                ? <Fld label="Vencimento"><GlassDate value={form.due_date || ''} onChange={(v) => setForm((f) => ({ ...f, due_date: v }))} /></Fld>
+                : <Fld label="Data"><GlassDate value={form.date || ''} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></Fld>}
+            </div>
             <Fld label="Descrição"><input value={form.description || ''} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className={inputCls} /></Fld>
           </div>
           <div className="flex gap-3 mt-6"><button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">{editing ? 'Salvar alterações' : 'Registrar'}</button><button onClick={() => { setModal(false); setEditing(null) }} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
