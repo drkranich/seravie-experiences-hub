@@ -1,14 +1,14 @@
-import { useState } from 'react'
 import { useAuth } from './hooks/useAuth'
+import { useTenant } from './hooks/useTenant'
 import { Login } from './pages/Login'
 import { AdminDashboard } from './pages/AdminDashboard'
 import { Home } from './pages/Home'
-import { ADMIN_EMAIL } from './config'
 
 export default function App() {
-  const [page, setPage] = useState('home') // home, admin
   const { user, loading: authLoading, logout } = useAuth()
+  const { profile, loading: tenantLoading, isAdmin } = useTenant()
 
+  // Aguardar auth carregar
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-ink text-ivory/60 font-serif text-2xl tracking-widest">
@@ -17,13 +17,24 @@ export default function App() {
     )
   }
 
-  // Admin Panel
-  if (page === 'admin') {
-    if (!user) {
-      return <Login onLoginSuccess={() => setPage('admin')} />
+  // Rota admin
+  const isAdminRoute = window.location.hash === '#admin' || window.location.search.includes('admin')
+
+  if (isAdminRoute || (user && profile)) {
+    // Sem usuário: mostrar login
+    if (!user) return <Login onLoginSuccess={() => {}} />
+
+    // Aguardar perfil do tenant carregar
+    if (tenantLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-ink text-ivory/60 font-serif text-xl tracking-widest">
+          Verificando acesso…
+        </div>
+      )
     }
-    // Apenas o super admin autorizado acessa o painel
-    if (user.email !== ADMIN_EMAIL) {
+
+    // Sem perfil ou sem permissão admin
+    if (!profile || !isAdmin()) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-ink text-ivory p-4 text-center">
           <h1 className="font-serif text-3xl mb-2">Acesso não autorizado</h1>
@@ -38,7 +49,7 @@ export default function App() {
               Sair
             </button>
             <button
-              onClick={() => setPage('home')}
+              onClick={() => window.location.href = '/'}
               className="border border-gold/50 text-champagne px-5 py-2.5 text-[11px] tracking-widerx uppercase hover:bg-gold/10 transition-colors"
             >
               Voltar ao site
@@ -47,9 +58,10 @@ export default function App() {
         </div>
       )
     }
-    return <AdminDashboard onExit={() => setPage('home')} />
+
+    return <AdminDashboard onExit={() => window.location.href = '/'} />
   }
 
-  // Home (landing)
-  return <Home onAdmin={() => setPage('admin')} />
+  // Home (landing pública)
+  return <Home onAdmin={() => { window.location.hash = '#admin'; window.location.reload() }} />
 }
