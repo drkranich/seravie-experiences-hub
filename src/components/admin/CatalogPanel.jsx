@@ -10,7 +10,7 @@ export function CatalogPanel({ notify }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', description: '', price: '', cost: '', stock: '', sku: '', status: 'active' })
+  const [form, setForm] = useState({ name: '', description: '', price: '', cost: '', stock: '', sku: '', barcode: '', status: 'active' })
 
   const loadProducts = async () => { setLoading(true); const { data } = await supabase.from('products').select('*').order('name'); setProducts(data || []); setLoading(false) }
   const loadOrders = async () => { setLoading(true); const { data } = await supabase.from('orders').select('*, contacts(name)').order('created_at', { ascending: false }).limit(50); setOrders(data || []); setLoading(false) }
@@ -21,7 +21,7 @@ export function CatalogPanel({ notify }) {
     if (!form.name.trim()) { notify('Nome obrigatório', 'error'); return }
     const { error } = await supabase.from('products').insert({ ...form, price: parseFloat(form.price) || 0, cost: parseFloat(form.cost) || null, stock: parseInt(form.stock) || 0, tenant_id: profile?.tenant_id })
     if (error) { notify('Erro', 'error'); return }
-    notify('Produto criado', 'success'); setShowForm(false); setForm({ name: '', description: '', price: '', cost: '', stock: '', sku: '', status: 'active' }); loadProducts()
+    notify('Produto criado', 'success'); setShowForm(false); setForm({ name: '', description: '', price: '', cost: '', stock: '', sku: '', barcode: '', status: 'active' }); loadProducts()
   }
 
   const STATUS_COLORS = { pending:'text-admin-gold', confirmed:'text-admin-champ', processing:'text-admin-gold', ready:'text-admin-sage', delivered:'text-admin-muted/40', cancelled:'text-admin-rose', refunded:'text-admin-rose/50' }
@@ -81,7 +81,10 @@ export function CatalogPanel({ notify }) {
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Preço (R$)</label><input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Estoque</label><input type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
               </div>
-              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">SKU</label><input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">SKU</label><input value={form.sku} onChange={e => setForm(f => ({ ...f, sku: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
+                <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Código de barras</label><input value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))} placeholder="Bipe aqui ou digite" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
+              </div>
               <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Descrição</label><textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" /></div>
             </div>
             <div className="flex gap-3 mt-6">

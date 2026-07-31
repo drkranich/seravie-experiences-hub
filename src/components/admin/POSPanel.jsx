@@ -54,6 +54,7 @@ export function POSPanel({ notify }) {
   const [stockModal, setStockModal] = useState(null) // product for entrada de estoque
   const [stockForm, setStockForm] = useState({ quantity: '', notes: '' })
   const [stripeLink, setStripeLink] = useState(null)
+  const [manualCode, setManualCode] = useState('')
 
   const loadSession = async () => {
     setLoading(true)
@@ -153,6 +154,36 @@ export function POSPanel({ notify }) {
   }))
   const setItemDiscount = (id, d) => setCart((c) => c.map((i) => i.product_id === id ? { ...i, discount: Math.max(0, num(d)) } : i))
   const removeItem = (id) => setCart((c) => c.filter((i) => i.product_id !== id))
+
+  // ---------- Leitor de código de barras (HID / keyboard wedge) ----------
+  const handleScan = (raw) => {
+    const code = String(raw).trim()
+    if (!code) return
+    const p = products.find((x) => x.barcode && x.barcode === code) || products.find((x) => (x.sku || '') === code)
+    if (!p) { notify(`Código ${code} não encontrado`, 'error'); return }
+    if (p.stock != null && p.stock <= 0) { notify(`${p.name}: sem estoque`, 'error'); return }
+    addToCart(p); notify(`${p.name} · bipado`, 'success')
+  }
+
+  useEffect(() => {
+    if (!session) return
+    let buf = ''; let last = 0
+    const onKey = (e) => {
+      if (e.target?.dataset?.barcode) return // campo manual trata o próprio Enter
+      const t = Date.now()
+      if (t - last > 80) buf = '' // reset se digitação humana (lenta)
+      last = t
+      if (e.key === 'Enter') {
+        if (buf.length >= 3) { e.preventDefault(); handleScan(buf); setSearch(''); setManualCode('') }
+        buf = ''
+        return
+      }
+      if (e.key.length === 1) buf += e.key
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, products])
 
   const lineTotal = (i) => Math.max(0, i.price * i.qty - (i.discount || 0))
   const subtotal = cart.reduce((s, i) => s + lineTotal(i), 0)
@@ -318,6 +349,15 @@ export function POSPanel({ notify }) {
             <div className="relative">
               <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar produto ou SKU…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Icon name="tag" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-champ/50" />
+                <input data-barcode="1" value={manualCode} onChange={(e) => setManualCode(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScan(manualCode); setManualCode('') } }}
+                  placeholder="Código de barras — bipe ou digite…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
+              </div>
+              <span className="flex items-center gap-1.5 text-[10px] text-admin-sage bg-admin-sage/10 px-2.5 py-2 rounded-lg shrink-0" title="Leitor USB detectado como teclado — bipe para adicionar"><span className="w-1.5 h-1.5 rounded-full bg-admin-sage animate-pulse" />Leitor pronto</span>
             </div>
             {categories.length > 0 && (
               <div className="flex gap-1.5 flex-wrap">
