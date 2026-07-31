@@ -36,8 +36,9 @@ export default function App() {
   const isStoreRoute = window.location.hash.startsWith('#loja') || /[?&](store|loja)=/.test(window.location.search)
   if (isStoreRoute) return <Storefront />
 
-  // Rota do site público (precedência sobre o admin, mesmo logado — "Ver site")
-  const isSiteRoute = window.location.hash === '#site'
+  // Rota do site público (precedência sobre o admin, mesmo logado — "Ver site").
+  // #topo é reconhecido pela Home como 'home' (página completa).
+  const isSiteRoute = window.location.hash === '#topo' || window.location.hash === '#site'
   if (isSiteRoute) return <Home onAdmin={() => { window.location.hash = '#admin'; window.location.reload() }} />
 
   // Rota admin
@@ -82,7 +83,7 @@ export default function App() {
       )
     }
 
-    return <AdminDashboard onExit={() => { window.location.hash = '#site'; window.location.reload() }} />
+    return <AdminDashboard onExit={() => { window.location.hash = '#topo'; window.location.reload() }} />
   }
 
   // Home (landing pública)
