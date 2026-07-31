@@ -163,15 +163,15 @@ export function ChannelsTab({ notify }) {
             const row = byKey(def.key)
             const st = row?.status || 'disconnected'
             return (
-              <div key={def.key} className="glass rounded-2xl p-5">
+              <div key={def.key} className="glass rounded-2xl p-5 flex flex-col h-full">
                 <div className="flex items-start justify-between mb-3">
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center font-semibold text-sm" style={{ background: def.tint, color: def.color }}>{def.letter}</div>
                   <span className={`text-[9px] px-2 py-0.5 rounded-lg ${STATUS_STYLE[st]}`}>{STATUS_LABEL[st]}</span>
                 </div>
                 <p className="text-admin-text text-sm font-medium">{def.name}</p>
-                <p className="text-admin-muted/50 text-xs mt-1 mb-3 leading-relaxed">{def.blurb}</p>
-                {row?.last_sync_at && <p className="text-admin-muted/40 text-[10px] mb-3">Última sincronização: {new Date(row.last_sync_at).toLocaleString('pt-BR')}</p>}
-                <div className="flex gap-2 flex-wrap">
+                <p className="text-admin-muted/50 text-xs mt-1 leading-relaxed flex-1">{def.blurb}</p>
+                {row?.last_sync_at && <p className="text-admin-muted/40 text-[10px] mt-3">Última sincronização: {new Date(row.last_sync_at).toLocaleString('pt-BR')}</p>}
+                <div className="flex gap-2 flex-wrap mt-4">
                   <button onClick={() => open(def)} className="flex-1 min-w-[84px] bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-3 py-2 rounded-xl text-xs transition-colors">{row ? 'Configurar' : 'Conectar'}</button>
                   {row && <button onClick={() => test(def)} disabled={busy === def.key + ':test'} className="px-3 py-2 rounded-xl text-xs text-admin-champ/80 border border-admin-champ/20 hover:bg-white/[0.04] transition-colors disabled:opacity-50">{busy === def.key + ':test' ? '…' : 'Testar'}</button>}
                   {def.orders && st === 'connected' && <button onClick={() => pull(def)} disabled={busy === def.key + ':pull'} className="px-3 py-2 rounded-xl text-xs text-admin-sage border border-admin-sage/20 hover:bg-admin-sage/10 transition-colors disabled:opacity-50">{busy === def.key + ':pull' ? '…' : 'Sincronizar pedidos'}</button>}
