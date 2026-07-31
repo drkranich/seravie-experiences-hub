@@ -28,6 +28,7 @@ import { AIPanel } from '../components/admin/AIPanel'
 import { AnalyticsPanel } from '../components/admin/AnalyticsPanel'
 import { SuperAdminPanel } from '../components/admin/SuperAdminPanel'
 import { POSPanel } from '../components/admin/POSPanel'
+import { ChocolatePanel } from '../components/admin/ChocolatePanel'
 import { ScaffoldPage } from '../components/admin/ScaffoldPage'
 import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
 
@@ -71,6 +72,7 @@ export function AdminDashboard({ onExit }) {
     marketing: <MarketingPanel notify={notify} />,
     catalog: <CatalogPanel notify={notify} />,
     pos: <POSPanel notify={notify} />,
+    chocolate: <ChocolatePanel notify={notify} />,
     verticals: <VerticalsPanel notify={notify} />,
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
@@ -91,9 +93,10 @@ export function AdminDashboard({ onExit }) {
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).
   const sections = useMemo(() => {
+    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate' } // frentes com painel real
     const frentes = verticals.map((v) => {
       const nav = verticalToNav(v)
-      if (nav && v === 'franchise') nav.route = 'franchise' // usa o painel real de Franquias
+      if (nav && VERTICAL_ROUTES[v]) nav.route = VERTICAL_ROUTES[v]
       return nav
     }).filter(Boolean)
     const base = [...CORE_SECTIONS]
