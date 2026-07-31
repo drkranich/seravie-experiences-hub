@@ -136,6 +136,7 @@ export function ResourcePanel({
     let q = supabase.from(table).select(select)
     if (baseFilter) {
       if (baseFilter.op === 'contains') q = q.contains(baseFilter.column, baseFilter.value)
+      else if (baseFilter.op === 'neq') q = q.neq(baseFilter.column, baseFilter.value)
       else q = q.eq(baseFilter.column, baseFilter.value)
     }
     const { data } = await q.order(orderBy.column, { ascending: orderBy.ascending })
