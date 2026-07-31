@@ -39,6 +39,7 @@ import { SpaPanel } from '../components/admin/SpaPanel'
 import { TourismPanel } from '../components/admin/TourismPanel'
 import { ArchitecturePanel } from '../components/admin/ArchitecturePanel'
 import { CraftPanel } from '../components/admin/CraftPanel'
+import { StorePanel } from '../components/admin/StorePanel'
 import { FinancePanel } from '../components/admin/FinancePanel'
 import { AgendaPanel } from '../components/admin/AgendaPanel'
 import { AutomationPanel } from '../components/admin/AutomationPanel'
@@ -93,6 +94,7 @@ export function AdminDashboard({ onExit }) {
     agenda: <AgendaPanel notify={notify} />,
     automations: <AutomationPanel notify={notify} />,
     pos: <POSPanel notify={notify} />,
+    ecommerce: <StorePanel notify={notify} />,
     chocolate: <ChocolatePanel notify={notify} />,
     gourmet: <EmporioPanel notify={notify} />,
     coffee: <CoffeePanel notify={notify} />,

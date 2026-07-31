@@ -81,6 +81,14 @@ export const CORE_SECTIONS = [
         { key: 'exp.calendar', label: 'Calendário' },
       ]},
       { key: 'pos', label: 'PDV', icon: 'tag', route: 'pos' },
+      { key: 'ecommerce', label: 'E-commerce', icon: 'cart', route: 'ecommerce', pages: [
+        { key: 'ec.storefront', label: 'Vitrine', route: 'ecommerce' },
+        { key: 'ec.orders', label: 'Pedidos Online', route: 'ecommerce' },
+        { key: 'ec.settings', label: 'Configurações da Loja', route: 'ecommerce' },
+        { key: 'ec.shipping', label: 'Frete' },
+        { key: 'ec.coupons', label: 'Cupons' },
+        { key: 'ec.payments', label: 'Pagamentos' },
+      ]},
       { key: 'agenda', label: 'Agenda', icon: 'calendar', route: 'agenda' },
       { key: 'marketing', label: 'Marketing', icon: 'star', route: 'marketing', pages: [
         { key: 'mkt.campaigns', label: 'Campanhas', route: 'marketing' },
