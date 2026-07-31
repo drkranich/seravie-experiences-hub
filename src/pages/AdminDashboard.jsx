@@ -38,6 +38,7 @@ import { VerticalCatalogPanel } from '../components/admin/VerticalCatalogPanel'
 import { SpaPanel } from '../components/admin/SpaPanel'
 import { TourismPanel } from '../components/admin/TourismPanel'
 import { ArchitecturePanel } from '../components/admin/ArchitecturePanel'
+import { FinancePanel } from '../components/admin/FinancePanel'
 import { ScaffoldPage } from '../components/admin/ScaffoldPage'
 import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
 
@@ -80,6 +81,7 @@ export function AdminDashboard({ onExit }) {
     knowledge: <KnowledgeHub notify={notify} />,
     marketing: <MarketingPanel notify={notify} />,
     catalog: <CatalogPanel notify={notify} />,
+    finance: <FinancePanel notify={notify} />,
     pos: <POSPanel notify={notify} />,
     chocolate: <ChocolatePanel notify={notify} />,
     gourmet: <EmporioPanel notify={notify} />,
