@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassDate } from './ui'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toFixed(2)}`
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
@@ -68,7 +68,7 @@ export function ArchitecturePanel({ notify }) {
           <div className="space-y-4">
             <Fld label="Nome *"><input value={form.name || ''} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="Ex: Loja conceito SP" /></Fld>
             <div className="grid grid-cols-2 gap-3"><Fld label="Cliente"><input value={form.client_name || ''} onChange={(e) => setForm((f) => ({ ...f, client_name: e.target.value }))} className={inputCls} /></Fld><Fld label="Status"><GlassSelect value={form.status} onChange={(v) => setForm((f) => ({ ...f, status: v }))} options={Object.entries(STATUS).map(([value, label]) => ({ value, label }))} /></Fld></div>
-            <div className="grid grid-cols-2 gap-3"><Fld label="Início"><input type="date" value={form.start_date || ''} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className={inputCls} /></Fld><Fld label="Prazo"><input type="date" value={form.deadline || ''} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))} className={inputCls} /></Fld></div>
+            <div className="grid grid-cols-2 gap-3"><Fld label="Início"><GlassDate value={form.start_date || ''} onChange={(v) => setForm((f) => ({ ...f, start_date: v }))} /></Fld><Fld label="Prazo"><GlassDate value={form.deadline || ''} onChange={(v) => setForm((f) => ({ ...f, deadline: v }))} /></Fld></div>
             <Fld label="Orçamento (R$)"><input type="number" value={form.budget || ''} onChange={(e) => setForm((f) => ({ ...f, budget: e.target.value }))} className={inputCls} /></Fld>
             <Fld label="Observações"><textarea value={form.notes || ''} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className={`${inputCls} resize-none`} /></Fld>
           </div>

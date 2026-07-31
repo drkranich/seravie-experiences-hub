@@ -219,7 +219,13 @@ export function Toggle({ checked, onChange }) {
  */
 export function GlassSelect({ value, onChange, options = [], placeholder = 'Selecione', className = '', disabled }) {
   const [open, setOpen] = useState(false)
+  const [dropUp, setDropUp] = useState(false)
   const ref = useRef(null)
+  const toggle = () => setOpen((o) => {
+    const willOpen = !o
+    if (willOpen && ref.current) { const r = ref.current.getBoundingClientRect(); setDropUp(window.innerHeight - r.bottom < 300 && r.top > 300) }
+    return willOpen
+  })
   const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
   const current = opts.find((o) => String(o.value) === String(value))
 
@@ -237,14 +243,14 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none flex items-center justify-between gap-2 text-left disabled:opacity-50"
       >
         <span className={`truncate ${current ? '' : 'text-admin-muted/40'}`}>{current ? current.label : placeholder}</span>
         <Icon name={open ? 'up' : 'down'} className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
       {open && (
-        <div className="absolute z-[60] mt-2 w-full glass-pop rounded-xl p-1 max-h-64 overflow-auto">
+        <div className={`absolute left-0 z-[60] w-full glass-pop rounded-xl p-1 max-h-64 overflow-auto ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
           {opts.length === 0 && <p className="px-3.5 py-2 text-sm text-admin-muted/40">Sem opções</p>}
           {opts.map((o) => (
             <button
@@ -260,6 +266,90 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
               {o.label}
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * GlassDate — calendário/date picker do design system Seravie.
+ * Regra geral: todo calendário usa glassmorphism (glass-pop escuro, não
+ * translúcido demais). Substitui o <input type="date"> nativo, cujo popup
+ * é desenhado pelo sistema operacional e não pode ser estilizado.
+ * value/onChange usam o formato 'YYYY-MM-DD' (compatível com o banco).
+ */
+const pad2 = (n) => String(n).padStart(2, '0')
+const toYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+const parseYMD = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1) }
+
+export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', className = '' }) {
+  const [open, setOpen] = useState(false)
+  const [dropUp, setDropUp] = useState(false)
+  const ref = useRef(null)
+  const selected = value ? parseYMD(value) : null
+  const [view, setView] = useState(selected || new Date())
+
+  const toggle = () => setOpen((o) => {
+    const willOpen = !o
+    if (willOpen && ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      setDropUp(window.innerHeight - r.bottom < 360 && r.top > 360) // abre pra cima só se faltar espaço embaixo
+    }
+    return willOpen
+  })
+
+  useEffect(() => {
+    if (!open) return
+    setView(selected || new Date())
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onEsc)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const y = view.getFullYear(), m = view.getMonth()
+  const firstDay = new Date(y, m, 1).getDay()
+  const days = new Date(y, m + 1, 0).getDate()
+  const today = new Date()
+  const same = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  const cells = [...Array(firstDay).fill(null), ...Array.from({ length: days }, (_, i) => new Date(y, m, i + 1))]
+  const monthLabel = view.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const pick = (d) => { onChange(toYMD(d)); setOpen(false) }
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button type="button" onClick={toggle}
+        className="w-full glass-input rounded-xl px-4 py-2.5 text-sm outline-none flex items-center justify-between gap-2 text-left">
+        <span className={selected ? 'text-admin-text' : 'text-admin-muted/40'}>{selected ? `${pad2(selected.getDate())}/${pad2(selected.getMonth() + 1)}/${selected.getFullYear()}` : placeholder}</span>
+        <Icon name="calendar" className="w-4 h-4 text-admin-champ/60 shrink-0" />
+      </button>
+      {open && (
+        <div className={`absolute left-0 z-[60] w-[16.5rem] glass-pop rounded-xl p-3 ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-admin-champ text-sm font-medium capitalize">{monthLabel}</p>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => setView(new Date(y, m - 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
+              <button type="button" onClick={() => setView(new Date(y, m + 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-0.5 mb-1">
+            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="text-center text-[10px] text-admin-muted/40 py-1">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {cells.map((d, i) => d ? (
+              <button key={i} type="button" onClick={() => pick(d)}
+                className={`h-8 rounded-lg text-xs transition-colors ${same(d, selected) ? 'bg-admin-champ text-admin-bg font-medium' : same(d, today) ? 'text-admin-champ ring-1 ring-admin-champ/30' : 'text-admin-text hover:bg-white/[0.06]'}`}>
+                {d.getDate()}
+              </button>
+            ) : <div key={i} />)}
+          </div>
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.06]">
+            <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-[11px] text-admin-muted/60 hover:text-admin-rose">Limpar</button>
+            <button type="button" onClick={() => pick(new Date())} className="text-[11px] text-admin-champ hover:underline">Hoje</button>
+          </div>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassDate } from './ui'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toFixed(2)}`
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
@@ -126,7 +126,7 @@ export function CoffeePanel({ notify }) {
         <Modal title="Novo workshop" onClose={close}>
           <div className="space-y-4">
             <Fld label="Título *"><input value={form.title || ''} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className={inputCls} placeholder="Ex: Introdução ao Barismo" /></Fld>
-            <div className="grid grid-cols-2 gap-3"><Fld label="Data"><input type="date" value={form.event_date || ''} onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))} className={inputCls} /></Fld><Fld label="Vagas"><input type="number" value={form.guest_count || ''} onChange={(e) => setForm((f) => ({ ...f, guest_count: e.target.value }))} className={inputCls} /></Fld></div>
+            <div className="grid grid-cols-2 gap-3"><Fld label="Data"><GlassDate value={form.event_date || ''} onChange={(v) => setForm((f) => ({ ...f, event_date: v }))} /></Fld><Fld label="Vagas"><input type="number" value={form.guest_count || ''} onChange={(e) => setForm((f) => ({ ...f, guest_count: e.target.value }))} className={inputCls} /></Fld></div>
           </div>
           <Actions onSave={saveWorkshop} onClose={close} label="Criar workshop" />
         </Modal>

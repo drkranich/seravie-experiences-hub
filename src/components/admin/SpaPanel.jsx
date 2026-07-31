@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassDate } from './ui'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toFixed(2)}`
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
@@ -100,7 +100,7 @@ export function SpaPanel({ notify }) {
           <div className="space-y-4">
             <Fld label="Cliente *"><input value={form.customer_name || ''} onChange={(e) => setForm((f) => ({ ...f, customer_name: e.target.value }))} className={inputCls} /></Fld>
             <Fld label="Serviço"><GlassSelect value={form.service || ''} onChange={(v) => setForm((f) => ({ ...f, service: v }))} options={[{ value: '', label: 'Selecione' }, ...services.map((s) => ({ value: s.name, label: s.name }))]} /></Fld>
-            <div className="grid grid-cols-2 gap-3"><Fld label="Data"><input type="date" value={form.date || ''} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className={inputCls} /></Fld><Fld label="Hora"><input value={form.time || ''} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className={inputCls} placeholder="14:30" /></Fld></div>
+            <div className="grid grid-cols-2 gap-3"><Fld label="Data"><GlassDate value={form.date || ''} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></Fld><Fld label="Hora"><input value={form.time || ''} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className={inputCls} placeholder="14:30" /></Fld></div>
             <Fld label="Profissional"><input value={form.professional || ''} onChange={(e) => setForm((f) => ({ ...f, professional: e.target.value }))} className={inputCls} /></Fld>
           </div>
           <div className="flex gap-3 mt-6"><button onClick={saveAppt} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Agendar</button><button onClick={close} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>

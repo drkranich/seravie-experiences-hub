@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassDate } from './ui'
 
 const COMM_TYPE_LABELS = { announcement: 'Comunicado', alert: 'Alerta', training: 'Treinamento', campaign: 'Campanha', policy: 'Política', other: 'Outro' }
 const PRIORITY_COLORS = { low: 'text-admin-muted/40', normal: 'text-admin-sage', high: 'text-admin-gold', urgent: 'text-admin-rose' }
@@ -268,7 +268,7 @@ export function FranchisePanel({ notify }) {
           <div className="space-y-4">
             <Fld label="Título *"><input value={form.title || ''} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className={inputCls} placeholder="Ex: Vitrine de Páscoa" /></Fld>
             <div className="grid grid-cols-2 gap-3"><Fld label="Tipo"><GlassSelect value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v }))} options={[{ value: 'vitrine', label: 'Vitrine' }, { value: 'layout', label: 'Layout de loja' }, { value: 'campanha', label: 'Campanha' }]} /></Fld><Fld label="Status"><GlassSelect value={form.status} onChange={(v) => setForm((f) => ({ ...f, status: v }))} options={Object.entries(VM_STATUS).map(([value, label]) => ({ value, label }))} /></Fld></div>
-            <div className="grid grid-cols-2 gap-3"><Fld label="Início"><input type="date" value={form.start_date || ''} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className={inputCls} /></Fld><Fld label="Fim"><input type="date" value={form.end_date || ''} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} className={inputCls} /></Fld></div>
+            <div className="grid grid-cols-2 gap-3"><Fld label="Início"><GlassDate value={form.start_date || ''} onChange={(v) => setForm((f) => ({ ...f, start_date: v }))} /></Fld><Fld label="Fim"><GlassDate value={form.end_date || ''} onChange={(v) => setForm((f) => ({ ...f, end_date: v }))} /></Fld></div>
             <Fld label="Instruções"><textarea value={form.instructions || ''} onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))} rows={3} className={`${inputCls} resize-none`} placeholder="Como a loja deve montar a vitrine…" /></Fld>
           </div>
           <ModalActions onSave={saveVM} onClose={close} label="Criar campanha" />
@@ -304,7 +304,7 @@ export function FranchisePanel({ notify }) {
             <Fld label="Título *"><input value={form.title || ''} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className={inputCls} placeholder="Ex: Faturamento do mês" /></Fld>
             <div className="grid grid-cols-2 gap-3"><Fld label="Unidade"><GlassSelect value={form.unit_id || ''} onChange={(v) => setForm((f) => ({ ...f, unit_id: v }))} options={unitOptions} /></Fld><Fld label="Tipo"><GlassSelect value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v }))} options={[{ value: 'sales', label: 'Vendas' }, { value: 'ticket', label: 'Ticket médio' }, { value: 'nps', label: 'NPS' }, { value: 'other', label: 'Outro' }]} /></Fld></div>
             <div className="grid grid-cols-2 gap-3"><Fld label="Alvo"><input type="number" value={form.target_value || ''} onChange={(e) => setForm((f) => ({ ...f, target_value: e.target.value }))} className={inputCls} /></Fld><Fld label="Atual"><input type="number" value={form.current_value || ''} onChange={(e) => setForm((f) => ({ ...f, current_value: e.target.value }))} className={inputCls} /></Fld></div>
-            <div className="grid grid-cols-2 gap-3"><Fld label="Início"><input type="date" value={form.period_start || ''} onChange={(e) => setForm((f) => ({ ...f, period_start: e.target.value }))} className={inputCls} /></Fld><Fld label="Fim"><input type="date" value={form.period_end || ''} onChange={(e) => setForm((f) => ({ ...f, period_end: e.target.value }))} className={inputCls} /></Fld></div>
+            <div className="grid grid-cols-2 gap-3"><Fld label="Início"><GlassDate value={form.period_start || ''} onChange={(v) => setForm((f) => ({ ...f, period_start: v }))} /></Fld><Fld label="Fim"><GlassDate value={form.period_end || ''} onChange={(v) => setForm((f) => ({ ...f, period_end: v }))} /></Fld></div>
           </div>
           <ModalActions onSave={saveGoal} onClose={close} label="Criar meta" />
         </Modal>

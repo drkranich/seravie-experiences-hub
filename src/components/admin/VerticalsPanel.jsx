@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassDate } from './ui'
 
 const VERTICALS = [
   { key: 'franchise', label: 'Franchise Experience', icon: 'leaf', desc: 'Rede, unidades, auditorias, VM, comunicados' },
@@ -151,7 +151,7 @@ export function VerticalsPanel({ notify }) {
               <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Título *</label><input value={form.title||''} onChange={e => setForm(f => ({...f, title: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo</label><GlassSelect value={form.type||'wedding'} onChange={v => setForm(f => ({...f, type: v}))} options={['wedding','corporate','birthday','graduation','other']} /></div>
-                <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Data</label><input type="date" value={form.event_date||''} onChange={e => setForm(f => ({...f, event_date: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
+                <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Data</label><GlassDate value={form.event_date||''} onChange={v => setForm(f => ({...f, event_date: v}))} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Convidados</label><input type="number" value={form.guest_count||''} onChange={e => setForm(f => ({...f, guest_count: e.target.value}))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
