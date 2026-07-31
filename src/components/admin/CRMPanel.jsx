@@ -15,6 +15,9 @@ export function CRMPanel({ notify }) {
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', type: 'person', notes: '' })
+  const [detail, setDetail] = useState(null)
+  const [dOrders, setDOrders] = useState([])
+  const [dLoading, setDLoading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -49,6 +52,13 @@ export function CRMPanel({ notify }) {
   const openEdit = (c) => {
     setSelected(c); setForm({ name: c.name, email: c.email || '', phone: c.phone || '', type: c.type, notes: c.notes || '' }); setShowForm(true)
   }
+
+  const openDetail = async (c) => {
+    setDetail(c); setDLoading(true); setDOrders([])
+    const { data } = await supabase.from('orders').select('number, total, created_at, items, payment_status, payment_method').eq('contact_id', c.id).order('created_at', { ascending: false }).limit(100)
+    setDOrders(data || []); setDLoading(false)
+  }
+  const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   return (
     <div>
@@ -90,10 +100,10 @@ export function CRMPanel({ notify }) {
               <div className="w-8 h-8 rounded-full bg-admin-champ/15 flex items-center justify-center shrink-0">
                 <span className="text-admin-champ font-serif text-sm">{c.name[0].toUpperCase()}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-admin-text text-sm font-medium truncate">{c.name}</p>
+              <button onClick={() => openDetail(c)} className="flex-1 min-w-0 text-left">
+                <p className="text-admin-text text-sm font-medium truncate hover:text-admin-champ transition-colors">{c.name}</p>
                 <p className="text-admin-muted/50 text-xs truncate">{c.email || c.phone || '—'}</p>
-              </div>
+              </button>
               <span className="text-[10px] text-admin-muted/40 hidden sm:block">{TYPE_LABELS[c.type]}</span>
               <span className={`text-[10px] hidden sm:block ${STATUS_COLORS[c.status]}`}>{c.status}</span>
               {c.ltv > 0 && <span className="text-[10px] text-admin-gold hidden md:block">R$ {c.ltv.toFixed(0)}</span>}
@@ -158,6 +168,59 @@ export function CRMPanel({ notify }) {
           </div>
         </div>
       )}
+
+      {/* Customer 360 */}
+      {detail && (() => {
+        const paid = dOrders.filter((o) => o.payment_status === 'paid')
+        const totalSpent = paid.reduce((s, o) => s + Number(o.total || 0), 0)
+        const nOrders = paid.length
+        const ticket = nOrders ? totalSpent / nOrders : 0
+        const last = paid[0]?.created_at
+        const first = paid[paid.length - 1]?.created_at
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="glass-pop rounded-2xl p-7 w-full max-w-lg overflow-visible">
+              <div className="flex items-start justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-admin-champ/15 flex items-center justify-center shrink-0"><span className="text-admin-champ font-serif text-lg">{detail.name[0].toUpperCase()}</span></div>
+                  <div>
+                    <h2 className="font-serif text-2xl text-admin-text leading-tight">{detail.name}</h2>
+                    <div className="flex gap-2 mt-0.5"><span className="text-admin-muted/50 text-xs">{TYPE_LABELS[detail.type]}</span><span className={`text-xs ${STATUS_COLORS[detail.status]}`}>{detail.status}</span></div>
+                  </div>
+                </div>
+                <button onClick={() => setDetail(null)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+              </div>
+
+              {(detail.email || detail.phone) && <p className="text-admin-muted/60 text-sm mb-4">{[detail.email, detail.phone].filter(Boolean).join(' · ')}</p>}
+
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="glass-soft rounded-xl p-3"><p className="text-[9px] uppercase tracking-wider text-admin-muted/50">Total gasto</p><p className="text-admin-sage text-lg font-medium">{brl(totalSpent)}</p></div>
+                <div className="glass-soft rounded-xl p-3"><p className="text-[9px] uppercase tracking-wider text-admin-muted/50">Pedidos</p><p className="text-admin-text text-lg font-medium">{nOrders}</p></div>
+                <div className="glass-soft rounded-xl p-3"><p className="text-[9px] uppercase tracking-wider text-admin-muted/50">Ticket médio</p><p className="text-admin-text text-lg font-medium">{brl(ticket)}</p></div>
+              </div>
+              {(first || last) && <p className="text-admin-muted/40 text-xs mb-4">{first && `Primeira compra: ${new Date(first).toLocaleDateString('pt-BR')}`}{first && last && ' · '}{last && `Última: ${new Date(last).toLocaleDateString('pt-BR')}`}</p>}
+
+              <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2">Histórico de compras</p>
+              <div className="space-y-1.5 max-h-52 overflow-y-auto mb-4">
+                {dLoading ? <p className="text-admin-muted/40 text-xs py-4 text-center">Carregando…</p> : dOrders.length === 0 ? <p className="text-admin-muted/40 text-xs py-4 text-center">Nenhuma compra registrada</p> : dOrders.map((o, i) => (
+                  <div key={i} className="glass-soft rounded-lg px-3 py-2 flex items-center gap-3">
+                    <span className="text-admin-muted/50 text-xs">#{o.number}</span>
+                    <span className="text-admin-muted/40 text-xs flex-1">{new Date(o.created_at).toLocaleDateString('pt-BR')} · {(o.items || []).length} itens</span>
+                    <span className={`text-xs ${o.payment_status === 'paid' ? 'text-admin-sage' : 'text-admin-muted/40'}`}>{brl(o.total)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {detail.notes && <div className="mb-4"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-1">Notas</p><p className="text-admin-muted/70 text-sm">{detail.notes}</p></div>}
+
+              <div className="flex gap-3">
+                <button onClick={() => { openEdit(detail); setDetail(null) }} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Editar contato</button>
+                <button onClick={() => setDetail(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Fechar</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

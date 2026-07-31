@@ -40,6 +40,7 @@ import { TourismPanel } from '../components/admin/TourismPanel'
 import { ArchitecturePanel } from '../components/admin/ArchitecturePanel'
 import { FinancePanel } from '../components/admin/FinancePanel'
 import { AgendaPanel } from '../components/admin/AgendaPanel'
+import { Onboarding } from '../components/admin/Onboarding'
 import { ScaffoldPage } from '../components/admin/ScaffoldPage'
 import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
 
@@ -48,7 +49,7 @@ const ROUTE_LABELS = { catalog: 'Catálogo', messages: 'Formulários', franchise
 
 export function AdminDashboard({ onExit }) {
   const { user, logout } = useAuth()
-  const { profile } = useTenant()
+  const { profile, isAdmin } = useTenant()
   const { settings } = useSettings()
   const brand = settings?.brand || {}
   const [active, setActive] = useState('overview')
@@ -56,11 +57,13 @@ export function AdminDashboard({ onExit }) {
   const [toasts, setToasts] = useState([])
   const [navOpen, setNavOpen] = useState(false)
   const [verticals, setVerticals] = useState([])
+  const [verticalsLoaded, setVerticalsLoaded] = useState(false)
 
-  useEffect(() => {
-    supabase.from('vertical_configs').select('vertical')
-      .then(({ data }) => setVerticals((data || []).map((d) => d.vertical)))
-  }, [])
+  const loadVerticals = () => supabase.from('vertical_configs').select('vertical')
+    .then(({ data }) => { setVerticals((data || []).map((d) => d.vertical)); setVerticalsLoaded(true) })
+  useEffect(() => { loadVerticals() }, [])
+
+  const needsOnboarding = verticalsLoaded && verticals.length === 0 && isAdmin && isAdmin()
 
   const notify = (message, type = 'info') => {
     const id = Date.now() + Math.random()
@@ -252,7 +255,7 @@ export function AdminDashboard({ onExit }) {
           </div>
         )}
 
-        <main className={`flex-1 ${FULLSCREEN.includes(active) ? '' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>{content}</main>
+        <main className={`flex-1 ${FULLSCREEN.includes(active) ? '' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>{needsOnboarding ? <Onboarding onDone={loadVerticals} /> : content}</main>
       </div>
 
       <div className="fixed bottom-6 right-6 z-50 space-y-3 pointer-events-none">
