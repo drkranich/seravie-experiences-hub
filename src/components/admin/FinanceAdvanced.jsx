@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassMonth } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
 
@@ -136,7 +136,7 @@ export function DrePanel({ notify }) {
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div><h1 className="font-serif text-4xl text-admin-text">DRE</h1><p className="text-admin-muted/60 text-sm mt-1">Demonstrativo de resultado do mês (regime de caixa)</p></div>
         <div className="flex items-center gap-2">
-          <div className="w-40"><GlassSelect value={month} onChange={setMonth} options={months.map((m) => ({ value: m, label: new Date(m + '-02').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }))} /></div>
+          <GlassMonth value={month} onChange={setMonth} />
           <button onClick={() => exportCsv(`dre-${month}.csv`, exportRows()) || notify('Sem dados', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />CSV</button>
           <button onClick={() => exportPdf(`DRE ${month}`, exportRows(), `Resultado ${brl(result)}`) || notify('Sem dados', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />PDF</button>
         </div>

@@ -382,6 +382,54 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
   )
 }
 
+/**
+ * GlassMonth — seletor de mês (formato 'YYYY-MM'). Setas para navegar e um
+ * popover glass com os 12 meses por ano — permite escolher qualquer mês.
+ */
+export function GlassMonth({ value, onChange, className = '' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const [y, m] = String(value || '').split('-').map(Number)
+  const cy = y || new Date().getFullYear()
+  const cm = m || (new Date().getMonth() + 1)
+  const [viewYear, setViewYear] = useState(cy)
+  const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+  const shift = (delta) => { const d = new Date(cy, cm - 1 + delta, 1); onChange(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`) }
+  const label = new Date(cy, cm - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const pick = (mi) => { onChange(`${viewYear}-${pad2(mi + 1)}`); setOpen(false) }
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc); document.addEventListener('keydown', onEsc)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc) }
+  }, [open])
+
+  return (
+    <div ref={ref} className={`relative flex items-center gap-1 ${className}`}>
+      <button type="button" onClick={() => shift(-1)} className="w-8 h-8 rounded-lg glass-input hover:bg-white/[0.06] flex items-center justify-center text-admin-muted shrink-0"><Icon name="up" className="w-4 h-4 -rotate-90" /></button>
+      <button type="button" onClick={() => { setViewYear(cy); setOpen((o) => !o) }} className="glass-input rounded-xl px-3 py-2 text-sm text-admin-text capitalize min-w-[9rem] text-center">{label}</button>
+      <button type="button" onClick={() => shift(1)} className="w-8 h-8 rounded-lg glass-input hover:bg-white/[0.06] flex items-center justify-center text-admin-muted shrink-0"><Icon name="down" className="w-4 h-4 -rotate-90" /></button>
+      {open && (
+        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-[90] w-64 glass-pop rounded-xl p-2.5 shadow-2xl">
+          <div className="flex items-center justify-between mb-2">
+            <button type="button" onClick={() => setViewYear((v) => v - 1)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
+            <p className="text-admin-champ text-sm font-medium">{viewYear}</p>
+            <button type="button" onClick={() => setViewYear((v) => v + 1)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {MONTHS.map((mm, i) => {
+              const sel = viewYear === cy && i + 1 === cm
+              return <button key={i} type="button" onClick={() => pick(i)} className={`py-2 rounded-lg text-xs transition-colors ${sel ? 'bg-admin-champ text-admin-bg font-medium' : 'text-admin-text hover:bg-white/[0.06]'}`}>{mm}</button>
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Spinner({ className = 'w-5 h-5' }) {
   return (
     <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none">
