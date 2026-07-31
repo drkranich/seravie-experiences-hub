@@ -1,129 +1,173 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Card, Icon } from './ui'
+import { useTenant } from '../../hooks/useTenant'
+import { Icon } from './ui'
 
-function BarChart({ data, color }) {
-  const max = Math.max(1, ...data.map((d) => d.value))
-  return (
-    <div className="flex items-end gap-2 h-44">
-      {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
-          <span className="text-[10px] text-admin-text mb-1">{d.value}</span>
-          <div
-            className="w-full rounded-t-md transition-all duration-500"
-            style={{
-              height: `${(d.value / max) * 100}%`,
-              minHeight: d.value > 0 ? '4px' : '0',
-              background: color,
-            }}
-          />
-          <span className="text-[9px] text-admin-muted/60 mt-2 text-center leading-tight">{d.label}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
+const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const cnt = async (builder) => { try { return (await builder).count || 0 } catch { return 0 } }
 
 export function Overview({ go }) {
-  const [stats, setStats] = useState({ specialties: 0, portfolio: 0, messages: 0, unread: 0, posts: 0, testimonials: 0, faqs: 0 })
-  const [timeline, setTimeline] = useState([])
+  const { profile } = useTenant()
+  const [loading, setLoading] = useState(true)
+  const [core, setCore] = useState({ todayRevenue: 0, todayCount: 0, monthRevenue: 0, ticket: 0, contacts: 0, openCash: false, criticalStock: 0, lowStock: 0, days: [], maxDay: 1 })
+  const [segments, setSegments] = useState([])
+  const [alerts, setAlerts] = useState([])
 
   useEffect(() => {
     ;(async () => {
-      const count = (q) => q.then((r) => r.count || 0)
-      const [specialties, portfolio, messages, unread, posts, testimonials, faqs] = await Promise.all([
-        count(supabase.from('specialties').select('*', { count: 'exact', head: true })),
-        count(supabase.from('portfolio_items').select('*', { count: 'exact', head: true })),
-        count(supabase.from('contact_submissions').select('*', { count: 'exact', head: true })),
-        count(supabase.from('contact_submissions').select('*', { count: 'exact', head: true }).eq('read', false)),
-        count(supabase.from('posts').select('*', { count: 'exact', head: true })),
-        count(supabase.from('testimonials').select('*', { count: 'exact', head: true })),
-        count(supabase.from('faqs').select('*', { count: 'exact', head: true })),
-      ])
-      setStats({ specialties, portfolio, messages, unread, posts, testimonials, faqs })
+      setLoading(true)
+      const now = new Date()
+      const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      const sbCount = (t) => supabase.from(t).select('*', { count: 'exact', head: true })
+      const todayYMD = ymd(now)
 
-      const since = new Date()
-      since.setHours(0, 0, 0, 0)
-      since.setDate(since.getDate() - 13)
+      // ---- Núcleo de comércio ----
+      const [{ data: todayOrders }, { data: monthOrders }, { count: contacts }, { data: openSess }, { data: prods }, { data: unreadMsgs }] = await Promise.all([
+        supabase.from('orders').select('total, items, created_at').gte('created_at', todayStart.toISOString()).eq('payment_status', 'paid'),
+        supabase.from('orders').select('total').gte('created_at', monthStart.toISOString()).eq('payment_status', 'paid'),
+        supabase.from('contacts').select('*', { count: 'exact', head: true }),
+        supabase.from('cash_sessions').select('id').eq('status', 'open').limit(1),
+        supabase.from('products').select('stock, min_stock').limit(2000),
+        supabase.from('contact_submissions').select('id').eq('read', false).limit(200),
+      ])
+      const todayRevenue = (todayOrders || []).reduce((s, o) => s + Number(o.total || 0), 0)
+      const todayCount = (todayOrders || []).length
+      const monthRevenue = (monthOrders || []).reduce((s, o) => s + Number(o.total || 0), 0)
+      const criticalStock = (prods || []).filter((p) => p.stock != null && p.stock <= 0).length
+      const lowStock = (prods || []).filter((p) => p.stock != null && p.min_stock > 0 && p.stock > 0 && p.stock <= p.min_stock).length
+
+      // vendas 14 dias
       const days = []
-      for (let i = 0; i < 14; i++) {
-        const dt = new Date(since)
-        dt.setDate(since.getDate() + i)
-        days.push({ key: dt.toISOString().slice(0, 10), label: String(dt.getDate()), value: 0 })
+      for (let i = 13; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days.push({ key: ymd(d), label: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }), value: 0 }) }
+      const dayMap = Object.fromEntries(days.map((d) => [d.key, d]))
+      const since14 = new Date(now); since14.setDate(since14.getDate() - 13); since14.setHours(0, 0, 0, 0)
+      const { data: recent } = await supabase.from('orders').select('total, created_at').gte('created_at', since14.toISOString()).eq('payment_status', 'paid')
+      ;(recent || []).forEach((o) => { const k = ymd(new Date(o.created_at)); if (dayMap[k]) dayMap[k].value += Number(o.total || 0) })
+      const maxDay = Math.max(1, ...days.map((d) => d.value))
+
+      setCore({ todayRevenue, todayCount, monthRevenue, ticket: todayCount ? todayRevenue / todayCount : 0, contacts: contacts || 0, openCash: (openSess || []).length > 0, criticalStock, lowStock, days, maxDay })
+
+      // ---- Frentes ativas do tenant ----
+      const { data: vc } = await supabase.from('vertical_configs').select('vertical')
+      const active = (vc || []).map((v) => v.vertical)
+
+      const catalog = (v, title, icon) => async () => ({ title, icon, route: v, stats: [['Itens', await cnt(supabase.from('products').select('*', { count: 'exact', head: true }).contains('tags', [v]))]] })
+      const L = {
+        franchise: async () => ({ title: 'Franquias', icon: 'leaf', route: 'franchise', stats: [['Unidades', await cnt(sbCount('units'))], ['Ocorrências abertas', await cnt(sbCount('incidents').eq('status', 'open'))]] }),
+        chocolate: async () => ({ title: 'Chocolateria', icon: 'gift', route: 'chocolate', stats: [['Linhas', await cnt(sbCount('chocolate_lines'))], ['Kits', await cnt(sbCount('chocolate_kits'))]] }),
+        coffee: async () => ({ title: 'Cafeteria', icon: 'cup', route: 'coffee', stats: [['Cardápio', await cnt(sbCount('coffee_menu'))], ['Workshops', await cnt(sbCount('events').eq('type', 'workshop'))]] }),
+        gourmet: async () => ({ title: 'Empório', icon: 'cup', route: 'gourmet', stats: [['Cestas/Kits', await cnt(sbCount('hampers'))], ['Fornecedores', await cnt(sbCount('suppliers'))]] }),
+        wine: async () => ({ title: 'Vinhos', icon: 'wine', route: 'wine', stats: [['Rótulos', await cnt(sbCount('wine_labels'))]] }),
+        events: async () => ({ title: 'Eventos', icon: 'star', route: 'events', stats: [['Total', await cnt(sbCount('events').neq('type', 'workshop'))], ['Confirmados', await cnt(sbCount('events').eq('status', 'confirmed'))]] }),
+        spa: async () => ({ title: 'Spa', icon: 'heart', route: 'spa', stats: [['Agend. hoje', await cnt(sbCount('appointments').eq('date', todayYMD))], ['Serviços', await cnt(sbCount('spa_services'))]] }),
+        tourism: async () => ({ title: 'Turismo', icon: 'map', route: 'tourism', stats: [['Passeios', await cnt(sbCount('tours'))]] }),
+        architecture: async () => ({ title: 'Arquitetura', icon: 'layout', route: 'architecture', stats: [['Projetos', await cnt(sbCount('projects'))], ['Em execução', await cnt(sbCount('projects').eq('status', 'execution'))]] }),
+        gift: async () => ({ title: 'Presentes', icon: 'gift', route: 'gift', stats: [['Itens', await cnt(sbCount('gift_items'))]] }),
+        brewery: catalog('brewery', 'Cervejaria', 'cup'),
+        bakery: catalog('bakery', 'Padaria', 'cup'),
+        floriculture: catalog('floriculture', 'Floricultura', 'leaf'),
+        beauty: catalog('beauty', 'Beauty', 'heart'),
       }
-      const { data: msgs } = await supabase
-        .from('contact_submissions')
-        .select('created_at')
-        .gte('created_at', since.toISOString())
-      ;(msgs || []).forEach((m) => {
-        const k = new Date(m.created_at).toISOString().slice(0, 10)
-        const b = days.find((x) => x.key === k)
-        if (b) b.value++
-      })
-      setTimeline(days)
+      const segs = (await Promise.all(active.filter((v) => L[v]).map((v) => L[v]()))).filter(Boolean)
+      setSegments(segs)
+
+      // ---- Feed de atenção ----
+      const al = []
+      if (criticalStock > 0) al.push({ icon: 'box', tone: 'rose', text: `${criticalStock} produto(s) sem estoque`, go: 'catalog' })
+      if (lowStock > 0) al.push({ icon: 'box', tone: 'gold', text: `${lowStock} produto(s) abaixo do mínimo`, go: 'catalog' })
+      al.push({ icon: 'tag', tone: (openSess || []).length ? 'sage' : 'muted', text: (openSess || []).length ? 'Caixa aberto — vendas em andamento' : 'Nenhum caixa aberto', go: 'pos' })
+      if ((unreadMsgs || []).length) al.push({ icon: 'mail', tone: 'champ', text: `${unreadMsgs.length} mensagem(ns) não lida(s)`, go: 'messages' })
+      if (active.includes('franchise')) { const inc = await cnt(sbCount('incidents').eq('status', 'open')); if (inc) al.push({ icon: 'check', tone: 'rose', text: `${inc} ocorrência(s) aberta(s) na rede`, go: 'franchise' }) }
+      if (active.includes('spa')) { const ap = await cnt(sbCount('appointments').eq('date', todayYMD)); if (ap) al.push({ icon: 'heart', tone: 'champ', text: `${ap} agendamento(s) hoje`, go: 'spa' }) }
+      if (active.includes('architecture')) { const px = await cnt(sbCount('projects').eq('status', 'execution')); if (px) al.push({ icon: 'layout', tone: 'sage', text: `${px} projeto(s) em execução`, go: 'architecture' }) }
+      setAlerts(al)
+      setLoading(false)
     })()
   }, [])
 
-  const cards = [
-    { key: 'services', icon: 'spark', label: 'Serviços', value: stats.specialties, accent: 'text-admin-gold' },
-    { key: 'portfolio', icon: 'image', label: 'Projetos', value: stats.portfolio, accent: 'text-admin-sage' },
-    { key: 'messages', icon: 'mail', label: 'Mensagens', value: stats.messages, accent: 'text-admin-rose' },
-    { key: 'messages', icon: 'star', label: 'Não lidas', value: stats.unread, accent: 'text-admin-champ' },
-  ]
+  const toneCls = { rose: 'text-admin-rose', gold: 'text-admin-gold', sage: 'text-admin-sage', champ: 'text-admin-champ', muted: 'text-admin-muted/50' }
 
-  const contentData = [
-    { label: 'Serviços', value: stats.specialties },
-    { label: 'Projetos', value: stats.portfolio },
-    { label: 'Jornal', value: stats.posts },
-    { label: 'Depoim.', value: stats.testimonials },
-    { label: 'FAQ', value: stats.faqs },
-  ]
+  if (loading) return <div className="py-16 text-admin-muted/40 text-sm text-center">Carregando seu backstage…</div>
 
   return (
     <div>
-      <div className="mb-10">
-        <h1 className="font-serif text-5xl text-admin-text">Visão geral</h1>
-        <p className="text-admin-muted/70 mt-2">Bem-vindo ao backstage da Seravie Experiences.</p>
+      <div className="mb-8">
+        <h1 className="font-serif text-5xl text-admin-text">Backstage</h1>
+        <p className="text-admin-muted/70 mt-2">Bem-vindo, {profile?.tenant_name || 'Seravie Experiences'}. Sua operação em um olhar.</p>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        {cards.map((c, i) => (
-          <button key={i} onClick={() => go(c.key)} className="text-left">
-            <div className="glass lift rounded-2xl p-6">
-              <span className={`w-12 h-12 rounded-full border border-white/10 flex items-center justify-center mb-6 ${c.accent}`}>
-                <Icon name={c.icon} className="w-5 h-5" />
-              </span>
-              <div className={`font-serif text-5xl ${c.accent}`}>{c.value}</div>
-              <div className="text-[11px] tracking-widerx uppercase text-admin-muted/60 mt-2">{c.label}</div>
+      {/* KPIs de comércio */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+        <div className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Vendas hoje</p><p className="text-admin-sage text-2xl font-medium">{brl(core.todayRevenue)}</p><p className="text-admin-muted/40 text-xs mt-1">{core.todayCount} pedidos</p></div>
+        <div className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Faturamento do mês</p><p className="text-admin-champ text-2xl font-medium">{brl(core.monthRevenue)}</p></div>
+        <div className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Ticket médio hoje</p><p className="text-admin-text text-2xl font-medium">{brl(core.ticket)}</p></div>
+        <div className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Clientes</p><p className="text-admin-text text-2xl font-medium">{core.contacts}</p></div>
+        <button onClick={() => go('pos')} className="glass rounded-2xl p-5 text-left lift"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Caixa</p><p className={`text-2xl font-medium ${core.openCash ? 'text-admin-sage' : 'text-admin-muted/50'}`}>{core.openCash ? 'Aberto' : 'Fechado'}</p><p className="text-admin-champ/60 text-xs mt-1">abrir PDV →</p></button>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-5 mb-6">
+        {/* Vendas 14 dias */}
+        <div className="glass rounded-2xl p-5 lg:col-span-2">
+          <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-4">Vendas — últimos 14 dias</p>
+          <div className="flex items-end gap-1.5 h-40">
+            {core.days.map((d) => (
+              <div key={d.key} className="flex-1 flex flex-col items-center gap-1.5 group">
+                <div className="w-full rounded-t bg-admin-champ/70 hover:bg-admin-champ transition-all relative" style={{ height: `${Math.max(2, (d.value / core.maxDay) * 100)}%` }}>
+                  <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] text-admin-champ opacity-0 group-hover:opacity-100 whitespace-nowrap">{brl(d.value)}</span>
+                </div>
+                <span className="text-[9px] text-admin-muted/40">{d.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Feed de atenção (IA) */}
+        <div className="glass rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4"><Icon name="spark" className="w-4 h-4 text-admin-champ" /><p className="text-[11px] tracking-wider uppercase text-admin-champ/70">O que merece atenção hoje</p></div>
+          {alerts.length === 0 ? <p className="text-admin-muted/40 text-sm">Tudo em ordem por aqui ✦</p> : (
+            <div className="space-y-2">
+              {alerts.map((a, i) => (
+                <button key={i} onClick={() => a.go && go(a.go)} className="w-full text-left flex items-center gap-3 glass-soft rounded-xl px-3 py-2.5 hover:bg-white/[0.04] transition-colors">
+                  <Icon name={a.icon} className={`w-4 h-4 shrink-0 ${toneCls[a.tone]}`} />
+                  <span className="text-admin-text text-sm flex-1">{a.text}</span>
+                  <Icon name="external" className="w-3.5 h-3.5 text-admin-muted/30" />
+                </button>
+              ))}
             </div>
-          </button>
-        ))}
+          )}
+        </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-5 mb-14">
-        <Card className="p-6">
-          <h2 className="text-[11px] tracking-widerx uppercase text-admin-champ mb-6">Distribuição de conteúdo</h2>
-          <BarChart data={contentData} color="#B89C61" />
-        </Card>
-        <Card className="p-6">
-          <h2 className="text-[11px] tracking-widerx uppercase text-admin-champ mb-6">Mensagens — últimos 14 dias</h2>
-          <BarChart data={timeline} color="#C1835B" />
-        </Card>
-      </div>
+      {/* Frentes do negócio */}
+      {segments.length > 0 && (
+        <>
+          <h2 className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-4">Suas frentes</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+            {segments.map((s) => (
+              <button key={s.route} onClick={() => go(s.route)} className="glass rounded-2xl p-5 text-left border border-transparent hover:border-admin-champ/25 lift transition-all">
+                <div className="flex items-center gap-2 mb-3"><Icon name={s.icon} className="w-4 h-4 text-admin-champ/70" /><p className="text-admin-text text-sm font-medium">{s.title}</p></div>
+                <div className="space-y-1.5">
+                  {s.stats.map(([label, value], i) => (
+                    <div key={i} className="flex items-center justify-between"><span className="text-admin-muted/50 text-xs">{label}</span><span className="text-admin-champ text-sm font-medium">{value}</span></div>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
-      <h2 className="text-[11px] tracking-widerx uppercase text-admin-champ mb-5">Ações rápidas</h2>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Ações rápidas */}
+      <h2 className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-4">Ações rápidas</h2>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { key: 'content', icon: 'layout', label: 'Editar hero e seções' },
-          { key: 'jornal', icon: 'book', label: 'Escrever no Jornal' },
-          { key: 'portfolio', icon: 'image', label: 'Adicionar projeto' },
-          { key: 'media', icon: 'folder', label: 'Biblioteca de mídia' },
+          { key: 'pos', icon: 'tag', label: 'Abrir o PDV' },
+          { key: 'catalog', icon: 'image', label: 'Gerenciar catálogo' },
+          { key: 'crm', icon: 'user', label: 'Ver clientes (CRM)' },
+          { key: 'finance', icon: 'chart', label: 'Financeiro' },
         ].map((a) => (
-          <button
-            key={a.label}
-            onClick={() => go(a.key)}
-            className="glass-soft lift rounded-2xl flex items-center gap-3 p-5 text-admin-muted hover:text-admin-champ transition-colors"
-          >
+          <button key={a.label} onClick={() => go(a.key)} className="glass-soft lift rounded-2xl flex items-center gap-3 p-5 text-admin-muted hover:text-admin-champ transition-colors">
             <Icon name={a.icon} className="w-5 h-5 text-admin-champ" />
             <span className="text-sm">{a.label}</span>
           </button>
