@@ -7,7 +7,7 @@ import { Icon } from './ui'
 // `primary` é o campo mínimo para considerar o canal conectado.
 export const CHANNELS = [
   {
-    key: 'mercado_livre', name: 'Mercado Livre', color: '#ffe600', tint: '#ffe60018', letter: 'ML',
+    key: 'mercado_livre', name: 'Mercado Livre', color: '#ffe600', tint: '#ffe60018', letter: 'ML', orders: true,
     blurb: 'Sincronize anúncios, estoque e pedidos com sua conta do Mercado Livre.',
     help: 'Crie um app em developers.mercadolivre.com.br e gere o Access Token do vendedor.',
     primary: 'access_token',
@@ -82,6 +82,26 @@ export function ChannelsTab({ notify }) {
   const [form, setForm] = useState({ credentials: {}, is_enabled: false })
   const [reveal, setReveal] = useState({})
   const [saving, setSaving] = useState(false)
+  const [busy, setBusy] = useState(null)
+
+  const test = async (def) => {
+    setBusy(def.key + ':test')
+    const { data, error } = await supabase.functions.invoke('channel-sync', { body: { channel: def.key, action: 'test' } })
+    setBusy(null)
+    if (error) return notify('Falha ao testar conexão', 'error')
+    if (data?.ok) notify(`${def.name} conectado${data.account?.name ? ` · ${data.account.name}` : ''}`, 'success')
+    else notify(data?.error || 'Conexão falhou', 'error')
+    load()
+  }
+  const pull = async (def) => {
+    setBusy(def.key + ':pull')
+    const { data, error } = await supabase.functions.invoke('channel-sync', { body: { channel: def.key, action: 'pull_orders' } })
+    setBusy(null)
+    if (error) return notify('Falha ao sincronizar', 'error')
+    if (data?.ok) notify(`${data.imported} pedido(s) importado(s) de ${data.total}`, 'success')
+    else notify(data?.error || 'Não foi possível sincronizar', 'error')
+    load()
+  }
 
   const load = async () => {
     setLoading(true)
@@ -137,9 +157,12 @@ export function ChannelsTab({ notify }) {
                   <span className={`text-[9px] px-2 py-0.5 rounded-lg ${STATUS_STYLE[st]}`}>{STATUS_LABEL[st]}</span>
                 </div>
                 <p className="text-admin-text text-sm font-medium">{def.name}</p>
-                <p className="text-admin-muted/50 text-xs mt-1 mb-4 leading-relaxed">{def.blurb}</p>
-                <div className="flex gap-2">
-                  <button onClick={() => open(def)} className="flex-1 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-3 py-2 rounded-xl text-xs transition-colors">{row ? 'Configurar' : 'Conectar'}</button>
+                <p className="text-admin-muted/50 text-xs mt-1 mb-3 leading-relaxed">{def.blurb}</p>
+                {row?.last_sync_at && <p className="text-admin-muted/40 text-[10px] mb-3">Última sincronização: {new Date(row.last_sync_at).toLocaleString('pt-BR')}</p>}
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => open(def)} className="flex-1 min-w-[84px] bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-3 py-2 rounded-xl text-xs transition-colors">{row ? 'Configurar' : 'Conectar'}</button>
+                  {row && <button onClick={() => test(def)} disabled={busy === def.key + ':test'} className="px-3 py-2 rounded-xl text-xs text-admin-champ/80 border border-admin-champ/20 hover:bg-white/[0.04] transition-colors disabled:opacity-50">{busy === def.key + ':test' ? '…' : 'Testar'}</button>}
+                  {def.orders && st === 'connected' && <button onClick={() => pull(def)} disabled={busy === def.key + ':pull'} className="px-3 py-2 rounded-xl text-xs text-admin-sage border border-admin-sage/20 hover:bg-admin-sage/10 transition-colors disabled:opacity-50">{busy === def.key + ':pull' ? '…' : 'Sincronizar pedidos'}</button>}
                   {st === 'connected' && <button onClick={() => disconnect(def)} className="px-3 py-2 rounded-xl text-xs text-admin-muted hover:text-admin-rose border border-white/[0.06] transition-colors">Desconectar</button>}
                 </div>
               </div>
