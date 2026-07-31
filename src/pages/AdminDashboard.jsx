@@ -41,6 +41,8 @@ import { ArchitecturePanel } from '../components/admin/ArchitecturePanel'
 import { FinancePanel } from '../components/admin/FinancePanel'
 import { AgendaPanel } from '../components/admin/AgendaPanel'
 import { AutomationPanel } from '../components/admin/AutomationPanel'
+import { RolesPanel } from '../components/admin/RolesPanel'
+import { AuditLogPanel } from '../components/admin/AuditLogPanel'
 import { Onboarding } from '../components/admin/Onboarding'
 import { ScaffoldPage } from '../components/admin/ScaffoldPage'
 import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
@@ -119,6 +121,8 @@ export function AdminDashboard({ onExit }) {
     newsletter: <NewsletterInbox notify={notify} />,
     superadmin: <SuperAdminPanel notify={notify} />,
     settings: <SettingsPanel notify={notify} />,
+    roles: <RolesPanel notify={notify} />,
+    audit: <AuditLogPanel notify={notify} />,
   }
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).

@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
+import { logAudit } from '../../lib/audit'
 
 /**
  * ResourcePanel — painel CRUD completo e config-driven do design system Seravie.
@@ -168,10 +169,16 @@ export function ResourcePanel({
     const payload = {}
     fields.forEach((f) => { payload[f.key] = coerce(f, form[f.key]) })
     if (!noTenant) payload.tenant_id = tenantId
-    const { error } = editing
-      ? await supabase.from(table).update(payload).eq('id', editing.id)
-      : await supabase.from(table).insert({ ...inject, ...payload })
+    let error, savedId
+    if (editing) {
+      const res = await supabase.from(table).update(payload).eq('id', editing.id)
+      error = res.error; savedId = editing.id
+    } else {
+      const res = await supabase.from(table).insert({ ...inject, ...payload }).select('id').single()
+      error = res.error; savedId = res.data?.id
+    }
     if (error) return notify('Erro ao salvar: ' + error.message, 'error')
+    logAudit({ action: editing ? 'update' : 'create', resource_type: table, resource_id: savedId, old_data: editing || null, new_data: payload }, tenantId)
     notify(editing ? 'Registro atualizado' : 'Registro criado', 'success')
     setModal(false); setEditing(null); setForm({}); load()
   }
@@ -181,8 +188,9 @@ export function ResourcePanel({
     fields.forEach((f) => { payload[f.key] = r[f.key] })
     if (primary) payload[primary.key] = `${r[primary.key]} (cópia)`
     if (!noTenant) payload.tenant_id = tenantId
-    const { error } = await supabase.from(table).insert({ ...inject, ...payload })
+    const { data, error } = await supabase.from(table).insert({ ...inject, ...payload }).select('id').single()
     if (error) return notify('Erro ao duplicar', 'error')
+    logAudit({ action: 'create', resource_type: table, resource_id: data?.id, new_data: payload }, tenantId)
     notify('Registro duplicado', 'success'); setDetail(null); load()
   }
 
@@ -190,6 +198,7 @@ export function ResourcePanel({
     const { error } = await supabase.from(table).delete().eq('id', r.id)
     setConfirm(null); setDetail(null)
     if (error) return notify('Erro ao excluir', 'error')
+    logAudit({ action: 'delete', resource_type: table, resource_id: r.id, old_data: r }, tenantId)
     notify('Registro excluído', 'success'); load()
   }
 
