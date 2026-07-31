@@ -338,7 +338,7 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
         <Icon name="calendar" className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
       {open && (
-        <div className="mt-2 w-full glass-pop rounded-xl p-2.5">
+        <div className="absolute left-0 top-full mt-2 z-[90] w-64 glass-pop rounded-xl p-2.5 shadow-2xl">
           <div className="flex items-center justify-between mb-1.5">
             <p className="text-admin-champ text-xs font-medium capitalize">{monthLabel}</p>
             <div className="flex gap-1">
