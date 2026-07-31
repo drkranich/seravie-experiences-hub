@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
 import { Icon, GlassSelect, GlassDate } from './ui'
+import { exportCsv, exportPdf } from '../../lib/export'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
@@ -77,6 +78,8 @@ export function FinancePanel({ notify }) {
           <div className="w-40"><GlassSelect value={month} onChange={setMonth} options={months.map((m) => ({ value: m, label: new Date(m + '-02').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }))} /></div>
           <button onClick={() => openNew('revenue')} className="px-4 py-2 rounded-xl text-sm text-admin-sage bg-admin-sage/10 hover:bg-admin-sage/20 transition-colors">+ Receita</button>
           <button onClick={() => openNew('expense')} className="px-4 py-2 rounded-xl text-sm text-admin-rose bg-admin-rose/10 hover:bg-admin-rose/20 transition-colors">+ Despesa</button>
+          <button onClick={() => exportCsv(`financeiro-${month}.csv`, monthEntries.map((e) => ({ data: e.date, tipo: e.type === 'revenue' ? 'receita' : 'despesa', categoria: e.category, descricao: e.description, valor: e.amount, forma: METHODS[e.payment_method] || e.payment_method }))) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />CSV</button>
+          <button onClick={() => exportPdf(`Financeiro ${month}`, monthEntries.map((e) => ({ data: e.date, tipo: e.type === 'revenue' ? 'Receita' : 'Despesa', categoria: e.category, descricao: e.description, valor: brl(e.amount), forma: METHODS[e.payment_method] || e.payment_method })), `Receitas ${brl(revenue)} · Despesas ${brl(expense)} · Saldo ${brl(balance)}`) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />PDF</button>
         </div>
       </div>
 

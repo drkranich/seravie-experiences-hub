@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
+import { exportCsv, exportPdf } from '../../lib/export'
 
 export function CatalogPanel({ notify }) {
   const { profile } = useTenant()
@@ -30,7 +31,11 @@ export function CatalogPanel({ notify }) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h1 className="font-serif text-4xl text-admin-text">Catálogo</h1><p className="text-admin-muted/60 text-sm mt-1">{products.length} produtos</p></div>
-        {tab === 'products' && <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="spark" className="w-4 h-4" />Novo produto</button>}
+        {tab === 'products' && <div className="flex gap-2">
+          <button onClick={() => exportCsv('produtos.csv', products.map((p) => ({ nome: p.name, sku: p.sku, codigo_barras: p.barcode, preco: p.price, custo: p.cost, estoque: p.stock, status: p.status }))) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />CSV</button>
+          <button onClick={() => exportPdf('Catálogo de produtos', products.map((p) => ({ nome: p.name, sku: p.sku, codigo_barras: p.barcode, preco: `R$ ${parseFloat(p.price || 0).toFixed(2)}`, custo: p.cost != null ? `R$ ${parseFloat(p.cost).toFixed(2)}` : '', estoque: p.stock, status: p.status })), 'Catálogo') || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />PDF</button>
+          <button onClick={() => setShowForm(true)} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="spark" className="w-4 h-4" />Novo produto</button>
+        </div>}
       </div>
       <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-xl w-fit">
         {[['products','Produtos'],['orders','Pedidos']].map(([k,v]) => (

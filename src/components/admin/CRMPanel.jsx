@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
+import { exportCsv, exportPdf } from '../../lib/export'
 
 const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
@@ -67,10 +68,20 @@ export function CRMPanel({ notify }) {
           <h1 className="font-serif text-4xl text-admin-text">Experience CRM</h1>
           <p className="text-admin-muted/60 text-sm mt-1">{contacts.length} contatos · Customer 360</p>
         </div>
-        <button onClick={() => { setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '' }); setShowForm(true) }}
-          className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors">
-          <Icon name="spark" className="w-4 h-4" /> Novo contato
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => exportCsv('contatos.csv', contacts.map((c) => ({ nome: c.name, email: c.email, telefone: c.phone, tipo: TYPE_LABELS[c.type] || c.type, status: c.status, ltv: c.ltv }))) || notify('Nada para exportar', 'error')}
+            className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors">
+            <Icon name="upload" className="w-4 h-4" /> CSV
+          </button>
+          <button onClick={() => exportPdf('Contatos', contacts.map((c) => ({ nome: c.name, email: c.email, telefone: c.phone, tipo: TYPE_LABELS[c.type] || c.type, status: c.status, ltv: c.ltv })), 'Experience CRM') || notify('Nada para exportar', 'error')}
+            className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors">
+            <Icon name="upload" className="w-4 h-4" /> PDF
+          </button>
+          <button onClick={() => { setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '' }); setShowForm(true) }}
+            className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors">
+            <Icon name="spark" className="w-4 h-4" /> Novo contato
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
