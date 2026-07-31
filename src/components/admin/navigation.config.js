@@ -85,7 +85,7 @@ export const CORE_SECTIONS = [
         { key: 'ec.storefront', label: 'Vitrine', route: 'ecommerce' },
         { key: 'ec.orders', label: 'Pedidos Online', route: 'ecommerce' },
         { key: 'ec.settings', label: 'Configurações da Loja', route: 'ecommerce' },
-        { key: 'ec.shipping', label: 'Frete' },
+        { key: 'ec.shipping', label: 'Frete · Melhor Envio', route: 'ecommerce' },
         { key: 'ec.coupons', label: 'Cupons' },
         { key: 'ec.payments', label: 'Pagamentos' },
       ]},

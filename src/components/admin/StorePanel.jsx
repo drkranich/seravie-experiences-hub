@@ -175,6 +175,139 @@ function SettingsTab({ notify }) {
   )
 }
 
+function ShippingTab({ notify }) {
+  const { profile } = useTenant()
+  const tenantId = profile?.tenant_id
+  const [form, setForm] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [showToken, setShowToken] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [conn, setConn] = useState(null)
+  // calculadora
+  const [destCep, setDestCep] = useState('')
+  const [pkg, setPkg] = useState({ width: '', height: '', length: '', weight: '' })
+  const [calcing, setCalcing] = useState(false)
+  const [quotes, setQuotes] = useState(null)
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('store_settings').select('*').eq('tenant_id', tenantId).maybeSingle()
+      const dp = data?.default_package || { width: 16, height: 6, length: 20, weight: 0.5 }
+      setForm({ shipping_provider: data?.shipping_provider || 'none', melhor_envio_token: data?.melhor_envio_token || '', melhor_envio_sandbox: data?.melhor_envio_sandbox ?? true, origin_postal_code: data?.origin_postal_code || '', default_package: dp })
+    })()
+  }, [tenantId])
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const setDp = (k, v) => setForm((f) => ({ ...f, default_package: { ...f.default_package, [k]: Number(v) || 0 } }))
+
+  const save = async () => {
+    if (!tenantId) return
+    setSaving(true)
+    const payload = { tenant_id: tenantId, shipping_provider: form.shipping_provider, melhor_envio_token: form.melhor_envio_token || null, melhor_envio_sandbox: !!form.melhor_envio_sandbox, origin_postal_code: form.origin_postal_code || null, default_package: form.default_package, updated_at: new Date().toISOString() }
+    const { error } = await supabase.from('store_settings').upsert(payload, { onConflict: 'tenant_id' })
+    setSaving(false)
+    if (error) return notify('Erro ao salvar: ' + error.message, 'error')
+    notify('Configurações de frete salvas', 'success')
+  }
+
+  const testConn = async () => {
+    if (!form.melhor_envio_token) return notify('Cole o token do Melhor Envio primeiro', 'error')
+    setTesting(true); setConn(null)
+    const { data, error } = await supabase.functions.invoke('melhor-envio', { body: { action: 'test', token: form.melhor_envio_token, sandbox: form.melhor_envio_sandbox } })
+    setTesting(false)
+    if (error) { setConn({ ok: false, error: 'Falha ao chamar o serviço de frete.' }); return }
+    setConn(data)
+    if (data?.ok) notify('Conexão com o Melhor Envio OK', 'success'); else notify(data?.error || 'Token inválido', 'error')
+  }
+
+  const calc = async () => {
+    if (!destCep) return notify('Informe o CEP de destino', 'error')
+    setCalcing(true); setQuotes(null)
+    const { data, error } = await supabase.functions.invoke('melhor-envio', { body: { action: 'quote', to: destCep, width: pkg.width, height: pkg.height, length: pkg.length, weight: pkg.weight } })
+    setCalcing(false)
+    if (error) return notify('Falha ao calcular o frete', 'error')
+    if (!data?.ok) return notify(data?.error || 'Não foi possível calcular', 'error')
+    setQuotes(data.quotes || [])
+    if (!data.quotes?.length) notify('Nenhuma opção de frete retornada', 'info')
+  }
+
+  if (!form) return <p className="text-admin-muted/30 text-sm py-8 text-center">Carregando…</p>
+  const Fld = ({ label, children, hint }) => (<div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{label}</label>{children}{hint && <p className="text-admin-muted/40 text-[11px] mt-1">{hint}</p>}</div>)
+  const isME = form.shipping_provider === 'melhor_envio'
+
+  return (
+    <div className="max-w-2xl">
+      <div className="glass rounded-2xl p-6 mb-5">
+        <Fld label="Método de frete">
+          <GlassSelect value={form.shipping_provider} onChange={(v) => set('shipping_provider', v)} options={[
+            { value: 'none', label: 'Sem cálculo de frete' },
+            { value: 'flat', label: 'Frete fixo (definido em Configurações)' },
+            { value: 'melhor_envio', label: 'Melhor Envio (cálculo automático)' },
+          ]} />
+        </Fld>
+      </div>
+
+      {isME && (
+        <>
+          <div className="glass rounded-2xl p-6 mb-5">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[11px] tracking-wider uppercase text-admin-champ/70">Credenciais Melhor Envio</p>
+              <label className="flex items-center gap-2 text-xs text-admin-muted/70"><Toggle checked={!!form.melhor_envio_sandbox} onChange={(v) => set('melhor_envio_sandbox', v)} />{form.melhor_envio_sandbox ? 'Sandbox (teste)' : 'Produção'}</label>
+            </div>
+            <div className="glass-soft rounded-xl px-4 py-3 mb-4">
+              <p className="text-admin-muted/60 text-[11px] leading-relaxed">No painel do Melhor Envio, vá em <span className="text-admin-champ/80">Integrações → Tokens</span>, gere um token com permissão de <span className="text-admin-champ/80">shipping-calculate</span> e cole abaixo. Nada de código — é só colar e salvar.</p>
+            </div>
+            <Fld label="Token (API)">
+              <div className="relative">
+                <input type={showToken ? 'text' : 'password'} value={form.melhor_envio_token} onChange={(e) => set('melhor_envio_token', e.target.value)} className={`${inputCls} pr-20`} placeholder="Cole aqui o token do Melhor Envio" />
+                <button onClick={() => setShowToken((s) => !s)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-admin-champ/70 hover:text-admin-champ px-2 py-1">{showToken ? 'ocultar' : 'mostrar'}</button>
+              </div>
+            </Fld>
+            <div className="mt-4"><Fld label="CEP de origem" hint="De onde suas encomendas saem."><input value={form.origin_postal_code} onChange={(e) => set('origin_postal_code', e.target.value)} className={inputCls} placeholder="00000-000" /></Fld></div>
+
+            <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mt-5 mb-3">Pacote padrão</p>
+            <div className="grid grid-cols-4 gap-3">
+              <Fld label="Larg. (cm)"><input type="number" value={form.default_package.width} onChange={(e) => setDp('width', e.target.value)} className={inputCls} /></Fld>
+              <Fld label="Alt. (cm)"><input type="number" value={form.default_package.height} onChange={(e) => setDp('height', e.target.value)} className={inputCls} /></Fld>
+              <Fld label="Comp. (cm)"><input type="number" value={form.default_package.length} onChange={(e) => setDp('length', e.target.value)} className={inputCls} /></Fld>
+              <Fld label="Peso (kg)"><input type="number" step="0.1" value={form.default_package.weight} onChange={(e) => setDp('weight', e.target.value)} className={inputCls} /></Fld>
+            </div>
+
+            <div className="flex items-center gap-3 mt-5 flex-wrap">
+              <button onClick={save} disabled={saving} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-6 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar frete'}</button>
+              <button onClick={testConn} disabled={testing} className="border border-admin-champ/20 text-admin-champ/80 px-4 py-2.5 rounded-xl text-sm hover:bg-white/[0.04] transition-colors disabled:opacity-50">{testing ? 'Testando…' : 'Testar conexão'}</button>
+              {conn && (conn.ok
+                ? <span className="text-admin-sage text-xs flex items-center gap-1"><Icon name="check" className="w-4 h-4" />Conectado{conn.account?.name ? ` · ${conn.account.name}` : ''}{conn.sandbox ? ' (sandbox)' : ''}</span>
+                : <span className="text-admin-rose text-xs flex items-center gap-1"><Icon name="x" className="w-4 h-4" />{conn.error || 'Falhou'}</span>)}
+            </div>
+          </div>
+
+          <div className="glass rounded-2xl p-6">
+            <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-3">Calcular frete (teste)</p>
+            <p className="text-admin-muted/50 text-xs mb-4">Salve o token e o CEP de origem antes de calcular. Deixe as medidas em branco para usar o pacote padrão.</p>
+            <div className="grid sm:grid-cols-5 gap-3 items-end">
+              <div className="sm:col-span-2"><Fld label="CEP destino"><input value={destCep} onChange={(e) => setDestCep(e.target.value)} className={inputCls} placeholder="00000-000" /></Fld></div>
+              <Fld label="Peso (kg)"><input type="number" step="0.1" value={pkg.weight} onChange={(e) => setPkg((p) => ({ ...p, weight: e.target.value }))} className={inputCls} /></Fld>
+              <Fld label="Comp."><input type="number" value={pkg.length} onChange={(e) => setPkg((p) => ({ ...p, length: e.target.value }))} className={inputCls} /></Fld>
+              <button onClick={calc} disabled={calcing} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-4 py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">{calcing ? 'Calculando…' : 'Calcular'}</button>
+            </div>
+            {quotes && (
+              <div className="mt-4 space-y-2">
+                {quotes.length === 0 ? <p className="text-admin-muted/40 text-sm">Nenhuma opção retornada.</p> : quotes.map((q) => (
+                  <div key={q.id} className="glass-soft rounded-xl px-4 py-3 flex items-center gap-3">
+                    <div className="flex-1 min-w-0"><p className="text-admin-text text-sm">{q.company} · {q.service}</p>{q.delivery_time != null && <p className="text-admin-muted/40 text-xs mt-0.5">prazo {q.delivery_time} dia(s)</p>}</div>
+                    <p className="text-admin-gold text-sm shrink-0">{q.price != null ? brl(q.price) : '—'}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function StorePanel({ notify }) {
   return (
     <ResourceTabs
@@ -183,6 +316,7 @@ export function StorePanel({ notify }) {
       tabs={[
         { key: 'listings', label: 'Vitrine', render: () => <ListingsTab notify={notify} /> },
         { key: 'orders', label: 'Pedidos online', render: () => <OrdersTab notify={notify} /> },
+        { key: 'shipping', label: 'Frete', render: () => <ShippingTab notify={notify} /> },
         { key: 'settings', label: 'Configurações', render: () => <SettingsTab notify={notify} /> },
       ]}
     />
