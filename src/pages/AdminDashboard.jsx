@@ -34,6 +34,7 @@ import { CoffeePanel } from '../components/admin/CoffeePanel'
 import { WinePanel } from '../components/admin/WinePanel'
 import { EventsPanel } from '../components/admin/EventsPanel'
 import { GiftPanel } from '../components/admin/GiftPanel'
+import { VerticalCatalogPanel } from '../components/admin/VerticalCatalogPanel'
 import { ScaffoldPage } from '../components/admin/ScaffoldPage'
 import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
 
@@ -83,6 +84,10 @@ export function AdminDashboard({ onExit }) {
     wine: <WinePanel notify={notify} />,
     events: <EventsPanel notify={notify} />,
     gift: <GiftPanel notify={notify} />,
+    brewery: <VerticalCatalogPanel vertical="brewery" notify={notify} />,
+    bakery: <VerticalCatalogPanel vertical="bakery" notify={notify} />,
+    floriculture: <VerticalCatalogPanel vertical="floriculture" notify={notify} />,
+    beauty: <VerticalCatalogPanel vertical="beauty" notify={notify} />,
     verticals: <VerticalsPanel notify={notify} />,
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
@@ -103,7 +108,7 @@ export function AdminDashboard({ onExit }) {
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).
   const sections = useMemo(() => {
-    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate', gourmet: 'gourmet', coffee: 'coffee', wine: 'wine', events: 'events', gift: 'gift' } // frentes com painel real
+    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate', gourmet: 'gourmet', coffee: 'coffee', wine: 'wine', events: 'events', gift: 'gift', brewery: 'brewery', bakery: 'bakery', floriculture: 'floriculture', beauty: 'beauty' } // frentes com painel real
     const frentes = verticals.map((v) => {
       const nav = verticalToNav(v)
       if (nav && VERTICAL_ROUTES[v]) nav.route = VERTICAL_ROUTES[v]
