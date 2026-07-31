@@ -108,14 +108,14 @@ export function AdminDashboard({ onExit }) {
   const NavItem = ({ n }) => (
     <button onClick={() => go(n.key)} className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] transition-all duration-200 ${active === n.key ? 'bg-white/[0.06] text-admin-champ' : 'text-admin-muted hover:text-admin-text hover:bg-white/[0.03]'}`}>
       {active === n.key && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-admin-champ" />}
-      <Icon name={n.icon} className="w-4 h-4 shrink-0 opacity-70" />
-      <span className="truncate">{n.label}</span>
+      <Icon name={n.icon} className="w-3.5 h-3.5 shrink-0 opacity-60" />
+      <span className="leading-tight">{n.label}</span>
     </button>
   )
 
   return (
     <div className="min-h-screen admin-bg text-admin-text flex" data-no-translate>
-      <aside className="hidden lg:flex flex-col w-60 shrink-0 bg-admin-side/80 backdrop-blur-2xl border-r border-white/[0.06] sticky top-0 h-screen">
+      <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-admin-side/80 backdrop-blur-2xl border-r border-white/[0.06] sticky top-0 h-screen">
         <div className="px-5 pt-7 pb-5 border-b border-white/[0.06]">
           <div className="font-serif text-2xl text-admin-text leading-none tracking-wide">Seravie</div>
           <div className="text-[8px] tracking-[0.2em] text-admin-champ/60 mt-1 uppercase">{profile?.tenant_name || 'Experiences'} · CMS</div>
