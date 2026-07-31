@@ -3,48 +3,26 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
 import { logAudit } from '../../lib/audit'
+import { PermissionMatrix, permsToLevels, levelsToPerms } from './permissions'
 
-// Módulos gateáveis (as chaves batem com as rotas/itens de navegação).
-const MODULES = [
-  ['overview', 'Painel Executivo'], ['crm', 'CRM'], ['conversations', 'Conversas'], ['helpdesk', 'Help Desk'],
-  ['catalog', 'Catálogo'], ['pos', 'PDV'], ['receivables', 'Recebíveis'], ['ecommerce', 'E-commerce'],
-  ['finance', 'Financeiro'], ['agenda', 'Agenda'], ['operations', 'Operações'], ['marketing', 'Marketing'],
-  ['team', 'Equipe'], ['knowledge', 'Conhecimento'], ['analytics', 'Analytics'], ['verticals', 'Frentes de negócio'],
-  ['subscription', 'Minha Assinatura'], ['settings', 'Configurações'], ['plans', 'Planos da Plataforma'],
-]
+// Perfis padrão. Colaboradores vêm no máximo em 'edit' (nunca 'manage'), ou seja,
+// criam e editam mas NÃO excluem — excluir fica com o administrador.
 const DEFAULTS = [
   { name: 'Administrador', slug: 'admin', description: 'Acesso total à plataforma', perms: ['*'] },
-  { name: 'Gerente', slug: 'gerente', description: 'Gestão operacional e financeira', mods: ['overview', 'crm', 'catalog', 'pos', 'receivables', 'ecommerce', 'finance', 'agenda', 'operations', 'marketing', 'team', 'analytics'], level: 'manage' },
-  { name: 'Operador de caixa', slug: 'operador', description: 'Operação de loja e atendimento', mods: ['overview', 'crm', 'catalog', 'pos', 'agenda'], level: 'manage', viewOnlyExtra: ['receivables'] },
-  { name: 'Visualizador', slug: 'visualizador', description: 'Somente leitura', mods: MODULES.map(([k]) => k).filter((k) => k !== 'plans'), level: 'view' },
+  { name: 'Gerente', slug: 'gerente', description: 'Gestão operacional (sem excluir)', mods: ['overview', 'crm', 'catalog', 'pos', 'receivables', 'ecommerce', 'finance', 'agenda', 'operations', 'marketing', 'team', 'analytics'], level: 'edit' },
+  { name: 'Operador de caixa', slug: 'operador', description: 'Operação de loja e atendimento', mods: ['overview', 'crm', 'catalog', 'pos', 'agenda'], level: 'edit', viewOnlyExtra: ['receivables'] },
+  { name: 'Visualizador', slug: 'visualizador', description: 'Somente leitura', mods: ['overview', 'crm', 'catalog', 'pos', 'receivables', 'ecommerce', 'finance', 'agenda', 'operations', 'marketing', 'team', 'knowledge', 'analytics', 'verticals'], level: 'view' },
 ]
 const slugify = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
 
 function buildPerms(d) {
   if (d.perms) return d.perms
   const out = []
-  ;(d.mods || []).forEach((m) => { out.push(d.level === 'view' ? `view:${m}` : `manage:${m}`) })
+  ;(d.mods || []).forEach((m) => out.push(`${d.level}:${m}`))
   ;(d.viewOnlyExtra || []).forEach((m) => out.push(`view:${m}`))
   return out
 }
-// Estado do form: { [mod]: 'none' | 'view' | 'manage' }
-const permsToLevels = (perms) => {
-  const lv = {}
-  const arr = Array.isArray(perms) ? perms : []
-  if (arr.includes('*')) { MODULES.forEach(([k]) => { lv[k] = 'manage' }); return lv }
-  MODULES.forEach(([k]) => {
-    if (arr.includes(`manage:${k}`)) lv[k] = 'manage'
-    else if (arr.includes(`view:${k}`)) lv[k] = 'view'
-    else lv[k] = 'none'
-  })
-  return lv
-}
-const levelsToPerms = (lv) => {
-  const out = []
-  MODULES.forEach(([k]) => { if (lv[k] === 'manage') out.push(`manage:${k}`); else if (lv[k] === 'view') out.push(`view:${k}`) })
-  return out
-}
-const countPerms = (perms) => (Array.isArray(perms) ? (perms.includes('*') ? MODULES.length : perms.length) : 0)
+const countPerms = (perms) => (Array.isArray(perms) ? (perms.includes('*') ? 999 : perms.length) : 0)
 
 export function RolesPanel({ notify }) {
   const { profile } = useTenant()
@@ -61,7 +39,6 @@ export function RolesPanel({ notify }) {
 
   const openNew = () => { setEditing(null); setForm({ name: '', slug: '', description: '', levels: permsToLevels([]) }); setModal(true) }
   const openEdit = (r) => { setEditing(r); setForm({ name: r.name, slug: r.slug, description: r.description || '', levels: permsToLevels(r.permissions) }); setModal(true) }
-  const cycle = (mod) => setForm((f) => { const cur = f.levels[mod] || 'none'; const next = cur === 'none' ? 'view' : cur === 'view' ? 'manage' : 'none'; return { ...f, levels: { ...f.levels, [mod]: next } } })
 
   const save = async () => {
     if (!form.name.trim()) return notify('Nome obrigatório', 'error')
@@ -90,9 +67,6 @@ export function RolesPanel({ notify }) {
     notify('Perfis padrão criados', 'success'); load()
   }
 
-  const LEVEL_STYLE = { none: 'bg-white/[0.04] text-admin-muted/40', view: 'bg-admin-champ/10 text-admin-champ', manage: 'bg-admin-sage/10 text-admin-sage' }
-  const LEVEL_LABEL = { none: 'Sem acesso', view: 'Ver', manage: 'Gerenciar' }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
@@ -105,7 +79,7 @@ export function RolesPanel({ notify }) {
 
       <div className="glass-soft rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
         <Icon name="eye" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
-        <p className="text-admin-muted/60 text-xs leading-relaxed">Defina por módulo: <span className="text-admin-champ">Ver</span> (só leitura) ou <span className="text-admin-sage">Gerenciar</span> (criar/editar/excluir). O acesso é aplicado no menu do usuário conforme o papel dele. Administradores enxergam tudo.</p>
+        <p className="text-admin-muted/60 text-xs leading-relaxed">Controle por página (cada página é um setor): <span className="text-admin-champ">Ver</span> (leitura), <span className="text-admin-gold">Editar</span> (criar/editar) ou <span className="text-admin-sage">Gerenciar</span> (inclui <span className="text-admin-rose">excluir</span>). Colaboradores só excluem se você conceder "Gerenciar". Administradores enxergam tudo.</p>
       </div>
 
       {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p>
@@ -140,18 +114,8 @@ export function RolesPanel({ notify }) {
               <div className="col-span-2"><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Descrição</label><input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
             </div>
 
-            <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2">Permissões por módulo <span className="text-admin-muted/40 normal-case tracking-normal">(clique para alternar)</span></p>
-            <div className="glass-soft rounded-xl p-2 max-h-72 overflow-y-auto">
-              {MODULES.map(([mk, ml]) => {
-                const lv = form.levels[mk] || 'none'
-                return (
-                  <div key={mk} className="flex items-center justify-between px-2 py-1.5 hover:bg-white/[0.02] rounded-lg">
-                    <span className="text-admin-text text-sm">{ml}</span>
-                    <button onClick={() => cycle(mk)} className={`text-[11px] px-3 py-1 rounded-lg transition-colors ${LEVEL_STYLE[lv]}`}>{LEVEL_LABEL[lv]}</button>
-                  </div>
-                )
-              })}
-            </div>
+            <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2">Permissões por página <span className="text-admin-muted/40 normal-case tracking-normal">(módulo aplica em bloco; expanda para ajustar setor a setor)</span></p>
+            <PermissionMatrix levels={form.levels} onChange={(lv) => setForm((f) => ({ ...f, levels: lv }))} />
 
             <div className="flex gap-3 mt-6"><button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">{editing ? 'Salvar alterações' : 'Criar perfil'}</button><button onClick={() => setModal(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
           </div>

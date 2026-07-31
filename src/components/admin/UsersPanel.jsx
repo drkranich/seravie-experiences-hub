@@ -4,8 +4,11 @@ import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
 import { Icon, GlassSelect } from './ui'
 import { logAudit } from '../../lib/audit'
+import { PermissionMatrix, permsToLevels, levelsToPerms } from './permissions'
 
 const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.round(Math.random() * 1e9)}`)
+const slugify = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+const samePerms = (a, b) => JSON.stringify([...(a || [])].sort()) === JSON.stringify([...(b || [])].sort())
 const STATUS_STYLE = { active: 'text-admin-sage', invited: 'text-admin-gold', inactive: 'text-admin-muted/50', suspended: 'text-admin-rose' }
 
 export function UsersPanel({ notify }) {
@@ -17,7 +20,7 @@ export function UsersPanel({ notify }) {
   const [invites, setInvites] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
-  const [form, setForm] = useState({ email: '', role_id: '' })
+  const [form, setForm] = useState({ email: '', role_id: '', levels: {} })
   const [lastLink, setLastLink] = useState(null)
 
   const load = async () => {
@@ -34,16 +37,37 @@ export function UsersPanel({ notify }) {
 
   const linkFor = (token) => `${window.location.origin}/#convite/${token}`
 
+  const openInvite = () => { setForm({ email: '', role_id: '', levels: permsToLevels([]) }); setModal(true) }
+  const pickTemplate = (roleId) => {
+    const r = roles.find((x) => x.id === roleId)
+    setForm((f) => ({ ...f, role_id: roleId, levels: r ? permsToLevels(r.permissions) : permsToLevels([]) }))
+  }
+  // Resolve o papel do convite: reaproveita um papel com as mesmas permissões ou cria um sob medida.
+  const resolveRoleId = async (email, perms) => {
+    const match = roles.find((r) => samePerms(r.permissions, perms))
+    if (match) return match.id
+    const base = `acesso-${slugify(email.split('@')[0]) || 'personalizado'}`
+    let slug = base, n = 1
+    while (roles.some((r) => r.slug === slug)) { slug = `${base}-${n++}` }
+    const { data, error } = await supabase.from('roles').insert({ name: `Acesso · ${email}`, slug, description: 'Permissões personalizadas do convite', permissions: perms, is_system: false, tenant_id: tenantId }).select('id').single()
+    if (error) throw error
+    logAudit({ action: 'create', resource_type: 'roles', resource_id: data?.id, new_data: { slug, permissions: perms } }, tenantId)
+    return data.id
+  }
+
   const invite = async () => {
     const email = form.email.trim().toLowerCase()
     if (!email) return notify('Informe o e-mail', 'error')
-    if (!form.role_id) return notify('Escolha o papel', 'error')
+    const perms = levelsToPerms(form.levels)
+    if (perms.length === 0) return notify('Marque ao menos uma permissão de acesso', 'error')
+    let roleId
+    try { roleId = await resolveRoleId(email, perms) } catch (e) { return notify('Erro ao definir permissões: ' + e.message, 'error') }
     const token = uuid()
     const expires = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
-    const { data, error } = await supabase.from('invitations').insert({ tenant_id: tenantId, email, role_id: form.role_id, token, invited_by: user?.id || null, expires_at: expires }).select('id, token').single()
+    const { data, error } = await supabase.from('invitations').insert({ tenant_id: tenantId, email, role_id: roleId, token, invited_by: user?.id || null, expires_at: expires }).select('id, token').single()
     if (error) return notify('Erro ao convidar: ' + error.message, 'error')
-    logAudit({ action: 'create', resource_type: 'invitations', resource_id: data?.id, new_data: { email, role_id: form.role_id } }, tenantId)
-    setLastLink(linkFor(token)); setForm({ email: '', role_id: '' }); setModal(false); load()
+    logAudit({ action: 'create', resource_type: 'invitations', resource_id: data?.id, new_data: { email, role_id: roleId } }, tenantId)
+    setLastLink(linkFor(token)); setForm({ email: '', role_id: '', levels: {} }); setModal(false); load()
     notify('Convite criado — copie o link e envie', 'success')
   }
   const revoke = async (inv) => {
@@ -65,7 +89,7 @@ export function UsersPanel({ notify }) {
     <div>
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div><h1 className="font-serif text-4xl text-admin-text">Usuários & Acessos</h1><p className="text-admin-muted/60 text-sm mt-1">{members.length} membros · {invites.length} convites pendentes</p></div>
-        <button onClick={() => setModal(true)} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Convidar</button>
+        <button onClick={openInvite} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Convidar</button>
       </div>
 
       {lastLink && (
@@ -115,13 +139,17 @@ export function UsersPanel({ notify }) {
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-pop rounded-2xl p-7 w-full max-w-md overflow-visible">
+          <div className="glass-pop rounded-2xl p-7 w-full max-w-lg overflow-visible max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">Convidar usuário</h2><button onClick={() => setModal(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 mb-4">
               <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">E-mail *</label><input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="pessoa@email.com" /></div>
-              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Papel *</label><GlassSelect value={form.role_id} onChange={(v) => setForm((f) => ({ ...f, role_id: v }))} options={[{ value: '', label: 'Selecione o papel' }, ...roles.map((r) => ({ value: r.id, label: r.name }))]} /></div>
-              <p className="text-admin-muted/40 text-xs">A pessoa recebe um link, faz login/cadastro com este e-mail e é vinculada ao seu tenant com o papel escolhido.</p>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Modelo (opcional)</label><GlassSelect value={form.role_id} onChange={pickTemplate} options={[{ value: '', label: 'Começar do zero' }, ...roles.filter((r) => r.slug !== 'super_admin').map((r) => ({ value: r.id, label: r.name }))]} /></div>
             </div>
+
+            <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2">Áreas e permissões deste usuário <span className="text-admin-muted/40 normal-case tracking-normal">(cada página é um setor)</span></p>
+            <PermissionMatrix levels={form.levels} onChange={(lv) => setForm((f) => ({ ...f, levels: lv }))} />
+            <p className="text-admin-muted/40 text-xs mt-3">Escolha um modelo para preencher rápido e ajuste página a página. Níveis: <span className="text-admin-champ">Ver</span> · <span className="text-admin-gold">Editar</span> · <span className="text-admin-sage">Gerenciar</span> (este inclui <span className="text-admin-rose">excluir</span>). A pessoa recebe um link, entra com este e-mail e passa a ter exatamente esses acessos.</p>
+
             <div className="flex gap-3 mt-6"><button onClick={invite} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Gerar convite</button><button onClick={() => setModal(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
           </div>
         </div>

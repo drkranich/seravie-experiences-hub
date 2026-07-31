@@ -147,13 +147,20 @@ export function AdminDashboard({ onExit }) {
     }).filter(Boolean)
     const base = [...CORE_SECTIONS]
     if (frentes.length) base.splice(1, 0, { group: 'Frentes do seu negócio', items: frentes })
-    // Gating por papel (RBAC): admin/super_admin veem tudo; demais, só o permitido.
+    // Gating por papel (RBAC), no nível de PÁGINA: admin/super_admin veem tudo.
     const permsArr = Array.isArray(profile?.permissions) ? profile.permissions : []
-    const admin = ['super_admin', 'admin'].includes(profile?.role_slug)
-    const allow = (key) => admin || key === 'overview' || String(key).startsWith('vertical.')
-      || permsArr.includes('*') || permsArr.includes('view:' + key) || permsArr.includes('manage:' + key)
+    const full = ['super_admin', 'admin'].includes(profile?.role_slug) || permsArr.includes('*')
+    const anyLevel = (key) => permsArr.includes('view:' + key) || permsArr.includes('edit:' + key) || permsArr.includes('manage:' + key)
+    const gateItem = (item) => {
+      if (full || item.key === 'overview' || String(item.key).startsWith('vertical.')) return item
+      const modOK = anyLevel(item.key)
+      if (modOK) return item // acesso ao módulo implica todas as páginas
+      const pages = (item.pages || []).filter((p) => anyLevel(p.key))
+      if (!pages.length) return null
+      return { ...item, pages, route: pages[0].route || pages[0].key } // parcial: abre na 1ª página permitida
+    }
     return base
-      .map((sec) => ({ ...sec, items: sec.items.filter((it) => allow(it.key)) }))
+      .map((sec) => ({ ...sec, items: sec.items.map(gateItem).filter(Boolean) }))
       .filter((sec) => sec.items.length)
   }, [verticals, profile])
 
