@@ -97,10 +97,11 @@ export function ResourceTabs({ title, subtitle, tabs }) {
 export function ResourcePanel({
   notify, table, title, subtitle, icon = 'box', fields = [], kpis = [],
   orderBy = { column: 'created_at', ascending: false }, select = '*',
-  noTenant = false, exportName, embedded = false, inject = {}, baseFilter, newLabel = 'Novo',
+  noTenant = false, exportName, embedded = false, inject = {}, baseFilter, newLabel = 'Novo', module,
 }) {
-  const { profile } = useTenant()
+  const { profile, canManage } = useTenant()
   const tenantId = profile?.tenant_id
+  const readOnly = module && canManage ? !canManage(module) : false
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -236,7 +237,7 @@ export function ResourcePanel({
         <div className="flex gap-2 ml-auto">
           <button onClick={() => exportCsv(`${exportName || table}.csv`, exportRows()) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />CSV</button>
           <button onClick={() => exportPdf(title, exportRows(), subtitle) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />PDF</button>
-          <button onClick={openNew} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />{newLabel}</button>
+          {!readOnly && <button onClick={openNew} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />{newLabel}</button>}
         </div>
       </div>
 
@@ -279,11 +280,13 @@ export function ResourcePanel({
                   {statusField && <StatusPill value={r[statusField.key]} label={statusField.options ? labelOf(statusField, r[statusField.key]) : undefined} />}
                 </div>
                 {descField && r[descField.key] && <p className="text-admin-muted/40 text-xs line-clamp-2 mt-1">{r[descField.key]}</p>}
-                <div className="flex gap-1 mt-3 pt-3 border-t border-white/[0.05] opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Duplicar"><Icon name="copy" className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => setConfirm(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05] transition-colors ml-auto" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
-                </div>
+                {!readOnly && (
+                  <div className="flex gap-1 mt-3 pt-3 border-t border-white/[0.05] opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => duplicate(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Duplicar"><Icon name="copy" className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => setConfirm(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05] transition-colors ml-auto" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -324,11 +327,13 @@ export function ResourcePanel({
               ))}
             </div>
             {descField && detail[descField.key] && <div className="mb-5"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-1">{descField.label}</p><p className="text-admin-muted/70 text-sm whitespace-pre-wrap">{detail[descField.key]}</p></div>}
-            <div className="flex gap-2">
-              <button onClick={() => openEdit(detail)} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Editar</button>
-              <button onClick={() => duplicate(detail)} className="px-4 py-2.5 rounded-xl text-sm text-admin-muted hover:text-admin-champ border border-white/[0.06] transition-colors">Duplicar</button>
-              <button onClick={() => setConfirm(detail)} className="px-4 py-2.5 rounded-xl text-sm text-admin-rose hover:bg-admin-rose/10 transition-colors">Excluir</button>
-            </div>
+            {!readOnly ? (
+              <div className="flex gap-2">
+                <button onClick={() => openEdit(detail)} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Editar</button>
+                <button onClick={() => duplicate(detail)} className="px-4 py-2.5 rounded-xl text-sm text-admin-muted hover:text-admin-champ border border-white/[0.06] transition-colors">Duplicar</button>
+                <button onClick={() => setConfirm(detail)} className="px-4 py-2.5 rounded-xl text-sm text-admin-rose hover:bg-admin-rose/10 transition-colors">Excluir</button>
+              </div>
+            ) : <p className="text-admin-muted/40 text-xs text-center">Você tem acesso somente de leitura neste módulo.</p>}
           </div>
         </div>
       )}

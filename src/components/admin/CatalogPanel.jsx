@@ -57,7 +57,7 @@ export function CatalogPanel({ notify }) {
           key: 'products', label: 'Produtos',
           render: () => (
             <ResourcePanel
-              embedded notify={notify} table="products" title="Produtos" subtitle="produtos" icon="box" newLabel="Novo produto" exportName="produtos"
+              embedded module="catalog" notify={notify} table="products" title="Produtos" subtitle="produtos" icon="box" newLabel="Novo produto" exportName="produtos"
               orderBy={{ column: 'name', ascending: true }} inject={{ status: 'active' }}
               fields={[
                 { key: 'name', label: 'Nome', type: 'text', primary: true, required: true, full: true },
