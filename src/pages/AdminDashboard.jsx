@@ -17,13 +17,13 @@ import { ConversationsInbox } from '../components/admin/ConversationsInbox'
 import { TicketsPanel } from '../components/admin/TicketsPanel'
 import { OperationsPanel } from '../components/admin/OperationsPanel'
 import { FranchisePanel } from '../components/admin/FranchisePanel'
+import { TeamPanel } from '../components/admin/TeamPanel'
+import { KnowledgeHub } from '../components/admin/KnowledgeHub'
 
 const NAV_GROUPS = [
   {
     group: 'Core',
-    items: [
-      { key: 'overview', label: 'Backstage', icon: 'grid' },
-    ],
+    items: [{ key: 'overview', label: 'Backstage', icon: 'grid' }],
   },
   {
     group: 'Atendimento',
@@ -43,6 +43,13 @@ const NAV_GROUPS = [
     ],
   },
   {
+    group: 'Pessoas',
+    items: [
+      { key: 'teamhr', label: 'Equipe', icon: 'user' },
+      { key: 'knowledge', label: 'Conhecimento', icon: 'book' },
+    ],
+  },
+  {
     group: 'Conteúdo',
     items: [
       { key: 'content', label: 'Seções', icon: 'layout' },
@@ -58,7 +65,6 @@ const NAV_GROUPS = [
   {
     group: 'Estrutura',
     items: [
-      { key: 'team', label: 'Equipe', icon: 'user' },
       { key: 'pages', label: 'Páginas', icon: 'layout' },
       { key: 'menus', label: 'Menus', icon: 'link' },
       { key: 'media', label: 'Biblioteca', icon: 'folder' },
@@ -66,9 +72,7 @@ const NAV_GROUPS = [
   },
   {
     group: 'Sistema',
-    items: [
-      { key: 'settings', label: 'Configurações', icon: 'gear' },
-    ],
+    items: [{ key: 'settings', label: 'Configurações', icon: 'gear' }],
   },
 ]
 
@@ -97,6 +101,8 @@ export function AdminDashboard({ onExit }) {
     helpdesk: <TicketsPanel notify={notify} />,
     operations: <OperationsPanel notify={notify} />,
     franchise: <FranchisePanel notify={notify} />,
+    teamhr: <TeamPanel notify={notify} />,
+    knowledge: <KnowledgeHub notify={notify} />,
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
     portfolio: <PortfolioManager notify={notify} />,
@@ -105,7 +111,6 @@ export function AdminDashboard({ onExit }) {
     jornal: <CollectionManager {...collectionConfigs.posts} notify={notify} />,
     testimonials: <CollectionManager {...collectionConfigs.testimonials} notify={notify} />,
     faqs: <CollectionManager {...collectionConfigs.faqs} notify={notify} />,
-    team: <CollectionManager {...collectionConfigs.team} notify={notify} />,
     pages: <CollectionManager {...collectionConfigs.pages} notify={notify} />,
     menus: <CollectionManager {...collectionConfigs.menus} notify={notify} />,
     media: <MediaLibrary notify={notify} />,
