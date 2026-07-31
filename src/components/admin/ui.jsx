@@ -306,26 +306,24 @@ function popoverPlacement(el, ideal) {
 
 export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', className = '' }) {
   const [open, setOpen] = useState(false)
-  const [place, setPlace] = useState({ up: false, maxH: 360 })
+  const [up, setUp] = useState(false)
   const ref = useRef(null)
   const selected = value ? parseYMD(value) : null
   const [view, setView] = useState(selected || new Date())
 
   const toggle = () => setOpen((o) => {
     const willOpen = !o
-    if (willOpen && ref.current) setPlace(popoverPlacement(ref.current, 360))
+    if (willOpen && ref.current) { setUp(popoverPlacement(ref.current, 344).up); setView(selected || new Date()) }
     return willOpen
   })
 
   useEffect(() => {
     if (!open) return
-    setView(selected || new Date())
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onEsc)
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const y = view.getFullYear(), m = view.getMonth()
@@ -345,7 +343,7 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
         <Icon name="calendar" className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
       {open && (
-        <div style={{ maxHeight: place.maxH, overflowY: 'auto' }} className={`absolute left-0 z-[60] w-[16.5rem] glass-pop rounded-xl p-3 ${place.up ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        <div className={`absolute left-0 z-[70] w-[16.5rem] glass-pop rounded-xl p-3 ${up ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
           <div className="flex items-center justify-between mb-2">
             <p className="text-admin-champ text-sm font-medium capitalize">{monthLabel}</p>
             <div className="flex gap-1">
