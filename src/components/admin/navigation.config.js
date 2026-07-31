@@ -83,6 +83,7 @@ export const CORE_SECTIONS = [
       { key: 'pos', label: 'PDV', icon: 'tag', route: 'pos' },
       { key: 'ecommerce', label: 'E-commerce', icon: 'cart', route: 'ecommerce', pages: [
         { key: 'ec.storefront', label: 'Vitrine', route: 'ecommerce' },
+        { key: 'ec.channels', label: 'Canais de Venda (Marketplaces)', route: 'ecommerce' },
         { key: 'ec.orders', label: 'Pedidos Online', route: 'ecommerce' },
         { key: 'ec.settings', label: 'Configurações da Loja', route: 'ecommerce' },
         { key: 'ec.shipping', label: 'Frete · Melhor Envio', route: 'ecommerce' },

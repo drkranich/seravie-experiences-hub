@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, Toggle } from './ui'
 import { ResourcePanel, ResourceTabs } from './ResourcePanel'
+import { ChannelsTab } from './SalesChannels'
 import { exportCsv, exportPdf } from '../../lib/export'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -328,6 +329,7 @@ export function StorePanel({ notify }) {
       subtitle="Loja online — produto transversal do ecossistema"
       tabs={[
         { key: 'listings', label: 'Vitrine', render: () => <ListingsTab notify={notify} /> },
+        { key: 'channels', label: 'Canais de venda', render: () => <ChannelsTab notify={notify} /> },
         { key: 'orders', label: 'Pedidos online', render: () => <OrdersTab notify={notify} /> },
         { key: 'shipping', label: 'Frete', render: () => <ShippingTab notify={notify} /> },
         { key: 'settings', label: 'Configurações', render: () => <SettingsTab notify={notify} /> },
