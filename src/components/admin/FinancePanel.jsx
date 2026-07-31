@@ -18,9 +18,11 @@ function Modal({ title, onClose, children }) {
 const Fld = ({ label, children }) => (<div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{label}</label>{children}</div>)
 
 export function FinancePanel({ notify }) {
-  const { profile } = useTenant()
+  const { profile, canEdit, canManage } = useTenant()
   const { user } = useAuth()
   const tenantId = profile?.tenant_id
+  const mayEdit = canEdit ? canEdit('finance') : true
+  const mayDelete = canManage ? canManage('finance') : true
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
@@ -89,8 +91,8 @@ export function FinancePanel({ notify }) {
         <div><h1 className="font-serif text-4xl text-admin-text">Financeiro</h1><p className="text-admin-muted/60 text-sm mt-1">Receitas, despesas e indicadores</p></div>
         <div className="flex items-center gap-2">
           <div className="w-40"><GlassSelect value={month} onChange={setMonth} options={months.map((m) => ({ value: m, label: new Date(m + '-02').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }))} /></div>
-          <button onClick={() => openNew('revenue')} className="px-4 py-2 rounded-xl text-sm text-admin-sage bg-admin-sage/10 hover:bg-admin-sage/20 transition-colors">+ Receita</button>
-          <button onClick={() => openNew('expense')} className="px-4 py-2 rounded-xl text-sm text-admin-rose bg-admin-rose/10 hover:bg-admin-rose/20 transition-colors">+ Despesa</button>
+          {mayEdit && <button onClick={() => openNew('revenue')} className="px-4 py-2 rounded-xl text-sm text-admin-sage bg-admin-sage/10 hover:bg-admin-sage/20 transition-colors">+ Receita</button>}
+          {mayEdit && <button onClick={() => openNew('expense')} className="px-4 py-2 rounded-xl text-sm text-admin-rose bg-admin-rose/10 hover:bg-admin-rose/20 transition-colors">+ Despesa</button>}
           <button onClick={() => exportCsv(`financeiro-${month}.csv`, monthEntries.map((e) => ({ data: e.date, tipo: e.type === 'revenue' ? 'receita' : 'despesa', categoria: e.category, descricao: e.description, valor: e.amount, forma: METHODS[e.payment_method] || e.payment_method }))) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />CSV</button>
           <button onClick={() => exportPdf(`Financeiro ${month}`, monthEntries.map((e) => ({ data: e.date, tipo: e.type === 'revenue' ? 'Receita' : 'Despesa', categoria: e.category, descricao: e.description, valor: brl(e.amount), forma: METHODS[e.payment_method] || e.payment_method })), `Receitas ${brl(revenue)} · Despesas ${brl(expense)} · Saldo ${brl(balance)}`) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />PDF</button>
         </div>
@@ -116,8 +118,8 @@ export function FinancePanel({ notify }) {
                 <div className="flex-1 min-w-0"><p className="text-admin-text text-sm truncate">{e.description || e.category}</p><div className="flex gap-3 mt-0.5"><span className="text-admin-muted/40 text-xs capitalize">{e.category}</span>{e.date && <span className="text-admin-muted/40 text-xs">{new Date(e.date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}{e.payment_method && <span className="text-admin-muted/40 text-xs">{METHODS[e.payment_method] || e.payment_method}</span>}</div></div>
                 <p className={`text-sm font-medium shrink-0 ${e.type === 'revenue' ? 'text-admin-sage' : 'text-admin-rose'}`}>{e.type === 'revenue' ? '+' : '−'} {brl(e.amount)}</p>
                 <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(e)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => setConfirmDel(e)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05] transition-colors" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                  {mayEdit && <button onClick={() => openEdit(e)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>}
+                  {mayDelete && <button onClick={() => setConfirmDel(e)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05] transition-colors" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>}
                 </div>
               </div>
             ))}</div>

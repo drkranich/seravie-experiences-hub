@@ -8,7 +8,9 @@ const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', 
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
 
 export function CRMPanel({ notify }) {
-  const { profile } = useTenant()
+  const { profile, canEdit, canManage } = useTenant()
+  const mayEdit = canEdit ? canEdit('crm') : true
+  const mayDelete = canManage ? canManage('crm') : true
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -77,10 +79,10 @@ export function CRMPanel({ notify }) {
             className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors">
             <Icon name="upload" className="w-4 h-4" /> PDF
           </button>
-          <button onClick={() => { setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '' }); setShowForm(true) }}
+          {mayEdit && <button onClick={() => { setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '' }); setShowForm(true) }}
             className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors">
             <Icon name="spark" className="w-4 h-4" /> Novo contato
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -102,7 +104,7 @@ export function CRMPanel({ notify }) {
         <div className="glass rounded-2xl p-12 text-center">
           <Icon name="user" className="w-10 h-10 text-admin-champ/30 mx-auto mb-3" />
           <p className="text-admin-muted/50 text-sm">Nenhum contato encontrado</p>
-          <button onClick={() => setShowForm(true)} className="mt-4 text-admin-champ text-sm hover:underline">Criar primeiro contato</button>
+          {mayEdit && <button onClick={() => setShowForm(true)} className="mt-4 text-admin-champ text-sm hover:underline">Criar primeiro contato</button>}
         </div>
       ) : (
         <div className="grid gap-2">
@@ -119,12 +121,12 @@ export function CRMPanel({ notify }) {
               <span className={`text-[10px] hidden sm:block ${STATUS_COLORS[c.status]}`}>{c.status}</span>
               {c.ltv > 0 && <span className="text-[10px] text-admin-gold hidden md:block">R$ {c.ltv.toFixed(0)}</span>}
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openEdit(c)} className="p-1.5 hover:text-admin-champ text-admin-muted transition-colors rounded-lg hover:bg-white/[0.05]">
+                {mayEdit && <button onClick={() => openEdit(c)} className="p-1.5 hover:text-admin-champ text-admin-muted transition-colors rounded-lg hover:bg-white/[0.05]">
                   <Icon name="edit" className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => remove(c.id)} className="p-1.5 hover:text-admin-rose text-admin-muted transition-colors rounded-lg hover:bg-white/[0.05]">
+                </button>}
+                {mayDelete && <button onClick={() => remove(c.id)} className="p-1.5 hover:text-admin-rose text-admin-muted transition-colors rounded-lg hover:bg-white/[0.05]">
                   <Icon name="x" className="w-3.5 h-3.5" />
-                </button>
+                </button>}
               </div>
             </div>
           ))}
@@ -225,7 +227,7 @@ export function CRMPanel({ notify }) {
               {detail.notes && <div className="mb-4"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-1">Notas</p><p className="text-admin-muted/70 text-sm">{detail.notes}</p></div>}
 
               <div className="flex gap-3">
-                <button onClick={() => { openEdit(detail); setDetail(null) }} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Editar contato</button>
+                {mayEdit && <button onClick={() => { openEdit(detail); setDetail(null) }} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Editar contato</button>}
                 <button onClick={() => setDetail(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Fechar</button>
               </div>
             </div>
