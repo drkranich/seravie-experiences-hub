@@ -19,6 +19,10 @@ export function OperationsPanel({ notify }) {
   const [selected, setSelected] = useState(null)
   const [items, setItems] = useState([])
   const [newItem, setNewItem] = useState('')
+  const [runMode, setRunMode] = useState(false)
+  const [runChecks, setRunChecks] = useState({})
+  const [runNotes, setRunNotes] = useState('')
+  const [responses, setResponses] = useState([])
 
   const loadChecklists = async () => {
     setLoading(true)
@@ -52,7 +56,16 @@ export function OperationsPanel({ notify }) {
     else if (tab === 'equipment') loadEquipment()
   }, [tab])
 
-  useEffect(() => { if (selected) loadItems(selected.id) }, [selected])
+  const loadResponses = async (id) => { const { data } = await supabase.from('checklist_responses').select('*').eq('checklist_id', id).order('created_at', { ascending: false }).limit(10); setResponses(data || []) }
+  useEffect(() => { if (selected) { loadItems(selected.id); loadResponses(selected.id) } }, [selected])
+
+  const startRun = () => { setRunChecks({}); setRunNotes(''); setRunMode(true) }
+  const saveResponse = async () => {
+    const payload = items.map((i) => ({ item_id: i.id, title: i.title, done: !!runChecks[i.id] }))
+    const { error } = await supabase.from('checklist_responses').insert({ tenant_id: profile?.tenant_id, checklist_id: selected.id, status: 'completed', items: payload, notes: runNotes || null, responded_by: profile?.user_id, completed_at: new Date().toISOString() })
+    if (error) { notify('Erro ao salvar', 'error'); return }
+    notify('Checklist concluído', 'success'); setRunMode(false); loadResponses(selected.id)
+  }
 
   const saveChecklist = async () => {
     if (!form.title.trim()) { notify('Título obrigatório', 'error'); return }
@@ -138,7 +151,10 @@ export function OperationsPanel({ notify }) {
           </div>
           {selected && (
             <div className="glass rounded-2xl p-5">
-              <h3 className="font-serif text-xl text-admin-text mb-4">{selected.title}</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-serif text-xl text-admin-text">{selected.title}</h3>
+                {items.length > 0 && <button onClick={startRun} className="flex items-center gap-2 bg-admin-sage/10 hover:bg-admin-sage/20 text-admin-sage px-3 py-1.5 rounded-xl text-xs transition-colors"><Icon name="check" className="w-3.5 h-3.5" />Executar</button>}
+              </div>
               <div className="space-y-2 mb-4">
                 {items.map(item => (
                   <div key={item.id} className="flex items-center gap-3 py-2 border-b border-white/[0.04] group">
@@ -154,6 +170,14 @@ export function OperationsPanel({ notify }) {
                   placeholder="Novo item…" className="flex-1 glass-input rounded-xl px-3 py-2 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
                 <button onClick={addItem} className="px-3 py-2 bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ rounded-xl transition-colors"><Icon name="spark" className="w-4 h-4" /></button>
               </div>
+              {responses.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-white/[0.06]">
+                  <p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-2">Execuções recentes</p>
+                  <div className="space-y-1.5">{responses.slice(0, 5).map((r) => { const done = (r.items || []).filter((x) => x.done).length; const tot = (r.items || []).length; return (
+                    <div key={r.id} className="flex items-center justify-between text-xs"><span className="text-admin-muted/50">{new Date(r.completed_at || r.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span><span className={done === tot ? 'text-admin-sage' : 'text-admin-gold'}>{done}/{tot} ok</span></div>
+                  ) })}</div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -266,6 +290,25 @@ export function OperationsPanel({ notify }) {
               <button onClick={saveIncident} className="flex-1 bg-admin-rose/10 hover:bg-admin-rose/20 text-admin-rose py-2.5 rounded-xl text-sm transition-colors">Registrar</button>
               <button onClick={() => setShowIncidentForm(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted hover:text-admin-text transition-colors">Cancelar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Executar checklist */}
+      {runMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="glass-pop rounded-2xl p-7 w-full max-w-md overflow-visible">
+            <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Executar · {selected?.title}</h2><button onClick={() => setRunMode(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            <div className="space-y-1.5 mb-4 max-h-72 overflow-y-auto">
+              {items.length === 0 ? <p className="text-admin-muted/40 text-sm">Este checklist não tem itens.</p> : items.map((i) => (
+                <button key={i.id} onClick={() => setRunChecks((c) => ({ ...c, [i.id]: !c[i.id] }))} className="w-full flex items-center gap-3 glass-soft rounded-xl px-3 py-2.5 text-left">
+                  <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${runChecks[i.id] ? 'bg-admin-sage/80 border-admin-sage' : 'border-white/20'}`}>{runChecks[i.id] && <Icon name="check" className="w-3.5 h-3.5 text-admin-bg" />}</span>
+                  <span className="text-admin-text text-sm flex-1">{i.title}{i.required && <span className="text-admin-rose/70 text-[10px] ml-1">obrigatório</span>}</span>
+                </button>
+              ))}
+            </div>
+            <input value={runNotes} onChange={(e) => setRunNotes(e.target.value)} placeholder="Observações…" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none mb-4" />
+            <div className="flex gap-3"><button onClick={saveResponse} className="flex-1 btn-gradient rounded-xl py-2.5 text-sm font-medium">Concluir checklist</button><button onClick={() => setRunMode(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
           </div>
         </div>
       )}
