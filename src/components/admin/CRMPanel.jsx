@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
+import { logAudit } from '../../lib/audit'
 
 const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
@@ -62,6 +63,24 @@ export function CRMPanel({ notify }) {
     setDOrders(data || []); setDLoading(false)
   }
   const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  // LGPD — exportar e anonimizar dados do titular.
+  const exportSubject = (c) => {
+    const payload = { titular: c, pedidos: dOrders, exportado_em: new Date().toISOString() }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `dados-titular-${String(c.name || 'titular').replace(/\s+/g, '_')}.json`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+    logAudit({ action: 'export', resource_type: 'contacts', resource_id: c.id, new_data: { lgpd_export: true } }, profile?.tenant_id)
+    notify('Dados do titular exportados', 'success')
+  }
+  const anonymize = async (c) => {
+    if (!confirm('Anonimizar os dados pessoais deste titular (LGPD)? Nome, e-mail, telefone, documento e notas serão apagados. Esta ação é irreversível.')) return
+    const { error } = await supabase.from('contacts').update({ name: 'Titular anonimizado', email: null, phone: null, document: null, notes: null }).eq('id', c.id)
+    if (error) return notify('Erro ao anonimizar: ' + error.message, 'error')
+    logAudit({ action: 'update', resource_type: 'contacts', resource_id: c.id, old_data: { name: c.name }, new_data: { anonymized: true } }, profile?.tenant_id)
+    notify('Titular anonimizado', 'success'); setDetail(null); load()
+  }
 
   return (
     <div>
@@ -226,9 +245,11 @@ export function CRMPanel({ notify }) {
 
               {detail.notes && <div className="mb-4"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-1">Notas</p><p className="text-admin-muted/70 text-sm">{detail.notes}</p></div>}
 
-              <div className="flex gap-3">
-                {mayEdit && <button onClick={() => { openEdit(detail); setDetail(null) }} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Editar contato</button>}
-                <button onClick={() => setDetail(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Fechar</button>
+              <div className="flex gap-2 flex-wrap items-center">
+                {mayEdit && <button onClick={() => { openEdit(detail); setDetail(null) }} className="flex-1 min-w-[120px] bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Editar contato</button>}
+                <button onClick={() => exportSubject(detail)} className="px-3 py-2.5 rounded-xl text-xs text-admin-muted hover:text-admin-champ border border-white/[0.06] transition-colors" title="Exportar dados do titular (LGPD)">Exportar (LGPD)</button>
+                {mayDelete && <button onClick={() => anonymize(detail)} className="px-3 py-2.5 rounded-xl text-xs text-admin-rose hover:bg-admin-rose/10 transition-colors" title="Anonimizar dados (LGPD)">Anonimizar</button>}
+                <button onClick={() => setDetail(null)} className="px-4 py-2.5 rounded-xl text-sm text-admin-muted">Fechar</button>
               </div>
             </div>
           </div>

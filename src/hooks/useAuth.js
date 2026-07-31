@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { logAuthEvent } from '../lib/audit'
 
 export function useAuth() {
   const [user, setUser] = useState(null)
@@ -30,10 +31,12 @@ export function useAuth() {
     })
     if (error) return { error: error.message }
     setUser(data.user)
+    logAuthEvent('login')
     return { error: null }
   }
 
   const logout = async () => {
+    await logAuthEvent('logout') // registra antes de encerrar a sessão
     await supabase.auth.signOut()
     setUser(null)
   }

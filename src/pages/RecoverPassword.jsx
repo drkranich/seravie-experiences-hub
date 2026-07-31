@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { logAuthEvent } from '../lib/audit'
 
 export function RecoverPassword() {
   const [password, setPassword] = useState('')
@@ -17,6 +18,7 @@ export function RecoverPassword() {
     const { error: err } = await supabase.auth.updateUser({ password })
     setLoading(false)
     if (err) { setError(err.message || 'Não foi possível redefinir. Abra o link do e-mail novamente.'); return }
+    logAuthEvent('password_change')
     setDone(true)
   }
 

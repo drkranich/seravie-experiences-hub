@@ -3,13 +3,14 @@ import { supabase } from '../../lib/supabase'
 import { Icon, GlassSelect } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 
-const ACTIONS = { create: 'Criação', update: 'Edição', delete: 'Exclusão', login: 'Login', export: 'Exportação' }
-const ACTION_STYLE = { create: 'bg-admin-sage/10 text-admin-sage', update: 'bg-admin-champ/10 text-admin-champ', delete: 'bg-admin-rose/10 text-admin-rose', login: 'bg-admin-gold/10 text-admin-gold', export: 'bg-white/[0.05] text-admin-muted' }
+const ACTIONS = { create: 'Criação', update: 'Edição', delete: 'Exclusão', login: 'Login', logout: 'Logout', password_change: 'Troca de senha', export: 'Exportação' }
+const ACTION_STYLE = { create: 'bg-admin-sage/10 text-admin-sage', update: 'bg-admin-champ/10 text-admin-champ', delete: 'bg-admin-rose/10 text-admin-rose', login: 'bg-admin-gold/10 text-admin-gold', logout: 'bg-white/[0.05] text-admin-muted', password_change: 'bg-admin-champ/10 text-admin-champ', export: 'bg-white/[0.05] text-admin-muted' }
 const RESOURCE_LABELS = {
   products: 'Produtos', contacts: 'Contatos', financial_entries: 'Financeiro', gift_items: 'Presentes',
   chocolate_kits: 'Chocolate · Kits', chocolate_lines: 'Chocolate · Linhas', coffee_menu: 'Café · Cardápio',
   wine_labels: 'Vinhos', hampers: 'Cestas & Kits', spa_services: 'Spa · Serviços', appointments: 'Agenda',
   tours: 'Turismo', projects: 'Arquitetura', events: 'Eventos', suppliers: 'Fornecedores', pairings: 'Harmonizações', roles: 'Perfis',
+  auth: 'Autenticação', invitations: 'Convites', plans: 'Planos', agenda_notes: 'Agenda', coupons: 'Cupons', courses: 'Cursos', sla_policies: 'SLA', goals: 'Metas', equipment: 'Equipamentos',
 }
 const resLabel = (r) => RESOURCE_LABELS[r] || r
 
