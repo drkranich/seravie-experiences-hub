@@ -145,8 +145,15 @@ export function AdminDashboard({ onExit }) {
     }).filter(Boolean)
     const base = [...CORE_SECTIONS]
     if (frentes.length) base.splice(1, 0, { group: 'Frentes do seu negócio', items: frentes })
+    // Gating por papel (RBAC): admin/super_admin veem tudo; demais, só o permitido.
+    const permsArr = Array.isArray(profile?.permissions) ? profile.permissions : []
+    const admin = ['super_admin', 'admin'].includes(profile?.role_slug)
+    const allow = (key) => admin || key === 'overview' || String(key).startsWith('vertical.')
+      || permsArr.includes('*') || permsArr.includes('view:' + key) || permsArr.includes('manage:' + key)
     return base
-  }, [verticals])
+      .map((sec) => ({ ...sec, items: sec.items.filter((it) => allow(it.key)) }))
+      .filter((sec) => sec.items.length)
+  }, [verticals, profile])
 
   // Índice de navegação: key -> { item, parentLabel } (para ScaffoldPage/breadcrumb).
   const navIndex = useMemo(() => {

@@ -37,6 +37,12 @@ export function TenantProvider({ children }) {
   const isSuperAdmin = () => profile?.role_slug === 'super_admin'
   const isAdmin = () => ['super_admin', 'admin'].includes(profile?.role_slug)
 
+  // RBAC — permissões no formato array: '*', 'view:<mod>', 'manage:<mod>'.
+  const permsList = () => (Array.isArray(profile?.permissions) ? profile.permissions : [])
+  const can = (perm) => permsList().includes('*') || permsList().includes(perm)
+  const canView = (mod) => isAdmin() || can(`view:${mod}`) || can(`manage:${mod}`)
+  const canManage = (mod) => isAdmin() || can(`manage:${mod}`)
+
   return (
     <TenantContext.Provider value={{
       profile,
@@ -45,6 +51,9 @@ export function TenantProvider({ children }) {
       hasPermission,
       isSuperAdmin,
       isAdmin,
+      can,
+      canView,
+      canManage,
       reload: loadProfile
     }}>
       {children}
