@@ -25,6 +25,8 @@ export function FinancePanel({ notify }) {
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({})
+  const [editing, setEditing] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null)
   const [month, setMonth] = useState(ym(new Date()))
 
   const load = async () => {
@@ -36,13 +38,24 @@ export function FinancePanel({ notify }) {
 
   const save = async () => {
     if (!form.amount || Number(form.amount) <= 0) return notify('Informe um valor', 'error')
-    const { error } = await supabase.from('financial_entries').insert({
+    const base = {
       type: form.type || 'expense', category: form.category || 'outro', description: form.description,
       amount: Number(form.amount), date: form.date || new Date().toISOString().slice(0, 10),
-      payment_method: form.payment_method || 'dinheiro', created_by: user?.id || null, tenant_id: tenantId,
-    })
+      payment_method: form.payment_method || 'dinheiro',
+    }
+    const { error } = editing
+      ? await supabase.from('financial_entries').update(base).eq('id', editing.id)
+      : await supabase.from('financial_entries').insert({ ...base, created_by: user?.id || null, tenant_id: tenantId })
     if (error) return notify('Erro ao salvar', 'error')
-    notify('Lançamento registrado', 'success'); setModal(false); setForm({}); load()
+    notify(editing ? 'Lançamento atualizado' : 'Lançamento registrado', 'success'); setModal(false); setEditing(null); setForm({}); load()
+  }
+
+  const openEdit = (e) => { setEditing(e); setForm({ type: e.type, category: e.category, description: e.description || '', amount: String(e.amount), date: e.date, payment_method: e.payment_method }); setModal(true) }
+  const remove = async (e) => {
+    const { error } = await supabase.from('financial_entries').delete().eq('id', e.id)
+    setConfirmDel(null)
+    if (error) return notify('Erro ao excluir', 'error')
+    notify('Lançamento excluído', 'success'); load()
   }
 
   const months = useMemo(() => {
@@ -67,7 +80,7 @@ export function FinancePanel({ notify }) {
     return Object.entries(m).sort((a, b) => b[1] - a[1])
   }
 
-  const openNew = (type) => { setForm({ type, category: type === 'revenue' ? 'venda' : 'fornecedor', payment_method: 'dinheiro', date: new Date().toISOString().slice(0, 10) }); setModal(true) }
+  const openNew = (type) => { setEditing(null); setForm({ type, category: type === 'revenue' ? 'venda' : 'fornecedor', payment_method: 'dinheiro', date: new Date().toISOString().slice(0, 10) }); setModal(true) }
   const cats = (form.type === 'revenue' ? REV_CATS : EXP_CATS)
 
   return (
@@ -98,10 +111,14 @@ export function FinancePanel({ notify }) {
             <div className="glass rounded-2xl p-10 text-center"><p className="text-admin-muted/40 text-sm">Nenhum lançamento neste mês</p></div>
           ) : (
             <div className="space-y-2">{monthEntries.map((e) => (
-              <div key={e.id} className="glass rounded-xl px-5 py-3 flex items-center gap-4">
+              <div key={e.id} className="glass rounded-xl px-5 py-3 flex items-center gap-4 group">
                 <div className={`w-1.5 h-8 rounded-full shrink-0 ${e.type === 'revenue' ? 'bg-admin-sage/60' : 'bg-admin-rose/60'}`} />
                 <div className="flex-1 min-w-0"><p className="text-admin-text text-sm truncate">{e.description || e.category}</p><div className="flex gap-3 mt-0.5"><span className="text-admin-muted/40 text-xs capitalize">{e.category}</span>{e.date && <span className="text-admin-muted/40 text-xs">{new Date(e.date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>}{e.payment_method && <span className="text-admin-muted/40 text-xs">{METHODS[e.payment_method] || e.payment_method}</span>}</div></div>
                 <p className={`text-sm font-medium shrink-0 ${e.type === 'revenue' ? 'text-admin-sage' : 'text-admin-rose'}`}>{e.type === 'revenue' ? '+' : '−'} {brl(e.amount)}</p>
+                <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => openEdit(e)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setConfirmDel(e)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05] transition-colors" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                </div>
               </div>
             ))}</div>
           )}
@@ -125,15 +142,25 @@ export function FinancePanel({ notify }) {
       </div>
 
       {modal && (
-        <Modal title={form.type === 'revenue' ? 'Nova receita' : 'Nova despesa'} onClose={() => setModal(false)}>
+        <Modal title={`${editing ? 'Editar' : 'Nova'} ${form.type === 'revenue' ? 'receita' : 'despesa'}`} onClose={() => { setModal(false); setEditing(null) }}>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3"><Fld label="Tipo"><GlassSelect value={form.type} onChange={(v) => setForm((f) => ({ ...f, type: v, category: v === 'revenue' ? 'venda' : 'fornecedor' }))} options={[{ value: 'revenue', label: 'Receita' }, { value: 'expense', label: 'Despesa' }]} /></Fld><Fld label="Valor (R$)"><input type="number" value={form.amount || ''} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className={inputCls} /></Fld></div>
             <div className="grid grid-cols-2 gap-3"><Fld label="Categoria"><GlassSelect value={form.category} onChange={(v) => setForm((f) => ({ ...f, category: v }))} options={cats.map((c) => ({ value: c, label: c }))} /></Fld><Fld label="Forma"><GlassSelect value={form.payment_method} onChange={(v) => setForm((f) => ({ ...f, payment_method: v }))} options={Object.entries(METHODS).map(([value, label]) => ({ value, label }))} /></Fld></div>
             <Fld label="Data"><GlassDate value={form.date || ''} onChange={(v) => setForm((f) => ({ ...f, date: v }))} /></Fld>
             <Fld label="Descrição"><input value={form.description || ''} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className={inputCls} /></Fld>
           </div>
-          <div className="flex gap-3 mt-6"><button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Registrar</button><button onClick={() => setModal(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
+          <div className="flex gap-3 mt-6"><button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">{editing ? 'Salvar alterações' : 'Registrar'}</button><button onClick={() => { setModal(false); setEditing(null) }} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
         </Modal>
+      )}
+
+      {confirmDel && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="font-serif text-xl text-admin-text mb-2">Excluir lançamento</h3>
+            <p className="text-admin-muted/70 text-sm mb-6">Remover “{confirmDel.description || confirmDel.category}” ({brl(confirmDel.amount)})? Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-3"><button onClick={() => remove(confirmDel)} className="flex-1 bg-admin-rose/15 hover:bg-admin-rose/25 text-admin-rose py-2.5 rounded-xl text-sm transition-colors">Excluir</button><button onClick={() => setConfirmDel(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
+          </div>
+        </div>
       )}
     </div>
   )
