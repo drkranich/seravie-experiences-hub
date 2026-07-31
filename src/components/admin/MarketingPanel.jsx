@@ -34,6 +34,15 @@ export function MarketingPanel({ notify }) {
 
   const STATUS_COLORS = { draft:'text-admin-muted/40', scheduled:'text-admin-gold', running:'text-admin-sage', paused:'text-admin-rose', completed:'text-admin-muted/30', cancelled:'text-admin-rose/50' }
 
+  const setCampaignStatus = async (c, status) => {
+    const patch = { status }
+    if (status === 'running') patch.started_at = new Date().toISOString()
+    if (status === 'completed') patch.completed_at = new Date().toISOString()
+    await supabase.from('campaigns').update(patch).eq('id', c.id)
+    notify(status === 'running' ? 'Campanha iniciada' : status === 'completed' ? 'Campanha concluída' : 'Atualizada', 'success'); loadCampaigns()
+  }
+  const toggleCoupon = async (c) => { await supabase.from('coupons').update({ is_active: !c.is_active }).eq('id', c.id); loadCoupons() }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -52,8 +61,12 @@ export function MarketingPanel({ notify }) {
             : campaigns.map(c => (
               <div key={c.id} className="glass rounded-xl px-5 py-3.5 flex items-center gap-4">
                 <Icon name="star" className="w-4 h-4 text-admin-champ/40 shrink-0" />
-                <div className="flex-1 min-w-0"><p className="text-admin-text text-sm truncate">{c.title}</p><div className="flex gap-3 mt-0.5"><span className="text-admin-muted/40 text-xs">{c.type}</span><span className="text-admin-muted/30 text-xs">Enviados: {c.sent_count}</span><span className="text-admin-muted/30 text-xs">Abertos: {c.open_count}</span></div></div>
-                <span className={`text-[10px] font-medium ${STATUS_COLORS[c.status]}`}>{c.status}</span>
+                <div className="flex-1 min-w-0"><p className="text-admin-text text-sm truncate">{c.title}</p><div className="flex gap-3 mt-0.5"><span className="text-admin-muted/40 text-xs">{c.type}</span><span className="text-admin-muted/30 text-xs">Enviados: {c.sent_count}</span><span className="text-admin-muted/30 text-xs">Abertos: {c.open_count}</span><span className="text-admin-muted/30 text-xs">Cliques: {c.click_count}</span></div></div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={`text-[10px] font-medium ${STATUS_COLORS[c.status]}`}>{c.status}</span>
+                  {['draft', 'scheduled', 'paused'].includes(c.status) && <button onClick={() => setCampaignStatus(c, 'running')} className="text-xs text-admin-sage hover:underline">iniciar</button>}
+                  {c.status === 'running' && <><button onClick={() => setCampaignStatus(c, 'paused')} className="text-xs text-admin-gold hover:underline">pausar</button><button onClick={() => setCampaignStatus(c, 'completed')} className="text-xs text-admin-champ hover:underline">concluir</button></>}
+                </div>
               </div>
             ))
           }
@@ -65,7 +78,7 @@ export function MarketingPanel({ notify }) {
             : coupons.length === 0 ? <div className="glass rounded-2xl p-10 text-center col-span-3"><p className="text-admin-muted/40 text-sm">Nenhum cupom</p></div>
             : coupons.map(c => (
               <div key={c.id} className="glass rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2"><p className="text-admin-champ font-mono text-sm font-medium">{c.code}</p><span className={`text-[10px] px-2 py-0.5 rounded-lg ${c.is_active ? 'bg-admin-sage/10 text-admin-sage' : 'bg-white/[0.04] text-admin-muted/40'}`}>{c.is_active ? 'ativo' : 'inativo'}</span></div>
+                <div className="flex items-center justify-between mb-2"><p className="text-admin-champ font-mono text-sm font-medium">{c.code}</p><button onClick={() => toggleCoupon(c)} className={`text-[10px] px-2 py-0.5 rounded-lg transition-colors ${c.is_active ? 'bg-admin-sage/10 text-admin-sage hover:bg-admin-rose/10 hover:text-admin-rose' : 'bg-white/[0.04] text-admin-muted/40 hover:bg-admin-sage/10 hover:text-admin-sage'}`}>{c.is_active ? 'ativo' : 'inativo'}</button></div>
                 <p className="text-admin-text text-sm">{c.type === 'percentage' ? `${c.value}%` : `R$ ${c.value}`} de desconto</p>
                 <p className="text-admin-muted/40 text-xs mt-1">Usado {c.used_count}{c.max_uses ? `/${c.max_uses}` : ''} vezes</p>
               </div>

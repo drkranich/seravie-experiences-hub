@@ -40,6 +40,7 @@ import { TourismPanel } from '../components/admin/TourismPanel'
 import { ArchitecturePanel } from '../components/admin/ArchitecturePanel'
 import { FinancePanel } from '../components/admin/FinancePanel'
 import { AgendaPanel } from '../components/admin/AgendaPanel'
+import { AutomationPanel } from '../components/admin/AutomationPanel'
 import { Onboarding } from '../components/admin/Onboarding'
 import { ScaffoldPage } from '../components/admin/ScaffoldPage'
 import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
@@ -87,6 +88,7 @@ export function AdminDashboard({ onExit }) {
     catalog: <CatalogPanel notify={notify} />,
     finance: <FinancePanel notify={notify} />,
     agenda: <AgendaPanel notify={notify} />,
+    automations: <AutomationPanel notify={notify} />,
     pos: <POSPanel notify={notify} />,
     chocolate: <ChocolatePanel notify={notify} />,
     gourmet: <EmporioPanel notify={notify} />,
