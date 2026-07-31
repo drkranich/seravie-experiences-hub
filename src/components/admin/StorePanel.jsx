@@ -136,10 +136,19 @@ function SettingsTab({ notify }) {
   return (
     <div className="max-w-2xl">
       <div className="glass rounded-2xl p-6 mb-5">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-4">
           <div><p className="text-admin-text text-sm font-medium">Loja online</p><p className="text-admin-muted/50 text-xs mt-0.5">{form.is_open ? 'Loja aberta ao público' : 'Loja fechada (rascunho)'}</p></div>
           <Toggle checked={!!form.is_open} onChange={(v) => set('is_open', v)} />
         </div>
+        {form.slug && (
+          <div className="glass-soft rounded-xl px-4 py-3 mb-5 flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-0"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50">Endereço da loja</p><p className="text-admin-champ/80 text-xs truncate">{`${window.location.origin}/#loja/${form.slug}`}</p></div>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/#loja/${form.slug}`); notify('Link copiado', 'success') }} className="border border-admin-champ/20 text-admin-champ/80 px-3 py-1.5 rounded-lg text-xs hover:bg-white/[0.04] transition-colors">Copiar link</button>
+              <a href={`${window.location.origin}/#loja/${form.slug}`} target="_blank" rel="noreferrer" className="bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-3 py-1.5 rounded-lg text-xs transition-colors">Ver loja ↗</a>
+            </div>
+          </div>
+        )}
         <div className="grid sm:grid-cols-2 gap-4">
           <Fld label="Nome da loja"><input value={form.store_name || ''} onChange={(e) => set('store_name', e.target.value)} className={inputCls} placeholder="Minha Loja" /></Fld>
           <Fld label="Endereço (slug)"><input value={form.slug || ''} onChange={(e) => set('slug', e.target.value)} className={inputCls} placeholder="minha-loja" /></Fld>

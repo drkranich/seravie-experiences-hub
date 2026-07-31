@@ -5,6 +5,7 @@ import { useSettings } from './hooks/useSettings'
 import { Login } from './pages/Login'
 import { AdminDashboard } from './pages/AdminDashboard'
 import { Home } from './pages/Home'
+import { Storefront } from './pages/Storefront'
 
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth()
@@ -30,6 +31,10 @@ export default function App() {
       </div>
     )
   }
+
+  // Rota da loja pública (tem precedência: funciona logado ou não)
+  const isStoreRoute = window.location.hash.startsWith('#loja') || /[?&](store|loja)=/.test(window.location.search)
+  if (isStoreRoute) return <Storefront />
 
   // Rota admin
   const isAdminRoute = window.location.hash === '#admin' || window.location.search.includes('admin')
