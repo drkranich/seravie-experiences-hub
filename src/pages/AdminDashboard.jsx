@@ -21,9 +21,17 @@ import { TeamPanel } from '../components/admin/TeamPanel'
 import { KnowledgeHub } from '../components/admin/KnowledgeHub'
 import { MarketingPanel } from '../components/admin/MarketingPanel'
 import { CatalogPanel } from '../components/admin/CatalogPanel'
+import { VerticalsPanel } from '../components/admin/VerticalsPanel'
+import { AIPanel } from '../components/admin/AIPanel'
+import { AnalyticsPanel } from '../components/admin/AnalyticsPanel'
+import { SuperAdminPanel } from '../components/admin/SuperAdminPanel'
 
 const NAV_GROUPS = [
-  { group: 'Core', items: [{ key: 'overview', label: 'Backstage', icon: 'grid' }] },
+  { group: 'Core', items: [
+    { key: 'overview', label: 'Backstage', icon: 'grid' },
+    { key: 'analytics', label: 'Analytics', icon: 'star' },
+    { key: 'ai', label: 'Seravie AI', icon: 'spark' },
+  ]},
   { group: 'Atendimento', items: [
     { key: 'crm', label: 'CRM', icon: 'user' },
     { key: 'conversations', label: 'Conversas', icon: 'mail' },
@@ -43,6 +51,9 @@ const NAV_GROUPS = [
     { key: 'marketing', label: 'Marketing', icon: 'star' },
     { key: 'catalog', label: 'Catálogo', icon: 'image' },
   ]},
+  { group: 'Verticais', items: [
+    { key: 'verticals', label: 'Núcleos', icon: 'leaf' },
+  ]},
   { group: 'Conteúdo', items: [
     { key: 'content', label: 'Seções', icon: 'layout' },
     { key: 'services', label: 'Serviços', icon: 'spark' },
@@ -58,7 +69,10 @@ const NAV_GROUPS = [
     { key: 'menus', label: 'Menus', icon: 'link' },
     { key: 'media', label: 'Biblioteca', icon: 'folder' },
   ]},
-  { group: 'Sistema', items: [{ key: 'settings', label: 'Configurações', icon: 'gear' }] },
+  { group: 'Sistema', items: [
+    { key: 'superadmin', label: 'Super Admin', icon: 'gear' },
+    { key: 'settings', label: 'Configurações', icon: 'gear' },
+  ]},
 ]
 
 const FULLSCREEN = ['conversations', 'helpdesk']
@@ -80,6 +94,8 @@ export function AdminDashboard({ onExit }) {
 
   const modules = {
     overview: <Overview go={go} />,
+    analytics: <AnalyticsPanel />,
+    ai: <AIPanel notify={notify} />,
     crm: <CRMPanel notify={notify} />,
     conversations: <ConversationsInbox notify={notify} />,
     helpdesk: <TicketsPanel notify={notify} />,
@@ -89,6 +105,7 @@ export function AdminDashboard({ onExit }) {
     knowledge: <KnowledgeHub notify={notify} />,
     marketing: <MarketingPanel notify={notify} />,
     catalog: <CatalogPanel notify={notify} />,
+    verticals: <VerticalsPanel notify={notify} />,
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
     portfolio: <PortfolioManager notify={notify} />,
@@ -102,6 +119,7 @@ export function AdminDashboard({ onExit }) {
     media: <MediaLibrary notify={notify} />,
     messages: <MessagesPanel notify={notify} />,
     newsletter: <NewsletterInbox notify={notify} />,
+    superadmin: <SuperAdminPanel notify={notify} />,
     settings: <SettingsPanel notify={notify} />,
   }
 
