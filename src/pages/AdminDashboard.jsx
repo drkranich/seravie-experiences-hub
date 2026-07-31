@@ -38,6 +38,7 @@ import { VerticalCatalogPanel } from '../components/admin/VerticalCatalogPanel'
 import { SpaPanel } from '../components/admin/SpaPanel'
 import { TourismPanel } from '../components/admin/TourismPanel'
 import { ArchitecturePanel } from '../components/admin/ArchitecturePanel'
+import { CraftPanel } from '../components/admin/CraftPanel'
 import { FinancePanel } from '../components/admin/FinancePanel'
 import { AgendaPanel } from '../components/admin/AgendaPanel'
 import { AutomationPanel } from '../components/admin/AutomationPanel'
@@ -105,6 +106,7 @@ export function AdminDashboard({ onExit }) {
     spa: <SpaPanel notify={notify} />,
     tourism: <TourismPanel notify={notify} />,
     architecture: <ArchitecturePanel notify={notify} />,
+    artesanato: <CraftPanel notify={notify} />,
     verticals: <VerticalsPanel notify={notify} />,
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
@@ -127,7 +129,7 @@ export function AdminDashboard({ onExit }) {
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).
   const sections = useMemo(() => {
-    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate', gourmet: 'gourmet', coffee: 'coffee', wine: 'wine', events: 'events', gift: 'gift', brewery: 'brewery', bakery: 'bakery', floriculture: 'floriculture', beauty: 'beauty', spa: 'spa', tourism: 'tourism', architecture: 'architecture' } // frentes com painel real
+    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate', gourmet: 'gourmet', coffee: 'coffee', wine: 'wine', events: 'events', gift: 'gift', brewery: 'brewery', bakery: 'bakery', floriculture: 'floriculture', beauty: 'beauty', spa: 'spa', tourism: 'tourism', architecture: 'architecture', artesanato: 'artesanato' } // frentes com painel real
     const frentes = verticals.map((v) => {
       const nav = verticalToNav(v)
       if (nav && VERTICAL_ROUTES[v]) nav.route = VERTICAL_ROUTES[v]

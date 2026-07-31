@@ -273,6 +273,9 @@ export const VERTICAL_CORES = {
   architecture: { label: 'Arquitetura', icon: 'layout', pages: [
     'Projetos','Briefings','Moodboards','Materiais','Curadoria','Orçamentos','Cronograma','Clientes','Portfólio','Renderizações','Visitas','Fornecedores',
   ]},
+  artesanato: { label: 'Artesanato', icon: 'palette', pages: [
+    'Peças','Encomendas','Coleções','Artesãos','Técnicas','Materiais','Estoque','Feiras & Eventos','Personalizações','Fornecedores','Precificação','Fotos',
+  ]},
   events: { label: 'Eventos', icon: 'star', pages: [
     'Casamentos','Buffets','Cerimônias','Convidados','Cronograma','Fornecedores','Checklist','Financeiro','Decoração','Montagem','Desmontagem',
   ]},

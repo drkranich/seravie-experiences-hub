@@ -138,6 +138,21 @@ export function Icon({ name, className = 'w-5 h-5' }) {
         <path d="M3 9h18M8 3v4M16 3v4" />
       </>
     ),
+    palette: (
+      <>
+        <path d="M12 3a9 9 0 000 18c1.7 0 2-1.3 1.2-2.2-.8-.9-.5-2.2.8-2.2H17a4 4 0 004-4c0-5-4-9.6-9-9.6z" />
+        <circle cx="7.5" cy="10.5" r="1" />
+        <circle cx="12" cy="7.5" r="1" />
+        <circle cx="16.5" cy="10.5" r="1" />
+      </>
+    ),
+    cart: (
+      <>
+        <circle cx="9" cy="20" r="1.4" />
+        <circle cx="17" cy="20" r="1.4" />
+        <path d="M3 4h2l2.2 11.2a1 1 0 001 .8h8.5a1 1 0 001-.8L20.5 8H6.2" />
+      </>
+    ),
   }
   return (
     <svg viewBox="0 0 24 24" className={className} {...p}>
