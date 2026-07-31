@@ -81,6 +81,7 @@ export const CORE_SECTIONS = [
         { key: 'exp.calendar', label: 'Calendário' },
       ]},
       { key: 'pos', label: 'PDV', icon: 'tag', route: 'pos' },
+      { key: 'receivables', label: 'Recebíveis', icon: 'chart', route: 'receivables' },
       { key: 'ecommerce', label: 'E-commerce', icon: 'cart', route: 'ecommerce', pages: [
         { key: 'ec.storefront', label: 'Vitrine', route: 'ecommerce' },
         { key: 'ec.channels', label: 'Canais de Venda (Marketplaces)', route: 'ecommerce' },
@@ -219,6 +220,8 @@ export const CORE_SECTIONS = [
     group: 'Sistema',
     items: [
       { key: 'verticals', label: 'Frentes / Núcleos', icon: 'leaf', route: 'verticals' },
+      { key: 'subscription', label: 'Minha Assinatura', icon: 'star', route: 'subscription' },
+      { key: 'plans', label: 'Planos da Plataforma', icon: 'gear', route: 'plans' },
       { key: 'superadmin', label: 'Super Admin', icon: 'gear', route: 'superadmin' },
       { key: 'settings', label: 'Configurações', icon: 'gear', route: 'settings', pages: [
         { key: 'set.companies', label: 'Empresas' },
