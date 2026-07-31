@@ -15,13 +15,14 @@ function ListingsTab({ notify }) {
   const tenantId = profile?.tenant_id
   const [reloadKey, setReloadKey] = useState(0)
 
-  const importFromCatalog = async () => {
-    const { data } = await supabase.from('products').select('name, description, price, sku, stock').eq('status', 'active')
-    if (!data?.length) return notify('Nenhum produto ativo no catálogo', 'error')
+  const importFrom = async (source) => {
+    const table = source === 'craft' ? 'craft_items' : 'products'
+    const { data } = await supabase.from(table).select('*').eq('status', 'active')
+    if (!data?.length) return notify(source === 'craft' ? 'Nenhuma peça de artesanato ativa' : 'Nenhum produto ativo no catálogo', 'error')
     const { data: existing } = await supabase.from('store_listings').select('title')
     const have = new Set((existing || []).map((x) => x.title))
-    const rows = data.filter((p) => !have.has(p.name)).map((p) => ({ tenant_id: tenantId, title: p.name, description: p.description, price: p.price || 0, sku: p.sku, stock: p.stock || 0, is_published: true, source_table: 'products' }))
-    if (!rows.length) return notify('O catálogo já está na vitrine', 'info')
+    const rows = data.filter((p) => !have.has(p.name)).map((p) => ({ tenant_id: tenantId, title: p.name, description: p.description, price: p.price || 0, sku: p.sku || null, stock: p.stock || 0, is_published: true, source_table: table, source_id: p.id }))
+    if (!rows.length) return notify('Esses itens já estão na vitrine', 'info')
     const { error } = await supabase.from('store_listings').insert(rows)
     if (error) return notify('Erro ao importar: ' + error.message, 'error')
     notify(`${rows.length} itens importados para a vitrine`, 'success'); setReloadKey((k) => k + 1)
@@ -30,8 +31,11 @@ function ListingsTab({ notify }) {
   return (
     <div>
       <div className="glass-soft rounded-xl px-4 py-3 mb-4 flex items-center justify-between gap-3 flex-wrap">
-        <p className="text-admin-muted/60 text-xs leading-relaxed max-w-xl">A vitrine é desacoplada: aceita itens de qualquer frente do seu ecossistema. Cadastre manualmente ou importe do catálogo de produtos.</p>
-        <button onClick={importFromCatalog} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors shrink-0"><Icon name="upload" className="w-4 h-4 rotate-180" />Importar do catálogo</button>
+        <p className="text-admin-muted/60 text-xs leading-relaxed max-w-md">A vitrine é desacoplada: aceita itens de qualquer frente do seu ecossistema. Cadastre manualmente ou importe.</p>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={() => importFrom('products')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4 rotate-180" />Do catálogo</button>
+          <button onClick={() => importFrom('craft')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="palette" className="w-4 h-4" />Do artesanato</button>
+        </div>
       </div>
       <ResourcePanel
         key={reloadKey}

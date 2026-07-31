@@ -71,8 +71,13 @@ export function POSPanel({ notify }) {
     setLoading(false)
   }
   const loadProducts = async () => {
-    const { data } = await supabase.from('products').select('*').eq('status', 'active').order('name')
-    setProducts(data || [])
+    // Catálogo transversal: produtos + peças de artesanato (estoque de cada um é baixado na sua tabela).
+    const [prods, crafts] = await Promise.all([
+      supabase.from('products').select('*').eq('status', 'active').order('name'),
+      supabase.from('craft_items').select('*').eq('status', 'active').order('name'),
+    ])
+    const craftMapped = (crafts.data || []).map((c) => ({ id: c.id, name: c.name, price: c.price, cost: c.cost, stock: c.stock, sku: null, barcode: null, status: c.status, category_id: null, _src: 'craft' }))
+    setProducts([...(prods.data || []).map((p) => ({ ...p, _src: 'products' })), ...craftMapped])
   }
   const loadAux = async () => {
     const { data: cats } = await supabase.from('product_categories').select('id, name').order('sort_order')
@@ -143,7 +148,7 @@ export function POSPanel({ notify }) {
       if (p.stock != null && found.qty >= p.stock) { notify('Estoque insuficiente', 'error'); return c }
       return c.map((i) => i.product_id === p.id ? { ...i, qty: i.qty + 1 } : i)
     }
-    return [...c, { product_id: p.id, name: p.name, price: Number(p.price), qty: 1, discount: 0, stock: p.stock }]
+    return [...c, { product_id: p.id, name: p.name, price: Number(p.price), qty: 1, discount: 0, stock: p.stock, source: p._src || 'products' }]
   })
   const setQty = (id, qty) => setCart((c) => c.flatMap((i) => {
     if (i.product_id !== id) return [i]
@@ -251,11 +256,15 @@ export function POSPanel({ notify }) {
     for (const i of cart) {
       if (i.stock != null) {
         const bal = Math.max(0, i.stock - i.qty)
-        await supabase.from('products').update({ stock: bal }).eq('id', i.product_id)
-        await supabase.from('stock_movements').insert({
-          tenant_id: tenantId, product_id: i.product_id, type: 'sale', quantity: -i.qty, balance_after: bal,
-          reference_id: order.id, reference_type: 'order', created_by: user?.id || null,
-        })
+        if (i.source === 'craft') {
+          await supabase.from('craft_items').update({ stock: bal }).eq('id', i.product_id)
+        } else {
+          await supabase.from('products').update({ stock: bal }).eq('id', i.product_id)
+          await supabase.from('stock_movements').insert({
+            tenant_id: tenantId, product_id: i.product_id, type: 'sale', quantity: -i.qty, balance_after: bal,
+            reference_id: order.id, reference_type: 'order', created_by: user?.id || null,
+          })
+        }
       }
     }
     setBusy(false)
