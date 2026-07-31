@@ -354,8 +354,9 @@ export function Home({ onAdmin }) {
       <header className="fixed top-0 inset-x-0 z-50">
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
           <a href="#topo" className="leading-none" data-no-translate>
-            <div className="font-serif text-2xl text-ivory tracking-wide">Seravie</div>
-            <div className="text-[9px] tracking-widestx text-gold/80 mt-0.5">EXPERIENCES</div>
+            {brand.logo_url
+              ? <img src={brand.logo_url} alt="Seravie Experiences" className="max-h-10 w-auto object-contain" />
+              : <div className="font-serif text-2xl text-ivory tracking-wide">Seravie Experiences</div>}
           </a>
           <nav className="hidden lg:flex items-center gap-8 text-[11px] tracking-widerx uppercase text-ivory/75">
             {navItems.map((n) => (
@@ -827,8 +828,9 @@ export function Home({ onAdmin }) {
         <div className="max-w-7xl mx-auto px-6 lg:px-10 py-14">
           <div className="flex flex-col lg:flex-row justify-between gap-10">
             <div className="max-w-xs">
-              <div className="font-serif text-2xl text-ivory tracking-wide">{brand.name || 'Seravie'}</div>
-              <div className="text-[9px] tracking-widestx text-gold/80 mt-0.5 mb-4">{brand.suffix || 'EXPERIENCES'}</div>
+              {brand.logo_url
+                ? <img src={brand.logo_url} alt="Seravie Experiences" className="max-h-11 w-auto object-contain mb-4" />
+                : <div className="font-serif text-2xl text-ivory tracking-wide mb-4">{brand.name || 'Seravie Experiences'}{brand.suffix ? ` ${brand.suffix}` : ''}</div>}
               <p className="text-ivory/45 text-sm leading-relaxed mb-6">
                 {brand.tagline || 'Transformamos espaços em destinos memoráveis.'}
               </p>

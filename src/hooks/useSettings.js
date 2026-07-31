@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 const DEFAULTS = {
-  brand: { name: 'Seravie', suffix: 'EXPERIENCES', tagline: 'Transformamos espaços em destinos memoráveis.' },
+  brand: { name: 'Seravie Experiences', suffix: '', tagline: 'Transformamos espaços em destinos memoráveis.', logo_url: '', favicon_url: '' },
   social: { instagram: '', pinterest: '' },
   footer_links: ['Política de Privacidade', 'Termos de Uso', 'Cookies', 'Mapa do Site'],
   seo: { title: 'Seravie Experiences', description: 'Transformamos espaços em destinos memoráveis.' },

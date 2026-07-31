@@ -3,7 +3,7 @@ export const collectionConfigs = {
   posts: {
     table: 'posts',
     title: 'Jornal',
-    subtitle: 'Artigos e novidades da Seravie.',
+    subtitle: 'Artigos e novidades da Seravie Experiences.',
     orderColumn: 'created_at',
     newDefault: () => ({ slug: 'post-' + Date.now(), title: 'Novo post', published: false }),
     fields: [
@@ -48,7 +48,7 @@ export const collectionConfigs = {
   team: {
     table: 'team_members',
     title: 'Equipe',
-    subtitle: 'Pessoas por trás da Seravie.',
+    subtitle: 'Pessoas por trás da Seravie Experiences.',
     newDefault: () => ({ name: 'Nome', published: true }),
     fields: [
       { key: 'name', label: 'Nome' },

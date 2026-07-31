@@ -48,7 +48,7 @@ export function ScaffoldPage({ item, parentLabel, onNavigate }) {
           </div>
           <h2 className="font-serif text-2xl text-admin-text mb-2">{item.label}</h2>
           <p className="text-admin-muted/55 text-sm leading-relaxed max-w-md mx-auto">
-            Esta área faz parte do ecossistema Seravie e será ativada com dados e
+            Esta área faz parte do ecossistema Seravie Experiences e será ativada com dados e
             fluxos próprios do seu segmento. A estrutura, as permissões e o design
             já seguem o mesmo padrão da plataforma.
           </p>

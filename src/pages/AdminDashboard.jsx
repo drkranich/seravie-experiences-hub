@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTenant } from '../hooks/useTenant'
+import { useSettings } from '../hooks/useSettings'
 import { Icon } from '../components/admin/ui'
 import { Overview } from '../components/admin/Overview'
 import { ContentEditor } from '../components/admin/ContentEditor'
@@ -36,6 +37,8 @@ const ROUTE_LABELS = { catalog: 'Catálogo', messages: 'Formulários', franchise
 export function AdminDashboard({ onExit }) {
   const { user, logout } = useAuth()
   const { profile } = useTenant()
+  const { settings } = useSettings()
+  const brand = settings?.brand || {}
   const [active, setActive] = useState('overview')
   const [expanded, setExpanded] = useState({})
   const [toasts, setToasts] = useState([])
@@ -165,8 +168,10 @@ export function AdminDashboard({ onExit }) {
     <div className="min-h-screen admin-bg text-admin-text flex" data-no-translate>
       <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-admin-side/80 backdrop-blur-2xl border-r border-white/[0.06] sticky top-0 h-screen">
         <div className="px-5 pt-7 pb-5 border-b border-white/[0.06]">
-          <div className="font-serif text-2xl text-admin-text leading-none tracking-wide">Seravie</div>
-          <div className="text-[8px] tracking-[0.2em] text-admin-champ/60 mt-1 uppercase">{profile?.tenant_name || 'Experiences'} · Experience OS</div>
+          {brand.logo_url
+            ? <img src={brand.logo_url} alt="Seravie Experiences" className="max-h-9 w-auto object-contain" />
+            : <div className="font-serif text-[22px] text-admin-text leading-tight tracking-wide">Seravie Experiences</div>}
+          <div className="text-[8px] tracking-[0.2em] text-admin-champ/60 mt-1 uppercase">{profile?.tenant_name || 'Experience OS'} · Experience OS</div>
         </div>
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
           {sections.map((g) => (
@@ -192,7 +197,7 @@ export function AdminDashboard({ onExit }) {
           <div className="flex items-center gap-3">
             <button className="lg:hidden text-admin-muted hover:text-admin-text transition-colors" onClick={() => setNavOpen((o) => !o)}><Icon name="grid" className="w-5 h-5" /></button>
             <div className="flex items-center gap-2 text-[11px] text-admin-muted/60">
-              <span className="hidden sm:block">Seravie</span><span className="hidden sm:block opacity-30">/</span>
+              <span className="hidden sm:block">Seravie Experiences</span><span className="hidden sm:block opacity-30">/</span>
               <span className="text-admin-champ/80">{activeLabel}</span>
             </div>
           </div>

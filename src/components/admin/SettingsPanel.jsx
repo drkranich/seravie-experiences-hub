@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSettings } from '../../hooks/useSettings'
 import { Card, Field, TextInput, TextArea, AdminBtn, Spinner } from './ui'
+import { ImageUpload } from './ImageUpload'
 
 export function SettingsPanel({ notify }) {
   const { settings, loading, save } = useSettings()
@@ -54,7 +55,7 @@ export function SettingsPanel({ notify }) {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="font-serif text-4xl text-ivory">Configurações</h1>
-          <p className="text-ivory/45 mt-2">Marca, redes sociais, rodapé e SEO.</p>
+          <p className="text-ivory/45 mt-2">Marca, logo, favicon, redes sociais, rodapé e SEO.</p>
         </div>
         <AdminBtn icon={saving ? undefined : 'check'} onClick={handleSave} disabled={saving}>
           {saving ? 'Salvando' : 'Salvar'}
@@ -74,6 +75,15 @@ export function SettingsPanel({ notify }) {
             <Field label="Tagline">
               <TextInput value={d.brand?.tagline || ''} onChange={(e) => set('brand.tagline', e.target.value)} />
             </Field>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-[11px] tracking-widerx uppercase text-gold mb-5">Logo &amp; Favicon</h2>
+          <div className="space-y-5">
+            <ImageUpload label="Logo (aparece no painel e no site)" value={d.brand?.logo_url || ''} onChange={(url) => set('brand.logo_url', url)} />
+            <ImageUpload label="Favicon (ícone da aba do navegador)" value={d.brand?.favicon_url || ''} onChange={(url) => set('brand.favicon_url', url)} />
+            <p className="text-ivory/35 text-xs">Recomendado: logo em PNG/SVG com fundo transparente; favicon quadrado (512×512).</p>
           </div>
         </Card>
 

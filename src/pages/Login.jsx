@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { useSettings } from '../hooks/useSettings'
 
 export function Login({ onLoginSuccess }) {
   const [email, setEmail] = useState('')
@@ -7,6 +8,8 @@ export function Login({ onLoginSuccess }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
+  const { settings } = useSettings()
+  const brand = settings?.brand || {}
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -21,9 +24,11 @@ export function Login({ onLoginSuccess }) {
   return (
     <div className="min-h-screen admin-bg flex items-center justify-center p-4">
       <div className="glass rounded-3xl p-9 w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="font-serif text-4xl text-admin-text leading-none">Seravie</div>
-          <div className="text-[9px] tracking-widestx text-admin-champ/80 mt-2">EXPERIENCES · CMS</div>
+        <div className="text-center mb-8 flex flex-col items-center">
+          {brand.logo_url
+            ? <img src={brand.logo_url} alt="Seravie Experiences" className="max-h-12 w-auto object-contain" />
+            : <div className="font-serif text-[32px] text-admin-text leading-none">Seravie Experiences</div>}
+          <div className="text-[9px] tracking-widestx text-admin-champ/80 mt-2">CMS</div>
         </div>
 
         {error && (

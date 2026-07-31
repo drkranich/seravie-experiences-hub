@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useTenant } from './hooks/useTenant'
+import { useSettings } from './hooks/useSettings'
 import { Login } from './pages/Login'
 import { AdminDashboard } from './pages/AdminDashboard'
 import { Home } from './pages/Home'
@@ -7,6 +9,18 @@ import { Home } from './pages/Home'
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth()
   const { profile, loading: tenantLoading, isAdmin } = useTenant()
+  const { settings } = useSettings()
+
+  // Favicon e título dinâmicos (Configurações → Logo & Favicon)
+  useEffect(() => {
+    const fav = settings?.brand?.favicon_url
+    if (fav) {
+      let link = document.querySelector("link[rel~='icon']")
+      if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link) }
+      link.href = fav
+    }
+    if (settings?.seo?.title) document.title = settings.seo.title
+  }, [settings])
 
   // Aguardar auth carregar
   if (authLoading) {
