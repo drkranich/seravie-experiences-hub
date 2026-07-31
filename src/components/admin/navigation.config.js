@@ -81,6 +81,7 @@ export const CORE_SECTIONS = [
         { key: 'exp.calendar', label: 'Calendário' },
       ]},
       { key: 'pos', label: 'PDV', icon: 'tag', route: 'pos' },
+      { key: 'agenda', label: 'Agenda', icon: 'calendar', route: 'agenda' },
       { key: 'marketing', label: 'Marketing', icon: 'star', route: 'marketing', pages: [
         { key: 'mkt.campaigns', label: 'Campanhas', route: 'marketing' },
         { key: 'mkt.landing', label: 'Landing Pages' },
