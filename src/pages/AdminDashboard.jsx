@@ -15,6 +15,8 @@ import { NewsletterInbox } from '../components/admin/NewsletterInbox'
 import { CRMPanel } from '../components/admin/CRMPanel'
 import { ConversationsInbox } from '../components/admin/ConversationsInbox'
 import { TicketsPanel } from '../components/admin/TicketsPanel'
+import { OperationsPanel } from '../components/admin/OperationsPanel'
+import { FranchisePanel } from '../components/admin/FranchisePanel'
 
 const NAV_GROUPS = [
   {
@@ -31,6 +33,13 @@ const NAV_GROUPS = [
       { key: 'helpdesk', label: 'Help Desk', icon: 'check' },
       { key: 'messages', label: 'Formulários', icon: 'mail' },
       { key: 'newsletter', label: 'Newsletter', icon: 'gift' },
+    ],
+  },
+  {
+    group: 'Operações',
+    items: [
+      { key: 'operations', label: 'Operações', icon: 'check' },
+      { key: 'franchise', label: 'Franquias', icon: 'leaf' },
     ],
   },
   {
@@ -63,6 +72,8 @@ const NAV_GROUPS = [
   },
 ]
 
+const FULLSCREEN_MODULES = ['conversations', 'helpdesk']
+
 export function AdminDashboard({ onExit }) {
   const { user, logout } = useAuth()
   const { profile } = useTenant()
@@ -77,7 +88,6 @@ export function AdminDashboard({ onExit }) {
   }
 
   const go = (k) => { setActive(k); setNavOpen(false) }
-
   const activeLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.key === active)?.label || ''
 
   const modules = {
@@ -85,6 +95,8 @@ export function AdminDashboard({ onExit }) {
     crm: <CRMPanel notify={notify} />,
     conversations: <ConversationsInbox notify={notify} />,
     helpdesk: <TicketsPanel notify={notify} />,
+    operations: <OperationsPanel notify={notify} />,
+    franchise: <FranchisePanel notify={notify} />,
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
     portfolio: <PortfolioManager notify={notify} />,
@@ -115,7 +127,6 @@ export function AdminDashboard({ onExit }) {
 
   return (
     <div className="min-h-screen admin-bg text-admin-text flex" data-no-translate>
-      {/* SIDEBAR DESKTOP */}
       <aside className="hidden lg:flex flex-col w-60 shrink-0 bg-admin-side/80 backdrop-blur-2xl border-r border-white/[0.06] sticky top-0 h-screen">
         <div className="px-5 pt-7 pb-5 border-b border-white/[0.06]">
           <div className="font-serif text-2xl text-admin-text leading-none tracking-wide">Seravie</div>
@@ -142,7 +153,6 @@ export function AdminDashboard({ onExit }) {
         </div>
       </aside>
 
-      {/* CONTEÚDO PRINCIPAL */}
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="sticky top-0 z-30 bg-admin-side/40 backdrop-blur-xl border-b border-white/[0.06] px-6 py-3.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -183,12 +193,11 @@ export function AdminDashboard({ onExit }) {
           </div>
         )}
 
-        <main className={`flex-1 ${['conversations','helpdesk'].includes(active) ? '' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>
+        <main className={`flex-1 ${FULLSCREEN_MODULES.includes(active) ? '' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>
           {modules[active]}
         </main>
       </div>
 
-      {/* TOASTS */}
       <div className="fixed bottom-6 right-6 z-50 space-y-3 pointer-events-none">
         {toasts.map((t) => (
           <div key={t.id} className={`glass rounded-xl px-5 py-3 text-[13px] flex items-center gap-3 pointer-events-auto shadow-xl ${
