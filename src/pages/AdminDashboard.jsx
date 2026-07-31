@@ -124,10 +124,10 @@ export function AdminDashboard({ onExit }) {
   }
 
   const NavItem = ({ n }) => (
-    <button onClick={() => go(n.key)} className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] transition-all duration-200 ${active === n.key ? 'bg-white/[0.06] text-admin-champ' : 'text-admin-muted hover:text-admin-text hover:bg-white/[0.03]'}`}>
+    <button onClick={() => go(n.key)} className={`relative w-full flex items-center gap-2 pl-4 pr-3 py-2.5 rounded-lg text-[13px] transition-all duration-200 ${active === n.key ? 'bg-white/[0.06] text-admin-champ' : 'text-admin-muted hover:text-admin-text hover:bg-white/[0.03]'}`}>
       {active === n.key && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-admin-champ" />}
       <Icon name={n.icon} className="w-3.5 h-3.5 shrink-0 opacity-60" />
-      <span className="leading-tight">{n.label}</span>
+      <span className="flex-1 min-w-0">{n.label}</span>
     </button>
   )
 
