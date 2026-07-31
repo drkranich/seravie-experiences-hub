@@ -30,6 +30,7 @@ import { SuperAdminPanel } from '../components/admin/SuperAdminPanel'
 import { POSPanel } from '../components/admin/POSPanel'
 import { ChocolatePanel } from '../components/admin/ChocolatePanel'
 import { EmporioPanel } from '../components/admin/EmporioPanel'
+import { CoffeePanel } from '../components/admin/CoffeePanel'
 import { ScaffoldPage } from '../components/admin/ScaffoldPage'
 import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
 
@@ -75,6 +76,7 @@ export function AdminDashboard({ onExit }) {
     pos: <POSPanel notify={notify} />,
     chocolate: <ChocolatePanel notify={notify} />,
     gourmet: <EmporioPanel notify={notify} />,
+    coffee: <CoffeePanel notify={notify} />,
     verticals: <VerticalsPanel notify={notify} />,
     content: <ContentEditor notify={notify} />,
     services: <ServicesManager notify={notify} />,
@@ -95,7 +97,7 @@ export function AdminDashboard({ onExit }) {
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).
   const sections = useMemo(() => {
-    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate', gourmet: 'gourmet' } // frentes com painel real
+    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate', gourmet: 'gourmet', coffee: 'coffee' } // frentes com painel real
     const frentes = verticals.map((v) => {
       const nav = verticalToNav(v)
       if (nav && VERTICAL_ROUTES[v]) nav.route = VERTICAL_ROUTES[v]
