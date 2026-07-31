@@ -220,12 +220,13 @@ export const CORE_SECTIONS = [
     group: 'Sistema',
     items: [
       { key: 'verticals', label: 'Frentes / Núcleos', icon: 'leaf', route: 'verticals' },
+      { key: 'users', label: 'Usuários & Acessos', icon: 'user', route: 'users' },
       { key: 'subscription', label: 'Minha Assinatura', icon: 'star', route: 'subscription' },
       { key: 'plans', label: 'Planos da Plataforma', icon: 'gear', route: 'plans' },
       { key: 'superadmin', label: 'Super Admin', icon: 'gear', route: 'superadmin' },
       { key: 'settings', label: 'Configurações', icon: 'gear', route: 'settings', pages: [
         { key: 'set.companies', label: 'Empresas' },
-        { key: 'set.users', label: 'Usuários', route: 'superadmin' },
+        { key: 'set.users', label: 'Usuários', route: 'users' },
         { key: 'set.roles', label: 'Perfis', route: 'roles' },
         { key: 'set.permissions', label: 'Permissões', route: 'roles' },
         { key: 'set.channels', label: 'Canais' },

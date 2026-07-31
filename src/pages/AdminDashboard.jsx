@@ -46,6 +46,7 @@ import { AutomationPanel } from '../components/admin/AutomationPanel'
 import { RolesPanel } from '../components/admin/RolesPanel'
 import { AuditLogPanel } from '../components/admin/AuditLogPanel'
 import { PlansAdmin } from '../components/admin/PlansAdmin'
+import { UsersPanel } from '../components/admin/UsersPanel'
 import { SubscriptionPanel } from '../components/admin/SubscriptionPanel'
 import { ReceivablesPanel } from '../components/admin/ReceivablesPanel'
 import { Onboarding } from '../components/admin/Onboarding'
@@ -133,6 +134,7 @@ export function AdminDashboard({ onExit }) {
     plans: <PlansAdmin notify={notify} />,
     subscription: <SubscriptionPanel notify={notify} />,
     receivables: <ReceivablesPanel notify={notify} />,
+    users: <UsersPanel notify={notify} />,
   }
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).

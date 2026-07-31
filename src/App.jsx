@@ -6,6 +6,7 @@ import { Login } from './pages/Login'
 import { AdminDashboard } from './pages/AdminDashboard'
 import { Home } from './pages/Home'
 import { Storefront } from './pages/Storefront'
+import { AcceptInvite } from './pages/AcceptInvite'
 
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth()
@@ -35,6 +36,9 @@ export default function App() {
   // Rota da loja pública (tem precedência: funciona logado ou não)
   const isStoreRoute = window.location.hash.startsWith('#loja') || /[?&](store|loja)=/.test(window.location.search)
   if (isStoreRoute) return <Storefront />
+
+  // Aceite de convite de equipe (precedência: funciona logado ou não)
+  if (window.location.hash.startsWith('#convite')) return <AcceptInvite />
 
   // Rota do site público (precedência sobre o admin, mesmo logado — "Ver site").
   // #topo é reconhecido pela Home como 'home' (página completa).
