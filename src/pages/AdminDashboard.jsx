@@ -49,6 +49,7 @@ import { PlansAdmin } from '../components/admin/PlansAdmin'
 import { UsersPanel } from '../components/admin/UsersPanel'
 import { CoursesPanel, CouponsPanel, SlaPanel, GoalsPanel, EquipmentPanel } from '../components/admin/modulePanels'
 import { PayablesPanel, DrePanel } from '../components/admin/FinanceAdvanced'
+import { NpsPanel } from '../components/admin/NpsPanel'
 import { SubscriptionPanel } from '../components/admin/SubscriptionPanel'
 import { ReceivablesPanel } from '../components/admin/ReceivablesPanel'
 import { Onboarding } from '../components/admin/Onboarding'
@@ -144,6 +145,7 @@ export function AdminDashboard({ onExit }) {
     equipment: <EquipmentPanel notify={notify} />,
     payables: <PayablesPanel notify={notify} />,
     dre: <DrePanel notify={notify} />,
+    nps: <NpsPanel notify={notify} />,
   }
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).

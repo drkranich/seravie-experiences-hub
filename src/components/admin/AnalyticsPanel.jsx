@@ -16,19 +16,23 @@ function Kpi({ label, value, sub, accent = 'text-admin-champ' }) {
   )
 }
 
+const CHANNEL_LABEL = { pdv: 'PDV', store: 'Loja online', mercado_livre: 'Mercado Livre', magalu: 'Magalu', amazon: 'Amazon', shopee: 'Shopee', tiktok_shop: 'TikTok Shop', instagram_shop: 'Instagram' }
+
 export function AnalyticsPanel() {
   const [orders, setOrders] = useState([])
+  const [sorders, setSorders] = useState([])
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     ;(async () => {
       setLoading(true)
-      const [o, c] = await Promise.all([
+      const [o, s, c] = await Promise.all([
         supabase.from('orders').select('*, contacts(name)').order('created_at', { ascending: false }).limit(1000),
+        supabase.from('store_orders').select('total, payment_status, channel, created_at').eq('payment_status', 'paid').limit(1000),
         supabase.from('contacts').select('id, name, type, created_at').limit(2000),
       ])
-      setOrders(o.data || []); setContacts(c.data || []); setLoading(false)
+      setOrders(o.data || []); setSorders(s.data || []); setContacts(c.data || []); setLoading(false)
     })()
   }, [])
 
@@ -61,8 +65,16 @@ export function AnalyticsPanel() {
     sold.forEach((o) => (o.items || []).forEach((it) => { if (!prod[it.name]) prod[it.name] = { name: it.name, qty: 0, total: 0 }; prod[it.name].qty += Number(it.qty || 0); prod[it.name].total += Number(it.subtotal || (it.price * it.qty) || 0) }))
     const topProducts = Object.values(prod).sort((x, y) => y.qty - x.qty).slice(0, 6)
 
-    return { revenue, count, ticket, newCustomers, conversion, days, maxDay, byMethod, maxMethod, topCustomers, topProducts, buyers: buyers.size }
-  }, [orders, contacts])
+    // Faturamento por canal: PDV (orders) + loja/marketplaces (store_orders)
+    const chan = {}
+    sold.forEach((o) => { const k = o.channel === 'pdv' || !o.channel ? 'pdv' : o.channel; chan[k] = (chan[k] || 0) + Number(o.total || 0) })
+    sorders.forEach((o) => { const k = o.channel && o.channel !== 'store' ? o.channel : 'store'; chan[k] = (chan[k] || 0) + Number(o.total || 0) })
+    const byChannel = Object.entries(chan).sort((x, y) => y[1] - x[1])
+    const maxChannel = Math.max(1, ...byChannel.map(([, v]) => v))
+    const channelTotal = byChannel.reduce((s, [, v]) => s + v, 0)
+
+    return { revenue, count, ticket, newCustomers, conversion, days, maxDay, byMethod, maxMethod, topCustomers, topProducts, buyers: buyers.size, byChannel, maxChannel, channelTotal }
+  }, [orders, sorders, contacts])
 
   if (loading) return <div className="py-12 text-admin-muted/40 text-sm text-center">Carregando analytics…</div>
 
@@ -101,6 +113,20 @@ export function AnalyticsPanel() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="glass rounded-2xl p-5 mb-5">
+        <div className="flex items-center justify-between mb-4"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70">Faturamento por canal</p><span className="text-admin-muted/50 text-xs">total {brl(a.channelTotal)}</span></div>
+        {a.byChannel.length === 0 ? <p className="text-admin-muted/40 text-xs">Sem vendas ainda</p> : (
+          <div className="grid sm:grid-cols-2 gap-x-8 gap-y-3">
+            {a.byChannel.map(([k, v]) => (
+              <div key={k}>
+                <div className="flex justify-between text-xs mb-1"><span className="text-admin-text">{CHANNEL_LABEL[k] || k}</span><span className="text-admin-muted/60">{brl(v)} · {a.channelTotal ? Math.round((v / a.channelTotal) * 100) : 0}%</span></div>
+                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden"><div className="h-full bg-admin-sage/70" style={{ width: `${(v / a.maxChannel) * 100}%` }} /></div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-5">

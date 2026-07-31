@@ -65,7 +65,7 @@ export const CORE_SECTIONS = [
         { key: 'hd.escalations', label: 'Escalonamentos' },
         { key: 'hd.kb', label: 'Base de Conhecimento', route: 'knowledge' },
         { key: 'hd.ai', label: 'IA de Atendimento' },
-        { key: 'hd.nps', label: 'Pesquisas NPS' },
+        { key: 'hd.nps', label: 'Pesquisas NPS', route: 'nps' },
         { key: 'hd.audit', label: 'Auditoria', route: 'audit' },
       ]},
       { key: 'experiences', label: 'Experiências', icon: 'spark', pages: [
