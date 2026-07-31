@@ -306,16 +306,11 @@ function popoverPlacement(el, ideal) {
 
 export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', className = '' }) {
   const [open, setOpen] = useState(false)
-  const [up, setUp] = useState(false)
   const ref = useRef(null)
   const selected = value ? parseYMD(value) : null
   const [view, setView] = useState(selected || new Date())
 
-  const toggle = () => setOpen((o) => {
-    const willOpen = !o
-    if (willOpen && ref.current) { setUp(popoverPlacement(ref.current, 344).up); setView(selected || new Date()) }
-    return willOpen
-  })
+  const toggle = () => setOpen((o) => { if (!o) setView(selected || new Date()); return !o })
 
   useEffect(() => {
     if (!open) return
@@ -343,26 +338,26 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
         <Icon name="calendar" className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
       {open && (
-        <div className={`absolute left-0 z-[70] w-[16.5rem] glass-pop rounded-xl p-3 ${up ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-admin-champ text-sm font-medium capitalize">{monthLabel}</p>
+        <div className="mt-2 w-full glass-pop rounded-xl p-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-admin-champ text-xs font-medium capitalize">{monthLabel}</p>
             <div className="flex gap-1">
               <button type="button" onClick={() => setView(new Date(y, m - 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
               <button type="button" onClick={() => setView(new Date(y, m + 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
             </div>
           </div>
-          <div className="grid grid-cols-7 gap-0.5 mb-1">
-            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="text-center text-[10px] text-admin-muted/40 py-1">{d}</div>)}
+          <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="text-center text-[9px] text-admin-muted/40 py-0.5">{d}</div>)}
           </div>
           <div className="grid grid-cols-7 gap-0.5">
             {cells.map((d, i) => d ? (
               <button key={i} type="button" onClick={() => pick(d)}
-                className={`h-8 rounded-lg text-xs transition-colors ${same(d, selected) ? 'bg-admin-champ text-admin-bg font-medium' : same(d, today) ? 'text-admin-champ ring-1 ring-admin-champ/30' : 'text-admin-text hover:bg-white/[0.06]'}`}>
+                className={`h-6 rounded-md text-[11px] transition-colors ${same(d, selected) ? 'bg-admin-champ text-admin-bg font-medium' : same(d, today) ? 'text-admin-champ ring-1 ring-admin-champ/30' : 'text-admin-text hover:bg-white/[0.06]'}`}>
                 {d.getDate()}
               </button>
             ) : <div key={i} />)}
           </div>
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.06]">
+          <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-white/[0.06]">
             <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-[11px] text-admin-muted/60 hover:text-admin-rose">Limpar</button>
             <button type="button" onClick={() => pick(new Date())} className="text-[11px] text-admin-champ hover:underline">Hoje</button>
           </div>
