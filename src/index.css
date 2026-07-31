@@ -166,3 +166,121 @@ h4 {
 details[open] .faq-icon {
   transform: rotate(45deg);
 }
+
+/* ============================================================
+   SERAVIE DESIGN SYSTEM — Fase 3
+   Verde-musgo · Champanhe · Cobre refinado · Glassmorphism fumê
+   ============================================================ */
+
+/* Fontes premium */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Manrope:wght@300;400;500;600&display=swap');
+
+:root {
+  /* Canvas */
+  --s-canvas:      #121512;
+  --s-sidebar:     #181D19;
+  --s-surface:     rgba(255,255,255,0.04);
+  --s-surface-md:  rgba(255,255,255,0.07);
+
+  /* Bordas */
+  --s-border:      rgba(220,203,167,0.10);
+  --s-border-md:   rgba(220,203,167,0.18);
+
+  /* Texto */
+  --s-text:        #F4F1EA;
+  --s-text-2:      #BEB8AC;
+  --s-text-3:      #7A7469;
+
+  /* Acentos */
+  --s-champ:       #DCCBA7;
+  --s-copper:      #B7745E;
+  --s-copper-2:    #B5763A;
+  --s-gold:        #B89C61;
+
+  /* Estado */
+  --s-success:     #71856A;
+  --s-warn:        #C59861;
+  --s-danger:      #A9675D;
+}
+
+/* Tipografia do painel */
+.admin-bg {
+  background-color: var(--s-canvas);
+  font-family: 'Manrope', system-ui, sans-serif;
+}
+
+/* Glass card refinado */
+.glass-seravie {
+  background: var(--s-surface);
+  border: 0.5px solid var(--s-border);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 18px;
+}
+
+.glass-seravie-md {
+  background: var(--s-surface-md);
+  border: 0.5px solid var(--s-border-md);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 14px;
+}
+
+/* Efeito lift hover */
+.lift-seravie {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.lift-seravie:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+}
+
+/* Sidebar Seravie */
+.sidebar-seravie {
+  background: var(--s-sidebar);
+  border-right: 0.5px solid var(--s-border);
+}
+
+/* Scrollbar discreta */
+.sidebar-seravie::-webkit-scrollbar { width: 3px; }
+.sidebar-seravie::-webkit-scrollbar-track { background: transparent; }
+.sidebar-seravie::-webkit-scrollbar-thumb { background: var(--s-border-md); border-radius: 3px; }
+
+/* Indicator item ativo */
+.nav-active-bar::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 2px; height: 18px;
+  background: var(--s-champ);
+  border-radius: 2px;
+}
+
+/* Títulos editoriais */
+.title-editorial {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--s-text);
+  line-height: 1.1;
+}
+
+/* Badge de módulo/status */
+.badge-seravie {
+  font-family: 'Manrope', sans-serif;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 0.5px solid var(--s-border-md);
+  color: var(--s-text-2);
+  background: var(--s-surface);
+}
+
+/* Copper accent */
+.text-copper { color: var(--s-copper-2); }
+.text-champ  { color: var(--s-champ); }
+.border-seravie { border-color: var(--s-border); }
