@@ -9,7 +9,7 @@ const APPT_STATUS = { scheduled: 'Agendado', confirmed: 'Confirmado', completed:
 const APPT_COLORS = { scheduled: 'text-admin-gold', confirmed: 'text-admin-champ', completed: 'text-admin-sage', cancelled: 'text-admin-rose', no_show: 'text-admin-rose/60' }
 
 function Modal({ title, onClose, children }) {
-  return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div className="glass-pop rounded-2xl p-7 w-full max-w-md max-h-[88vh] overflow-y-auto"><div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">{title}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>{children}</div></div>)
+  return (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div className="glass-pop rounded-2xl p-7 w-full max-w-md max-h-[92vh] overflow-y-auto"><div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">{title}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>{children}</div></div>)
 }
 const Fld = ({ label, children }) => (<div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{label}</label>{children}</div>)
 

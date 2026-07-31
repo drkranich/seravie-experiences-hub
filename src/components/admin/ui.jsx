@@ -219,11 +219,11 @@ export function Toggle({ checked, onChange }) {
  */
 export function GlassSelect({ value, onChange, options = [], placeholder = 'Selecione', className = '', disabled }) {
   const [open, setOpen] = useState(false)
-  const [dropUp, setDropUp] = useState(false)
+  const [place, setPlace] = useState({ up: false, maxH: 256 })
   const ref = useRef(null)
   const toggle = () => setOpen((o) => {
     const willOpen = !o
-    if (willOpen && ref.current) { const r = ref.current.getBoundingClientRect(); setDropUp(window.innerHeight - r.bottom < 300 && r.top > 300) }
+    if (willOpen && ref.current) setPlace(popoverPlacement(ref.current, 280))
     return willOpen
   })
   const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
@@ -250,7 +250,7 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
         <Icon name={open ? 'up' : 'down'} className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
       {open && (
-        <div className={`absolute left-0 z-[60] w-full glass-pop rounded-xl p-1 max-h-64 overflow-auto ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        <div style={{ maxHeight: place.maxH }} className={`absolute left-0 z-[60] w-full glass-pop rounded-xl p-1 overflow-auto ${place.up ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
           {opts.length === 0 && <p className="px-3.5 py-2 text-sm text-admin-muted/40">Sem opções</p>}
           {opts.map((o) => (
             <button
@@ -283,19 +283,37 @@ const pad2 = (n) => String(n).padStart(2, '0')
 const toYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 const parseYMD = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1) }
 
+// Limites do container rolável mais próximo (ex.: o card/modal), para o
+// popover abrir para o lado com mais espaço e nunca ser truncado.
+function nearestBounds(el) {
+  let p = el?.parentElement
+  while (p) {
+    const s = getComputedStyle(p)
+    if (/(auto|scroll|hidden)/.test(s.overflowY + s.overflow)) return p.getBoundingClientRect()
+    p = p.parentElement
+  }
+  return { top: 0, bottom: window.innerHeight }
+}
+// Decide direção (cima/baixo) e altura máxima do popover dado o espaço disponível.
+function popoverPlacement(el, ideal) {
+  const r = el.getBoundingClientRect()
+  const b = nearestBounds(el)
+  const below = b.bottom - r.bottom
+  const above = r.top - b.top
+  const up = below < ideal && above > below
+  return { up, maxH: Math.max(180, Math.floor((up ? above : below) - 14)) }
+}
+
 export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', className = '' }) {
   const [open, setOpen] = useState(false)
-  const [dropUp, setDropUp] = useState(false)
+  const [place, setPlace] = useState({ up: false, maxH: 360 })
   const ref = useRef(null)
   const selected = value ? parseYMD(value) : null
   const [view, setView] = useState(selected || new Date())
 
   const toggle = () => setOpen((o) => {
     const willOpen = !o
-    if (willOpen && ref.current) {
-      const r = ref.current.getBoundingClientRect()
-      setDropUp(window.innerHeight - r.bottom < 360 && r.top > 360) // abre pra cima só se faltar espaço embaixo
-    }
+    if (willOpen && ref.current) setPlace(popoverPlacement(ref.current, 360))
     return willOpen
   })
 
@@ -327,7 +345,7 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
         <Icon name="calendar" className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
       {open && (
-        <div className={`absolute left-0 z-[60] w-[16.5rem] glass-pop rounded-xl p-3 ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        <div style={{ maxHeight: place.maxH, overflowY: 'auto' }} className={`absolute left-0 z-[60] w-[16.5rem] glass-pop rounded-xl p-3 ${place.up ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
           <div className="flex items-center justify-between mb-2">
             <p className="text-admin-champ text-sm font-medium capitalize">{monthLabel}</p>
             <div className="flex gap-1">
