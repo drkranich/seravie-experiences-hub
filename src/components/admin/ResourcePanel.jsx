@@ -51,13 +51,15 @@ const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-t
 const optsOf = (o) => (o ? Object.entries(o).map(([value, label]) => ({ value, label })) : [])
 const labelOf = (field, v) => (field.options ? field.options[v] || v : v)
 
-function FieldInput({ field, value, onChange }) {
+function FieldInput({ field, value, onChange, dynOptions }) {
   const v = value ?? ''
   switch (field.type) {
     case 'textarea':
       return <textarea value={v} onChange={(e) => onChange(e.target.value)} rows={field.rows || 2} className={`${inputCls} resize-none`} placeholder={field.placeholder} />
     case 'number': case 'currency': case 'int': case 'year':
       return <input type="number" value={v} onChange={(e) => onChange(e.target.value)} className={inputCls} placeholder={field.placeholder} />
+    case 'ref':
+      return <GlassSelect value={v} onChange={onChange} options={[{ value: '', label: field.placeholder || '— nenhum —' }, ...(dynOptions || [])]} placeholder={field.placeholder || 'Selecione'} />
     case 'select': case 'status':
       return <GlassSelect value={v} onChange={onChange} options={optsOf(field.options)} placeholder={field.placeholder || 'Selecione'} />
     case 'bool':
@@ -107,6 +109,19 @@ export function ResourcePanel({
   const [form, setForm] = useState({})
   const [detail, setDetail] = useState(null)
   const [confirm, setConfirm] = useState(null)
+  const [dynOpts, setDynOpts] = useState({})
+
+  const refFields = fields.filter((f) => f.type === 'ref' && f.refTable)
+  useEffect(() => {
+    if (!refFields.length) return
+    let alive = true
+    Promise.all(refFields.map(async (f) => {
+      const { data } = await supabase.from(f.refTable).select(`id, ${f.refLabel || 'name'}`).order(f.refLabel || 'name')
+      return [f.key, (data || []).map((d) => ({ value: d.id, label: d[f.refLabel || 'name'] }))]
+    })).then((pairs) => { if (alive) setDynOpts(Object.fromEntries(pairs)) })
+    return () => { alive = false }
+  }, [table])
+  const dynLabel = (field, val) => (dynOpts[field.key] || []).find((o) => String(o.value) === String(val))?.label || val
 
   const primary = fields.find((f) => f.primary) || fields[0]
   const currencyField = fields.find((f) => f.type === 'currency')
@@ -193,6 +208,7 @@ export function ResourcePanel({
       let v = r[f.key]
       if (f.type === 'currency') v = brl(v)
       else if (f.type === 'bool') v = v ? 'Sim' : 'Não'
+      else if (f.type === 'ref') v = dynLabel(f, v)
       else if (f.options) v = labelOf(f, v)
       o[f.label] = v ?? ''
     })
@@ -248,7 +264,7 @@ export function ResourcePanel({
                 </div>
                 <div className="flex gap-2 flex-wrap items-center mb-1">
                   {chipFields.map((f) => r[f.key] != null && r[f.key] !== '' && (
-                    <span key={f.key} className="text-admin-muted/50 text-xs">{f.type === 'bool' ? (r[f.key] ? f.label : null) : labelOf(f, r[f.key])}</span>
+                    <span key={f.key} className="text-admin-muted/50 text-xs">{f.type === 'bool' ? (r[f.key] ? f.label : null) : f.type === 'ref' ? dynLabel(f, r[f.key]) : labelOf(f, r[f.key])}</span>
                   ))}
                   {statusField && <StatusPill value={r[statusField.key]} label={statusField.options ? labelOf(statusField, r[statusField.key]) : undefined} />}
                 </div>
@@ -272,7 +288,7 @@ export function ResourcePanel({
               {fields.map((f) => (
                 <div key={f.key} className={f.full || f.type === 'textarea' || f.type === 'bool' ? 'col-span-2' : ''}>
                   {f.type !== 'bool' && <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{f.label}{f.required ? ' *' : ''}</label>}
-                  <FieldInput field={f} value={form[f.key]} onChange={(v) => setForm((s) => ({ ...s, [f.key]: v }))} />
+                  <FieldInput field={f} value={form[f.key]} dynOptions={dynOpts[f.key]} onChange={(v) => setForm((s) => ({ ...s, [f.key]: v }))} />
                 </div>
               ))}
             </div>
@@ -294,7 +310,7 @@ export function ResourcePanel({
             </div>
             <div className="grid grid-cols-2 gap-3 mb-5">
               {fields.filter((f) => !f.primary && f.type !== 'textarea' && detail[f.key] != null && detail[f.key] !== '').map((f) => (
-                <div key={f.key} className="glass-soft rounded-xl p-3"><p className="text-[9px] uppercase tracking-wider text-admin-muted/50">{f.label}</p><p className="text-admin-text text-sm mt-0.5">{f.type === 'currency' ? brl(detail[f.key]) : f.type === 'bool' ? (detail[f.key] ? 'Sim' : 'Não') : labelOf(f, detail[f.key])}</p></div>
+                <div key={f.key} className="glass-soft rounded-xl p-3"><p className="text-[9px] uppercase tracking-wider text-admin-muted/50">{f.label}</p><p className="text-admin-text text-sm mt-0.5">{f.type === 'currency' ? brl(detail[f.key]) : f.type === 'bool' ? (detail[f.key] ? 'Sim' : 'Não') : f.type === 'ref' ? dynLabel(f, detail[f.key]) : labelOf(f, detail[f.key])}</p></div>
               ))}
             </div>
             {descField && detail[descField.key] && <div className="mb-5"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-1">{descField.label}</p><p className="text-admin-muted/70 text-sm whitespace-pre-wrap">{detail[descField.key]}</p></div>}
