@@ -67,6 +67,77 @@ export function Icon({ name, className = 'w-5 h-5' }) {
         <path d="M5 15V5a2 2 0 012-2h8" />
       </>
     ),
+    user: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+      </>
+    ),
+    tag: (
+      <>
+        <path d="M3 12l9-9 9 9-9 9z" />
+        <circle cx="12" cy="8" r="1.3" />
+      </>
+    ),
+    leaf: <path d="M4 20C4 11 11 4 20 4c0 9-7 16-16 16zM4 20c3-6 7-9 12-11" />,
+    book: (
+      <>
+        <path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z" />
+        <path d="M5 4v13" />
+      </>
+    ),
+    cup: (
+      <>
+        <path d="M6 8h11v5a5 5 0 01-5 5H11a5 5 0 01-5-5z" />
+        <path d="M17 9h2a2 2 0 010 4h-2" />
+        <path d="M8 3v2M12 3v2" />
+      </>
+    ),
+    wine: (
+      <>
+        <path d="M8 3h8s-.5 8-4 8-4-8-4-8z" />
+        <path d="M12 11v6M9 21h6" />
+      </>
+    ),
+    building: (
+      <>
+        <rect x="5" y="3" width="14" height="18" rx="1" />
+        <path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" />
+      </>
+    ),
+    map: (
+      <>
+        <path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z" />
+        <path d="M9 4v14M15 6v14" />
+      </>
+    ),
+    heart: <path d="M12 20s-7-4.3-9.3-8.5C1.2 8.6 2.7 5.5 6 5.5c2 0 3.2 1.2 4 2.3.8-1.1 2-2.3 4-2.3 3.3 0 4.8 3.1 3.3 6C19 15.7 12 20 12 20z" />,
+    gift: (
+      <>
+        <rect x="4" y="9" width="16" height="11" rx="1" />
+        <path d="M4 13h16M12 9v11" />
+        <path d="M12 9C11 5 6 5 7 8c.5 1.5 5 1 5 1zM12 9c1-4 6-4 5-1-.5 1.5-5 1-5 1z" />
+      </>
+    ),
+    pen: <path d="M4 20l4-1 10-10-3-3L5 16zM14 6l3 3" />,
+    chart: (
+      <>
+        <path d="M4 20V4M4 20h16" />
+        <path d="M8 20v-6M12 20V8M16 20v-9" />
+      </>
+    ),
+    box: (
+      <>
+        <path d="M3 8l9-4 9 4-9 4z" />
+        <path d="M3 8v8l9 4 9-4V8M12 12v8" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M3 9h18M8 3v4M16 3v4" />
+      </>
+    ),
   }
   return (
     <svg viewBox="0 0 24 24" className={className} {...p}>

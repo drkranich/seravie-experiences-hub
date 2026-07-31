@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTenant } from '../hooks/useTenant'
 import { Icon } from '../components/admin/ui'
@@ -21,80 +22,39 @@ import { TeamPanel } from '../components/admin/TeamPanel'
 import { KnowledgeHub } from '../components/admin/KnowledgeHub'
 import { MarketingPanel } from '../components/admin/MarketingPanel'
 import { CatalogPanel } from '../components/admin/CatalogPanel'
-import { POSPanel } from '../components/admin/POSPanel'
 import { VerticalsPanel } from '../components/admin/VerticalsPanel'
 import { AIPanel } from '../components/admin/AIPanel'
 import { AnalyticsPanel } from '../components/admin/AnalyticsPanel'
 import { SuperAdminPanel } from '../components/admin/SuperAdminPanel'
-
-const NAV_GROUPS = [
-  { group: 'Core', items: [
-    { key: 'overview', label: 'Backstage', icon: 'grid' },
-    { key: 'analytics', label: 'Analytics', icon: 'star' },
-    { key: 'ai', label: 'Seravie AI', icon: 'spark' },
-  ]},
-  { group: 'Atendimento', items: [
-    { key: 'crm', label: 'CRM', icon: 'user' },
-    { key: 'conversations', label: 'Conversas', icon: 'mail' },
-    { key: 'helpdesk', label: 'Help Desk', icon: 'check' },
-    { key: 'messages', label: 'Formulários', icon: 'mail' },
-    { key: 'newsletter', label: 'Newsletter', icon: 'gift' },
-  ]},
-  { group: 'Operações', items: [
-    { key: 'operations', label: 'Operações', icon: 'check' },
-    { key: 'franchise', label: 'Franquias', icon: 'leaf' },
-  ]},
-  { group: 'Pessoas', items: [
-    { key: 'team', label: 'Equipe', icon: 'user' },
-    { key: 'knowledge', label: 'Conhecimento', icon: 'book' },
-  ]},
-  { group: 'Comercial', items: [
-    { key: 'pos', label: 'PDV', icon: 'tag' },
-    { key: 'marketing', label: 'Marketing', icon: 'star' },
-    { key: 'catalog', label: 'Catálogo', icon: 'image' },
-  ]},
-  { group: 'Verticais', items: [
-    { key: 'verticals', label: 'Núcleos', icon: 'leaf' },
-  ]},
-  { group: 'Conteúdo', items: [
-    { key: 'content', label: 'Seções', icon: 'layout' },
-    { key: 'services', label: 'Serviços', icon: 'spark' },
-    { key: 'portfolio', label: 'Portfólio', icon: 'image' },
-    { key: 'process', label: 'Processo', icon: 'check' },
-    { key: 'segments', label: 'Segmentos', icon: 'leaf' },
-    { key: 'jornal', label: 'Jornal', icon: 'book' },
-    { key: 'testimonials', label: 'Depoimentos', icon: 'star' },
-    { key: 'faqs', label: 'FAQ', icon: 'spark' },
-  ]},
-  { group: 'Estrutura', items: [
-    { key: 'pages', label: 'Páginas', icon: 'layout' },
-    { key: 'menus', label: 'Menus', icon: 'link' },
-    { key: 'media', label: 'Biblioteca', icon: 'folder' },
-  ]},
-  { group: 'Sistema', items: [
-    { key: 'superadmin', label: 'Super Admin', icon: 'gear' },
-    { key: 'settings', label: 'Configurações', icon: 'gear' },
-  ]},
-]
+import { POSPanel } from '../components/admin/POSPanel'
+import { ScaffoldPage } from '../components/admin/ScaffoldPage'
+import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
 
 const FULLSCREEN = ['conversations', 'helpdesk', 'pos']
+const ROUTE_LABELS = { catalog: 'Catálogo', messages: 'Formulários', franchise: 'Franquias' }
 
 export function AdminDashboard({ onExit }) {
   const { user, logout } = useAuth()
   const { profile } = useTenant()
   const [active, setActive] = useState('overview')
+  const [expanded, setExpanded] = useState({})
   const [toasts, setToasts] = useState([])
   const [navOpen, setNavOpen] = useState(false)
+  const [verticals, setVerticals] = useState([])
+
+  useEffect(() => {
+    supabase.from('vertical_configs').select('vertical')
+      .then(({ data }) => setVerticals((data || []).map((d) => d.vertical)))
+  }, [])
 
   const notify = (message, type = 'info') => {
     const id = Date.now() + Math.random()
-    setToasts(t => [...t, { id, message, type }])
-    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3500)
+    setToasts((t) => [...t, { id, message, type }])
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500)
   }
-  const go = (k) => { setActive(k); setNavOpen(false) }
-  const activeLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.key === active)?.label || ''
 
-  const modules = {
+  // Painéis reais (rotas com implementação). O que não estiver aqui abre ScaffoldPage.
+  const COMPONENTS = {
     overview: <Overview go={go} />,
     analytics: <AnalyticsPanel />,
     ai: <AIPanel notify={notify} />,
@@ -126,26 +86,93 @@ export function AdminDashboard({ onExit }) {
     settings: <SettingsPanel notify={notify} />,
   }
 
-  const NavItem = ({ n }) => (
-    <button onClick={() => go(n.key)} className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] transition-all duration-200 ${active === n.key ? 'bg-white/[0.06] text-admin-champ' : 'text-admin-muted hover:text-admin-text hover:bg-white/[0.03]'}`}>
-      {active === n.key && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-admin-champ" />}
-      <Icon name={n.icon} className="w-3.5 h-3.5 shrink-0 opacity-60" />
-      <span>{n.label}</span>
-    </button>
+  // Frentes especializadas ativas para o tenant (por vertical_configs).
+  const sections = useMemo(() => {
+    const frentes = verticals.map((v) => {
+      const nav = verticalToNav(v)
+      if (nav && v === 'franchise') nav.route = 'franchise' // usa o painel real de Franquias
+      return nav
+    }).filter(Boolean)
+    const base = [...CORE_SECTIONS]
+    if (frentes.length) base.splice(1, 0, { group: 'Frentes do seu negócio', items: frentes })
+    return base
+  }, [verticals])
+
+  // Índice de navegação: key -> { item, parentLabel } (para ScaffoldPage/breadcrumb).
+  const navIndex = useMemo(() => {
+    const idx = {}
+    for (const sec of sections) {
+      for (const item of sec.items) {
+        idx[item.key] = { item, parentLabel: sec.group }
+        for (const p of (item.pages || [])) idx[p.key] = { item: p, parentLabel: item.label }
+      }
+    }
+    return idx
+  }, [sections])
+
+  function go(key) { setActive(key); setNavOpen(false) }
+  const toggle = (key) => setExpanded((e) => ({ ...e, [key]: !e[key] }))
+
+  const clickItem = (item) => {
+    if (item.pages && item.pages.length) { toggle(item.key); go(item.route || item.key) }
+    else go(item.route || item.key)
+  }
+
+  const activeLabel =
+    navIndex[active]?.item?.label || ROUTE_LABELS[active] || 'Backstage'
+
+  // Conteúdo: painel real ou ScaffoldPage
+  const content = COMPONENTS[active] || (
+    navIndex[active]
+      ? <ScaffoldPage item={navIndex[active].item} parentLabel={navIndex[active].parentLabel} onNavigate={go} />
+      : COMPONENTS.overview
   )
+
+  const isItemActive = (item) =>
+    active === (item.route || item.key) || (item.pages || []).some((p) => active === (p.route || p.key))
+
+  const NavItem = ({ item }) => {
+    const on = isItemActive(item)
+    const hasPages = item.pages && item.pages.length > 0
+    const isOpen = expanded[item.key]
+    return (
+      <div>
+        <button onClick={() => clickItem(item)}
+          className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] transition-all duration-200 ${on ? 'bg-white/[0.06] text-admin-champ' : 'text-admin-muted hover:text-admin-text hover:bg-white/[0.03]'}`}>
+          {on && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-full bg-admin-champ" />}
+          <Icon name={item.icon || 'spark'} className="w-3.5 h-3.5 shrink-0 opacity-60" />
+          <span className="flex-1 text-left">{item.label}</span>
+          {hasPages && <Icon name={isOpen ? 'up' : 'down'} className="w-3 h-3 shrink-0 opacity-40" />}
+        </button>
+        {hasPages && isOpen && (
+          <div className="mt-0.5 mb-1 ml-4 pl-3 border-l border-white/[0.06] space-y-0.5">
+            {item.pages.map((p) => {
+              const pon = active === (p.route || p.key)
+              return (
+                <button key={p.key} onClick={() => go(p.route || p.key)}
+                  className={`w-full text-left px-3 py-1.5 rounded-lg text-[12px] transition-colors ${pon ? 'text-admin-champ bg-white/[0.05]' : 'text-admin-muted/70 hover:text-admin-text hover:bg-white/[0.03]'}`}>
+                  {p.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen admin-bg text-admin-text flex" data-no-translate>
       <aside className="hidden lg:flex flex-col w-64 shrink-0 bg-admin-side/80 backdrop-blur-2xl border-r border-white/[0.06] sticky top-0 h-screen">
         <div className="px-5 pt-7 pb-5 border-b border-white/[0.06]">
           <div className="font-serif text-2xl text-admin-text leading-none tracking-wide">Seravie</div>
-          <div className="text-[8px] tracking-[0.2em] text-admin-champ/60 mt-1 uppercase">{profile?.tenant_name || 'Experiences'} · CMS</div>
+          <div className="text-[8px] tracking-[0.2em] text-admin-champ/60 mt-1 uppercase">{profile?.tenant_name || 'Experiences'} · Experience OS</div>
         </div>
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
-          {NAV_GROUPS.map(g => (
+          {sections.map((g) => (
             <div key={g.group}>
               <p className="text-[9px] tracking-[0.18em] uppercase text-admin-muted/40 px-3 mb-2">{g.group}</p>
-              <div className="space-y-0.5">{g.items.map(n => <NavItem key={n.key} n={n} />)}</div>
+              <div className="space-y-0.5">{g.items.map((item) => <NavItem key={item.key} item={item} />)}</div>
             </div>
           ))}
         </nav>
@@ -163,7 +190,7 @@ export function AdminDashboard({ onExit }) {
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="sticky top-0 z-30 bg-admin-side/40 backdrop-blur-xl border-b border-white/[0.06] px-6 py-3.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button className="lg:hidden text-admin-muted hover:text-admin-text transition-colors" onClick={() => setNavOpen(o => !o)}><Icon name="grid" className="w-5 h-5" /></button>
+            <button className="lg:hidden text-admin-muted hover:text-admin-text transition-colors" onClick={() => setNavOpen((o) => !o)}><Icon name="grid" className="w-5 h-5" /></button>
             <div className="flex items-center gap-2 text-[11px] text-admin-muted/60">
               <span className="hidden sm:block">Seravie</span><span className="hidden sm:block opacity-30">/</span>
               <span className="text-admin-champ/80">{activeLabel}</span>
@@ -176,14 +203,14 @@ export function AdminDashboard({ onExit }) {
         </header>
 
         {navOpen && (
-          <div className="lg:hidden border-b border-white/[0.06] bg-admin-side/90 backdrop-blur-xl px-4 py-4 space-y-4">
-            {NAV_GROUPS.map(g => (
+          <div className="lg:hidden border-b border-white/[0.06] bg-admin-side/90 backdrop-blur-xl px-4 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            {sections.map((g) => (
               <div key={g.group}>
                 <p className="text-[9px] tracking-[0.18em] uppercase text-admin-muted/40 mb-2">{g.group}</p>
                 <div className="grid grid-cols-2 gap-1">
-                  {g.items.map(n => (
-                    <button key={n.key} onClick={() => go(n.key)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] transition-colors ${active === n.key ? 'bg-white/[0.08] text-admin-champ' : 'text-admin-muted hover:text-admin-text hover:bg-white/[0.03]'}`}>
-                      <Icon name={n.icon} className="w-4 h-4 shrink-0" />{n.label}
+                  {g.items.map((item) => (
+                    <button key={item.key} onClick={() => clickItem(item)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] transition-colors ${isItemActive(item) ? 'bg-white/[0.08] text-admin-champ' : 'text-admin-muted hover:text-admin-text hover:bg-white/[0.03]'}`}>
+                      <Icon name={item.icon || 'spark'} className="w-4 h-4 shrink-0" />{item.label}
                     </button>
                   ))}
                 </div>
@@ -192,11 +219,11 @@ export function AdminDashboard({ onExit }) {
           </div>
         )}
 
-        <main className={`flex-1 ${FULLSCREEN.includes(active) ? '' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>{modules[active]}</main>
+        <main className={`flex-1 ${FULLSCREEN.includes(active) ? '' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>{content}</main>
       </div>
 
       <div className="fixed bottom-6 right-6 z-50 space-y-3 pointer-events-none">
-        {toasts.map(t => (
+        {toasts.map((t) => (
           <div key={t.id} className={`glass rounded-xl px-5 py-3 text-[13px] flex items-center gap-3 pointer-events-auto shadow-xl ${t.type === 'error' ? 'text-admin-rose' : t.type === 'success' ? 'text-admin-champ' : 'text-admin-text'}`}>
             <Icon name={t.type === 'error' ? 'x' : 'check'} className="w-4 h-4 shrink-0" />{t.message}
           </div>
