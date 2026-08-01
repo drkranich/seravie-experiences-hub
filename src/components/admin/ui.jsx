@@ -288,6 +288,55 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
 }
 
 /**
+ * GlassMulti — seleção múltipla glassmorphism (mesma ancoragem do GlassSelect).
+ * value/onChange trabalham com um array de valores.
+ */
+export function GlassMulti({ value = [], onChange, options = [], placeholder = 'Selecione', className = '', disabled }) {
+  const [open, setOpen] = useState(false)
+  const [place, setPlace] = useState({ up: false, maxH: 256 })
+  const ref = useRef(null)
+  const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
+  const sel = Array.isArray(value) ? value : []
+  const toggle = () => setOpen((o) => {
+    const willOpen = !o
+    if (willOpen && ref.current) setPlace(popoverPlacement(ref.current, 280))
+    return willOpen
+  })
+  const flip = (v) => { onChange(sel.includes(v) ? sel.filter((x) => x !== v) : [...sel, v]) }
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onEsc)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc) }
+  }, [open])
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <button type="button" disabled={disabled} onClick={toggle}
+        className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none flex items-center justify-between gap-2 text-left disabled:opacity-50">
+        <span className={`truncate ${sel.length ? '' : 'text-admin-muted/40'}`}>{sel.length ? `${sel.length} selecionado${sel.length > 1 ? 's' : ''}: ${sel.slice(0, 6).join(', ')}${sel.length > 6 ? '…' : ''}` : placeholder}</span>
+        <Icon name={open ? 'up' : 'down'} className="w-4 h-4 text-admin-champ/60 shrink-0" />
+      </button>
+      {open && (
+        <div style={{ maxHeight: place.maxH }} className={`absolute left-0 z-[60] w-full glass-pop rounded-xl p-1 overflow-auto ${place.up ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+          {opts.map((o) => {
+            const on = sel.includes(o.value)
+            return (
+              <button key={String(o.value)} type="button" onClick={() => flip(o.value)}
+                className={`w-full text-left px-3.5 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${on ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-text hover:bg-white/[0.06]'}`}>
+                <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${on ? 'border-admin-champ bg-admin-champ/20' : 'border-white/20'}`}>{on && <Icon name="check" className="w-2.5 h-2.5" />}</span>
+                {o.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * GlassDate — calendário/date picker do design system Seravie.
  * Regra geral: todo calendário usa glassmorphism (glass-pop escuro, não
  * translúcido demais). Substitui o <input type="date"> nativo, cujo popup

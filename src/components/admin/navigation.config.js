@@ -97,6 +97,13 @@ export const CORE_SECTIONS = [
     ],
   },
   {
+    group: 'Seravie Hub',
+    items: [
+      { key: 'suppliers', label: 'Seravie Suppliers', icon: 'box', route: 'suppliers' },
+      { key: 'network_hub', label: 'Seravie Network', icon: 'user', route: 'network_hub' },
+    ],
+  },
+  {
     group: 'Site & Conteúdo',
     items: [
       { key: 'content', label: 'Seções', icon: 'layout', route: 'content' },

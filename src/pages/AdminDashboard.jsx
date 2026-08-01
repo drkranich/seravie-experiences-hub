@@ -54,6 +54,8 @@ import { MessagingChannels } from '../components/admin/MessagingChannels'
 import { SalesView, ContactsView, StockView } from '../components/admin/AutoViews'
 import { ExpansaoPanel, FranqueadosPanel, ImplantacoesPanel, StandardsPanel, CertificationPanel } from '../components/admin/NetworkPanels'
 import { OfficialCatalogPanel } from '../components/admin/OfficialCatalogPanel'
+import { SuppliersPanel } from '../components/admin/SuppliersPanel'
+import { NetworkHubPanel } from '../components/admin/NetworkHubPanel'
 import { SubscriptionPanel } from '../components/admin/SubscriptionPanel'
 import { ReceivablesPanel } from '../components/admin/ReceivablesPanel'
 import { Onboarding } from '../components/admin/Onboarding'
@@ -163,6 +165,8 @@ export function AdminDashboard({ onExit }) {
     catalogo_oficial: <OfficialCatalogPanel notify={notify} />,
     standards: <StandardsPanel notify={notify} />,
     certification: <CertificationPanel notify={notify} />,
+    suppliers: <SuppliersPanel notify={notify} />,
+    network_hub: <NetworkHubPanel notify={notify} />,
   }
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).
