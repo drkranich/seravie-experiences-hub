@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { AuthPanel } from '../components/AuthPanel'
 import { useSpecialties } from '../hooks/useSpecialties'
 import { usePortfolio } from '../hooks/usePortfolio'
 import { useSectionsMap } from '../hooks/useSectionsMap'
@@ -258,16 +259,39 @@ const PORTFOLIO_FALLBACK = [
 
 const NAV = [
   { key: 'nav.home', label: 'Home', href: '#topo' },
-  { key: 'nav.about', label: 'Sobre', href: '#sobre' },
+  { key: 'nav.platform', label: 'Plataforma', href: '#plataforma' },
   { key: 'nav.services', label: 'Serviços', href: '#servicos' },
   { key: 'nav.portfolio', label: 'Portfólio', href: '#portfolio' },
   { key: 'nav.process', label: 'Processo', href: '#processo' },
   { key: 'nav.audience', label: 'Para quem', href: '#para-quem' },
-  { key: 'nav.journal', label: 'Jornal', href: '#jornal' },
   { key: 'nav.contact', label: 'Contato', href: '#contato' },
 ]
 
+// Modos de operar na Seravie (três frentes do ecossistema)
+const PILLARS = [
+  { icon: 'chart', title: 'Para o seu negócio', text: 'Um sistema operacional completo — CRM, PDV, e-commerce, agenda, financeiro e mais — para operar sua experiência do dia a dia à estratégia.' },
+  { icon: 'building', title: 'Para redes e franquias', text: 'Expansão, implantação, padrões da marca (Experience Standards), catálogo oficial e certificação de unidades. A rede inteira em um só lugar.' },
+  { icon: 'compass', title: 'Ecossistema Seravie Hub', text: 'Encontre fornecedores curados no Suppliers e conecte-se a profissionais no Network. Autenticação única para todo o ecossistema.' },
+]
+
+// Tudo que a plataforma faz — módulos do sistema
+const PLATFORM_MODULES = [
+  { icon: 'user', title: 'Experience CRM', text: 'Clientes, leads, empresas e VIPs com histórico e segmentação.' },
+  { icon: 'tag', title: 'PDV & Vendas', text: 'Frente de caixa completa, integrada ao estoque e ao financeiro.' },
+  { icon: 'gift', title: 'E-commerce & Loja pública', text: 'Vitrine própria e canais de marketplace, com frete integrado.' },
+  { icon: 'compass', title: 'Agenda & Operações', text: 'Agendamentos, checklists, estoque e equipamentos no controle.' },
+  { icon: 'spark', title: 'Marketing & Automações', text: 'Campanhas, cupons, formulários e fluxos automáticos.' },
+  { icon: 'chart', title: 'Financeiro & DRE', text: 'Receitas, despesas, contas a pagar/receber e resultado.' },
+  { icon: 'book', title: 'Conhecimento & Cursos', text: 'Biblioteca, treinamentos e base de conhecimento da equipe.' },
+  { icon: 'heart', title: 'Help Desk & NPS', text: 'Chamados, SLA e pesquisas de satisfação dos clientes.' },
+  { icon: 'shield', title: 'Acessos & Conformidade', text: 'Permissões por setor, LGPD e aceite eletrônico com trilha.' },
+  { icon: 'spark', title: 'Seravie AI', text: 'Inteligência transversal para acelerar decisões e conteúdo.' },
+  { icon: 'palette', title: '14+ frentes de negócio', text: 'Chocolateria, cafeteria, vinhos, artesanato, beauty, spa, eventos e mais.' },
+  { icon: 'map', title: 'Rede & Franquias', text: 'Módulos completos para escalar a marca em rede.' },
+]
+
 export function Home({ onAdmin }) {
+  const [auth, setAuth] = useState(null) // 'login' | 'signup' | null
   const { specialties } = useSpecialties()
   const { portfolio } = usePortfolio()
   const sections = useSectionsMap()
@@ -365,21 +389,31 @@ export function Home({ onAdmin }) {
               </a>
             ))}
           </nav>
-          <div className="flex items-center gap-1 text-[11px] tracking-widerx" data-no-translate>
-            {['pt', 'en', 'es'].map((l) => (
-              <button
-                key={l}
-                onClick={() => setLocale(l)}
-                className={`px-2 py-1 rounded-sm uppercase transition-colors ${
-                  locale === l ? 'bg-gold/90 text-ink' : 'text-ivory/50 hover:text-gold'
-                }`}
-              >
-                {l}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-1 text-[11px] tracking-widerx" data-no-translate>
+              {['pt', 'en', 'es'].map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setLocale(l)}
+                  className={`px-2 py-1 rounded-sm uppercase transition-colors ${
+                    locale === l ? 'bg-gold/90 text-ink' : 'text-ivory/50 hover:text-gold'
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setAuth('login')} className="text-[11px] tracking-widerx uppercase text-ivory/75 hover:text-gold transition-colors">
+              Entrar
+            </button>
+            <button onClick={() => setAuth('signup')} className="bg-gold text-ink px-4 py-2 text-[11px] tracking-widerx uppercase hover:bg-champagne transition-colors">
+              Criar conta
+            </button>
           </div>
         </div>
       </header>
+
+      {auth && <AuthPanel initialTab={auth} onClose={() => setAuth(null)} />}
 
       {isPage && <LegalPage slug={route.slice(7)} />}
       {isProject && <ProjectPage id={route.slice(8)} />}
@@ -423,11 +457,11 @@ export function Home({ onAdmin }) {
                 'Design de experiências que despertam emoções, fortalecem marcas e permanecem na memória.'}
             </p>
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <Btn variant="secondary" href="#processo">
-                Conhecer nosso processo
+              <Btn variant="secondary" href="#plataforma">
+                Conhecer a plataforma
               </Btn>
-              <Btn variant="primary" href="#contato">
-                Solicitar avaliação
+              <Btn variant="primary" href="#" onClick={(e) => { e.preventDefault(); setAuth('signup') }}>
+                Criar conta grátis
               </Btn>
             </div>
           </div>
@@ -461,6 +495,75 @@ export function Home({ onAdmin }) {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ============================== PLATAFORMA / ECOSSISTEMA ============================== */}
+      <section id="plataforma" className="relative grain vignette overflow-hidden" style={{ ...processBg, display: vis(['plataforma']) }}>
+        <Wave fill="#1a211b" className="-mt-px" />
+        <Particles count={12} />
+        <div className="relative max-w-7xl mx-auto px-6 lg:px-10 py-20 lg:py-28">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-5">A plataforma</p>
+            <h2 className="font-serif text-4xl lg:text-6xl leading-[1.05] text-ivory">
+              Um sistema operacional para <span className="italic text-champagne">experiências inteiras.</span>
+            </h2>
+            <p className="mt-7 text-ivory/65 leading-relaxed text-lg font-light">
+              Mais do que um software: a Seravie é o coração operacional do seu negócio, da sua rede e de um
+              ecossistema que conecta marcas, fornecedores e especialistas. Tudo sob uma única conta.
+            </p>
+          </div>
+
+          {/* três frentes */}
+          <div className="grid md:grid-cols-3 gap-5 mb-20">
+            {PILLARS.map((p) => (
+              <div key={p.title} className="border border-gold/15 rounded-2xl p-8 bg-ink/40 backdrop-blur-sm hover:border-gold/40 transition-colors">
+                <span className="w-14 h-14 rounded-full border border-gold/40 flex items-center justify-center text-gold mb-6">
+                  <Icon name={p.icon} className="w-6 h-6" />
+                </span>
+                <h3 className="font-serif text-2xl text-ivory mb-3">{p.title}</h3>
+                <p className="text-ivory/55 text-sm leading-relaxed">{p.text}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* módulos */}
+          <div className="text-center mb-12">
+            <p className="text-[11px] tracking-widestx uppercase text-gold mb-4">Tudo em um só lugar</p>
+            <h3 className="font-serif text-3xl lg:text-4xl text-ivory">Cada módulo, uma parte da experiência.</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10">
+            {PLATFORM_MODULES.map((m) => (
+              <div key={m.title} className="flex items-start gap-4">
+                <span className="w-11 h-11 rounded-xl border border-gold/25 flex items-center justify-center text-gold shrink-0">
+                  <Icon name={m.icon} className="w-5 h-5" />
+                </span>
+                <div>
+                  <h4 className="font-serif text-xl text-ivory leading-snug">{m.title}</h4>
+                  <p className="text-ivory/50 text-sm leading-relaxed mt-1">{m.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA criar conta */}
+          <div className="mt-20 relative rounded-3xl border border-gold/20 overflow-hidden">
+            <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(70% 120% at 80% 20%, rgba(214,196,154,0.18), transparent 60%), linear-gradient(150deg, #14160f, #0b0a08)' }} />
+            <div className="relative px-8 lg:px-14 py-14 flex flex-col lg:flex-row items-center justify-between gap-8 text-center lg:text-left">
+              <div>
+                <h3 className="font-serif text-3xl lg:text-4xl text-ivory leading-tight">Comece sua experiência hoje.</h3>
+                <p className="text-ivory/60 mt-3 max-w-xl">Crie sua conta em minutos e coloque toda a operação para funcionar — sem instalação, sem complicação.</p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4 shrink-0">
+                <button onClick={() => setAuth('signup')} className="inline-flex items-center gap-3 bg-gold text-ink px-8 py-4 text-[11px] tracking-widerx uppercase hover:bg-champagne transition-colors">
+                  Criar conta grátis <Icon name="arrowR" className="w-4 h-4" />
+                </button>
+                <a href="#contato" className="inline-flex items-center gap-3 border border-gold/60 text-champagne px-8 py-4 text-[11px] tracking-widerx uppercase hover:bg-gold/10 transition-colors">
+                  Falar com especialista
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       </section>
