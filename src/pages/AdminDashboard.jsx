@@ -53,6 +53,7 @@ import { NpsPanel } from '../components/admin/NpsPanel'
 import { MessagingChannels } from '../components/admin/MessagingChannels'
 import { SalesView, ContactsView, StockView } from '../components/admin/AutoViews'
 import { ExpansaoPanel, FranqueadosPanel, ImplantacoesPanel, StandardsPanel, CertificationPanel } from '../components/admin/NetworkPanels'
+import { OfficialCatalogPanel } from '../components/admin/OfficialCatalogPanel'
 import { SubscriptionPanel } from '../components/admin/SubscriptionPanel'
 import { ReceivablesPanel } from '../components/admin/ReceivablesPanel'
 import { Onboarding } from '../components/admin/Onboarding'
@@ -159,6 +160,7 @@ export function AdminDashboard({ onExit }) {
     expansao: <ExpansaoPanel notify={notify} />,
     franqueados: <FranqueadosPanel notify={notify} />,
     implantacoes: <ImplantacoesPanel notify={notify} />,
+    catalogo_oficial: <OfficialCatalogPanel notify={notify} />,
     standards: <StandardsPanel notify={notify} />,
     certification: <CertificationPanel notify={notify} />,
   }

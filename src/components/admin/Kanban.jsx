@@ -102,7 +102,7 @@ export function KanbanBoard({
   return (
     <div>
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-        <div><h1 className="font-serif text-4xl text-admin-text">{title}</h1><p className="text-admin-muted/60 text-sm mt-1">{subtitle} — arraste os cards entre as etapas</p></div>
+        <div>{title && <h1 className="font-serif text-4xl text-admin-text">{title}</h1>}<p className="text-admin-muted/60 text-sm mt-1">{subtitle} — arraste os cards entre as etapas</p></div>
         {mayEdit && <button onClick={() => openNew()} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Novo</button>}
       </div>
 

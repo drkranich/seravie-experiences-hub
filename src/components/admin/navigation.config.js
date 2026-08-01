@@ -91,6 +91,7 @@ export const CORE_SECTIONS = [
       { key: 'expansao', label: 'Expansão', icon: 'map', route: 'expansao' },
       { key: 'franqueados', label: 'Franqueados', icon: 'building', route: 'franqueados' },
       { key: 'implantacoes', label: 'Implantações', icon: 'layout', route: 'implantacoes' },
+      { key: 'catalogo_oficial', label: 'Catálogo Oficial', icon: 'box', route: 'catalogo_oficial' },
       { key: 'standards', label: 'Experience Standards', icon: 'star', route: 'standards' },
       { key: 'certification', label: 'Certificação', icon: 'check', route: 'certification' },
     ],
