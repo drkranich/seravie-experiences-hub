@@ -264,7 +264,6 @@ const NAV = [
   { key: 'nav.portfolio', label: 'Portfólio', href: '#portfolio' },
   { key: 'nav.process', label: 'Processo', href: '#processo' },
   { key: 'nav.audience', label: 'Para quem', href: '#para-quem' },
-  { key: 'nav.contact', label: 'Contato', href: '#contato' },
 ]
 
 // Modos de operar na Seravie (três frentes do ecossistema)
@@ -973,9 +972,6 @@ export function Home({ onAdmin }) {
           </div>
           <div className="mt-12 pt-6 border-t border-gold/10 flex flex-col sm:flex-row justify-between items-center gap-3 text-ivory/35 text-xs">
             <span>© 2026 Seravie Experiences. Todos os direitos reservados.</span>
-            <button onClick={onAdmin} className="hover:text-gold transition-colors tracking-widerx uppercase text-[10px]">
-              Admin
-            </button>
           </div>
         </div>
       </footer>
