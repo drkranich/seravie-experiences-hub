@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 import { logAudit } from '../../lib/audit'
-import { ResourcePanel } from './ResourcePanel'
+import { ResourcePanel, ResourceTabs } from './ResourcePanel'
 import { KanbanBoard } from './Kanban'
 
 const MODELS = { studio: 'Seravie Studio', experience_center: 'Experience Center', regional_hub: 'Regional Hub', signature: 'Signature Center' }
@@ -239,11 +239,39 @@ export function StandardsPanel({ notify }) {
   )
 }
 
-// ---- Experience Certification (kanban por situação de auditoria) ----
-export function CertificationPanel({ notify }) {
+// ---- Experience Certification (kanban por situação + planos de correção automáticos) ----
+const PLAN_STATUS = { open: 'Aberto', in_progress: 'Em andamento', done: 'Concluído', cancelled: 'Cancelado' }
+
+function CertKanban({ notify }) {
+  const { profile } = useTenant()
+  const tenantId = profile?.tenant_id
+
+  // Quando uma unidade é reprovada, gera automaticamente um plano de correção.
+  const ensurePlan = async (cert, stage) => {
+    if (stage !== 'failed' || !cert?.id) return
+    const { data: existing } = await supabase.from('action_plans').select('id').eq('certification_id', cert.id).neq('status', 'done').limit(1)
+    if (existing && existing.length) return
+    let unitName = ''
+    if (cert.unit_id) { const { data: u } = await supabase.from('units').select('name').eq('id', cert.unit_id).single(); unitName = u?.name || '' }
+    const due = new Date(); due.setDate(due.getDate() + 30)
+    const { error } = await supabase.from('action_plans').insert({
+      tenant_id: tenantId,
+      certification_id: cert.id,
+      unit_id: cert.unit_id || null,
+      title: `Plano de correção — ${unitName || 'unidade'}`,
+      description: 'Gerado automaticamente após reprovação na Experience Certification. Defina as ações corretivas e os prazos para recertificação.',
+      status: 'open',
+      source: 'certification',
+      due_date: due.toISOString().slice(0, 10),
+    })
+    if (error) return notify('Auditoria salva, mas falhou ao gerar o plano de correção', 'error')
+    logAudit({ action: 'create', resource_type: 'action_plans', new_data: { certification_id: cert.id, source: 'certification' } }, tenantId)
+    notify('Reprovação registrada — plano de correção criado automaticamente na aba Planos de Correção', 'success')
+  }
+
   return (
-    <KanbanBoard notify={notify} module="certification" table="unit_certifications" title="Experience Certification" subtitle="auditorias e selos da rede" icon="check"
-      stageField="status" stageLabel="Situação" primary="unit_id"
+    <KanbanBoard notify={notify} module="certification" table="unit_certifications" title="" subtitle="auditorias e selos da rede" icon="check"
+      stageField="status" stageLabel="Situação" primary="unit_id" onStage={ensurePlan}
       stages={[
         ['pending', 'Pendente', 'border-admin-muted/30'],
         ['certified', 'Certificada', 'border-admin-sage/50'],
@@ -262,8 +290,42 @@ export function CertificationPanel({ notify }) {
       kpis={[
         { label: 'Auditorias', fmt: 'int', calc: (r) => r.length },
         { label: 'Certificadas', fmt: 'int', calc: (r) => r.filter((x) => x.status === 'certified').length },
+        { label: 'Reprovadas', fmt: 'int', calc: (r) => r.filter((x) => x.status === 'failed').length },
         { label: 'Pontuação média', fmt: 'int', calc: (r) => { const v = r.filter((x) => x.score != null); return v.length ? Math.round(v.reduce((s, x) => s + x.score, 0) / v.length) : 0 } },
-        { label: 'Selos Ouro+', fmt: 'int', calc: (r) => r.filter((x) => x.status === 'certified' && ['ouro', 'signature'].includes(x.level)).length },
+      ]}
+    />
+  )
+}
+
+function CorrectivePlans({ notify }) {
+  return (
+    <ResourcePanel notify={notify} module="certification" table="action_plans" embedded exportName="planos-correcao" newLabel="Novo plano"
+      orderBy={{ column: 'due_date', ascending: true }}
+      baseFilter={{ column: 'source', op: 'eq', value: 'certification' }}
+      inject={{ source: 'certification', status: 'open' }}
+      fields={[
+        { key: 'title', label: 'Plano', type: 'text', primary: true, required: true, full: true, search: true },
+        { key: 'unit_id', label: 'Unidade', type: 'ref', refTable: 'units', refLabel: 'name', chip: true, placeholder: '— unidade —' },
+        { key: 'due_date', label: 'Prazo', type: 'date', chip: true },
+        { key: 'status', label: 'Situação', type: 'status', options: PLAN_STATUS, default: 'open', filter: true },
+        { key: 'description', label: 'Ações corretivas', type: 'textarea' },
+      ]}
+      kpis={[
+        { label: 'Planos', calc: (r) => r.length, fmt: 'int' },
+        { label: 'Abertos', calc: (r) => r.filter((x) => x.status === 'open' || x.status === 'in_progress').length, fmt: 'int' },
+        { label: 'Atrasados', calc: (r) => r.filter((x) => x.status !== 'done' && x.status !== 'cancelled' && x.due_date && x.due_date < new Date().toISOString().slice(0, 10)).length, fmt: 'int' },
+        { label: 'Concluídos', calc: (r) => r.filter((x) => x.status === 'done').length, fmt: 'int' },
+      ]}
+    />
+  )
+}
+
+export function CertificationPanel({ notify }) {
+  return (
+    <ResourceTabs title="Experience Certification" subtitle="auditorias, selos e planos de correção da rede"
+      tabs={[
+        { key: 'audits', label: 'Auditorias', render: () => <CertKanban notify={notify} /> },
+        { key: 'plans', label: 'Planos de Correção', render: () => <CorrectivePlans notify={notify} /> },
       ]}
     />
   )

@@ -16,6 +16,7 @@ const fmtKpi = (fmt, v) => (fmt === 'currency' ? brl(v) : fmt === 'int' ? Math.r
 export function KanbanBoard({
   notify, module, table, title, subtitle, icon = 'layout',
   stageField, stages, stageLabel = 'Etapa', primary, fields = [], chips = [], valueField, kpis = [],
+  onStage,
 }) {
   const { profile, canManage, canEdit } = useTenant()
   const tenantId = profile?.tenant_id
@@ -69,6 +70,7 @@ export function KanbanBoard({
     else { const r = await supabase.from(table).insert({ ...payload, tenant_id: tenantId }).select('id').single(); error = r.error; id = r.data?.id }
     if (error) return notify('Erro ao salvar: ' + error.message, 'error')
     logAudit({ action: editing ? 'update' : 'create', resource_type: table, resource_id: id, new_data: payload }, tenantId)
+    if (onStage) { try { await onStage({ ...(editing || {}), ...payload, id }, form[stageField], !editing) } catch (e) { /* noop */ } }
     setModal(false); setEditing(null); load()
   }
   const remove = async (r) => {
@@ -87,6 +89,7 @@ export function KanbanBoard({
     const { error } = await supabase.from(table).update({ [stageField]: stage }).eq('id', id)
     if (error) { notify('Erro ao mover', 'error'); load(); return }
     logAudit({ action: 'update', resource_type: table, resource_id: id, new_data: { [stageField]: stage } }, tenantId)
+    if (onStage) { try { await onStage({ ...r, [stageField]: stage }, stage, false) } catch (e) { /* noop */ } }
   }
 
   const renderField = (f) => {
