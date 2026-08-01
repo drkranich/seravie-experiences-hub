@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useTenant } from '../../hooks/useTenant'
@@ -367,6 +367,134 @@ function MemberProfile({ notify }) {
   )
 }
 
+// ---------- Mensagens (chat privado entre membros) ----------
+const keyFor = (a, b) => [a, b].sort().join('_')
+const chatTime = (d) => new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+function Messages({ notify }) {
+  const { user } = useAuth()
+  const { profile } = useTenant()
+  const tenantId = profile?.tenant_id
+  const me = user?.id
+  const myName = user?.user_metadata?.name || user?.email || 'Você'
+  const [threads, setThreads] = useState([])
+  const [active, setActive] = useState(null)
+  const [msgs, setMsgs] = useState([])
+  const [text, setText] = useState('')
+  const [contacts, setContacts] = useState([])
+  const [showNew, setShowNew] = useState(false)
+  const endRef = useRef(null)
+
+  const loadThreads = async () => {
+    const { data } = await supabase.from('network_messages').select('*').order('created_at', { ascending: false })
+    const seen = new Map()
+    for (const m of (data || [])) {
+      if (!seen.has(m.thread_key)) {
+        const mine = m.from_user === me
+        seen.set(m.thread_key, { key: m.thread_key, otherId: mine ? m.to_user : m.from_user, otherName: (mine ? m.to_name : m.from_name) || 'Contato', last: m.body, at: m.created_at, unread: 0 })
+      }
+      if (m.to_user === me && !m.read) seen.get(m.thread_key).unread += 1
+    }
+    setThreads([...seen.values()])
+  }
+  const loadMsgs = async (key) => {
+    const { data } = await supabase.from('network_messages').select('*').eq('thread_key', key).order('created_at', { ascending: true })
+    setMsgs(data || [])
+    await supabase.from('network_messages').update({ read: true }).eq('thread_key', key).eq('to_user', me).eq('read', false)
+  }
+
+  useEffect(() => {
+    loadThreads()
+    ;(async () => { const { data } = await supabase.from('network_members').select('id,user_id,name,headline').eq('status', 'published').not('user_id', 'is', null); setContacts((data || []).filter((c) => c.user_id && c.user_id !== me)) })()
+  }, [])
+  useEffect(() => {
+    if (!active) return
+    loadMsgs(active.key)
+    const iv = setInterval(() => loadMsgs(active.key), 7000)
+    return () => clearInterval(iv)
+  }, [active?.key])
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs.length])
+
+  const openThread = (otherId, otherName) => { setShowNew(false); setActive({ key: keyFor(me, otherId), otherId, otherName }) }
+  const send = async () => {
+    if (!text.trim() || !active) return
+    const body = text.trim(); setText('')
+    setMsgs((m) => [...m, { id: `tmp-${Date.now()}`, thread_key: active.key, from_user: me, to_user: active.otherId, body, created_at: new Date().toISOString() }])
+    const { error } = await supabase.from('network_messages').insert({ tenant_id: tenantId, thread_key: active.key, from_user: me, to_user: active.otherId, from_name: myName, to_name: active.otherName, body })
+    if (error) return notify('Erro ao enviar: ' + error.message, 'error')
+    loadMsgs(active.key); loadThreads()
+  }
+
+  return (
+    <div className="glass rounded-2xl overflow-hidden grid md:grid-cols-[280px_1fr] h-[560px]">
+      {/* Lista de conversas */}
+      <div className="border-r border-white/[0.06] flex flex-col min-h-0">
+        <div className="p-3 border-b border-white/[0.06] flex items-center justify-between">
+          <p className="text-admin-text text-sm font-medium">Conversas</p>
+          <button onClick={() => setShowNew(true)} className="w-7 h-7 rounded-lg bg-admin-champ/10 text-admin-champ flex items-center justify-center"><Icon name="plus" className="w-4 h-4" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {threads.length === 0 ? <p className="text-admin-muted/40 text-xs p-4 text-center">Nenhuma conversa ainda. Toque em + para iniciar.</p> : threads.map((t) => (
+            <button key={t.key} onClick={() => openThread(t.otherId, t.otherName)} className={`w-full text-left px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.03] transition-colors ${active?.key === t.key ? 'bg-admin-champ/[0.06]' : ''}`}>
+              <div className="flex items-center justify-between gap-2"><p className="text-admin-text text-sm truncate">{t.otherName}</p>{t.unread > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-admin-champ/20 text-admin-champ shrink-0">{t.unread}</span>}</div>
+              <p className="text-admin-muted/40 text-xs truncate mt-0.5">{t.last}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Thread ativa */}
+      <div className="flex flex-col min-h-0">
+        {active ? (
+          <>
+            <div className="p-3.5 border-b border-white/[0.06] flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-admin-champ/10 flex items-center justify-center text-admin-champ text-sm">{(active.otherName || '?')[0]}</div>
+              <p className="text-admin-text text-sm font-medium">{active.otherName}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {msgs.map((m) => {
+                const mine = m.from_user === me
+                return (
+                  <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${mine ? 'bg-admin-champ/20 text-admin-text rounded-br-md' : 'glass-soft text-admin-muted/80 rounded-bl-md'}`}>
+                      <p className="whitespace-pre-wrap">{m.body}</p>
+                      <p className={`text-[9px] mt-0.5 ${mine ? 'text-admin-champ/50 text-right' : 'text-admin-muted/30'}`}>{chatTime(m.created_at)}</p>
+                    </div>
+                  </div>
+                )
+              })}
+              <div ref={endRef} />
+            </div>
+            <div className="p-3 border-t border-white/[0.06] flex gap-2">
+              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} placeholder="Escreva uma mensagem…" className="flex-1 glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" />
+              <button onClick={send} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-4 rounded-xl text-sm"><Icon name="mail" className="w-4 h-4" /></button>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-admin-muted/40 text-sm p-6 text-center">Selecione uma conversa ou inicie uma nova.<br />A comunicação acontece exclusivamente entre as partes.</div>
+        )}
+      </div>
+
+      {showNew && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowNew(false)}>
+          <div className="glass-pop rounded-2xl p-5 w-full max-w-sm max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4"><h2 className="font-serif text-xl text-admin-text">Nova conversa</h2><button onClick={() => setShowNew(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            {contacts.length === 0 ? <p className="text-admin-muted/40 text-sm">Nenhum membro disponível ainda. Os contatos aparecem quando outros membros publicam o perfil no Network.</p> : (
+              <div className="space-y-1">
+                {contacts.map((c) => (
+                  <button key={c.id} onClick={() => openThread(c.user_id, c.name)} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-white/[0.05] text-left transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-admin-sage/10 flex items-center justify-center text-admin-sage text-sm">{(c.name || '?')[0]}</div>
+                    <div className="min-w-0"><p className="text-admin-text text-sm truncate">{c.name}</p>{c.headline && <p className="text-admin-muted/40 text-[11px] truncate">{c.headline}</p>}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function NetworkHubPanel({ notify }) {
   return (
     <ResourceTabs title="Seravie Network" subtitle="a rede profissional da hospitalidade, varejo premium e economia criativa"
@@ -375,6 +503,7 @@ export function NetworkHubPanel({ notify }) {
         { key: 'comm', label: 'Comunidades', render: () => <Communities notify={notify} /> },
         { key: 'events', label: 'Eventos', render: () => <Events notify={notify} /> },
         { key: 'opps', label: 'Oportunidades', render: () => <Opportunities notify={notify} /> },
+        { key: 'msgs', label: 'Mensagens', render: () => <Messages notify={notify} /> },
         { key: 'rep', label: 'Reputação', render: () => <Reputation notify={notify} /> },
         { key: 'me', label: 'Meu Perfil', render: () => <MemberProfile notify={notify} /> },
       ]}
