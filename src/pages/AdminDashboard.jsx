@@ -52,6 +52,7 @@ import { PayablesPanel, DrePanel } from '../components/admin/FinanceAdvanced'
 import { NpsPanel } from '../components/admin/NpsPanel'
 import { MessagingChannels } from '../components/admin/MessagingChannels'
 import { SalesView, ContactsView, StockView } from '../components/admin/AutoViews'
+import { ExpansaoPanel, FranqueadosPanel, ImplantacoesPanel, StandardsPanel, CertificationPanel } from '../components/admin/NetworkPanels'
 import { SubscriptionPanel } from '../components/admin/SubscriptionPanel'
 import { ReceivablesPanel } from '../components/admin/ReceivablesPanel'
 import { Onboarding } from '../components/admin/Onboarding'
@@ -155,6 +156,11 @@ export function AdminDashboard({ onExit }) {
     crm_companies: <ContactsView segment="companies" notify={notify} />,
     crm_vip: <ContactsView segment="vip" notify={notify} />,
     crm_customers: <ContactsView segment="customers" notify={notify} />,
+    expansao: <ExpansaoPanel notify={notify} />,
+    franqueados: <FranqueadosPanel notify={notify} />,
+    implantacoes: <ImplantacoesPanel notify={notify} />,
+    standards: <StandardsPanel notify={notify} />,
+    certification: <CertificationPanel notify={notify} />,
   }
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).

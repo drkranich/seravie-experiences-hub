@@ -86,6 +86,16 @@ export const CORE_SECTIONS = [
     ],
   },
   {
+    group: 'Rede Seravie',
+    items: [
+      { key: 'expansao', label: 'Expansão', icon: 'map', route: 'expansao' },
+      { key: 'franqueados', label: 'Franqueados', icon: 'building', route: 'franqueados' },
+      { key: 'implantacoes', label: 'Implantações', icon: 'layout', route: 'implantacoes' },
+      { key: 'standards', label: 'Experience Standards', icon: 'star', route: 'standards' },
+      { key: 'certification', label: 'Certificação', icon: 'check', route: 'certification' },
+    ],
+  },
+  {
     group: 'Site & Conteúdo',
     items: [
       { key: 'content', label: 'Seções', icon: 'layout', route: 'content' },
