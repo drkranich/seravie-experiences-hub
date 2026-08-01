@@ -4,6 +4,7 @@ import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 import { logAudit } from '../../lib/audit'
 import { ResourcePanel } from './ResourcePanel'
+import { KanbanBoard } from './Kanban'
 
 const MODELS = { studio: 'Seravie Studio', experience_center: 'Experience Center', regional_hub: 'Regional Hub', signature: 'Signature Center' }
 const LEVELS = { bronze: 'Bronze', prata: 'Prata', ouro: 'Ouro', signature: 'Signature' }
@@ -86,7 +87,7 @@ export function ExpansaoPanel({ notify }) {
       </div>
 
       {loading ? <p className="text-admin-muted/30 text-sm py-8 text-center">Carregando…</p> : (
-        <div className="flex gap-3 overflow-x-auto pb-3">
+        <div className="flex flex-wrap gap-3 pb-3">
           {STAGES.map(([sk, sl, border]) => {
             const col = leads.filter((l) => (l.stage || 'prospect') === sk)
             const colTotal = col.reduce((s, l) => s + Number(l.investment || 0), 0)
@@ -95,7 +96,7 @@ export function ExpansaoPanel({ notify }) {
                 onDragOver={(e) => { e.preventDefault(); setOver(sk) }}
                 onDragLeave={() => setOver((o) => (o === sk ? null : o))}
                 onDrop={() => moveTo(sk)}
-                className={`shrink-0 w-64 glass rounded-2xl p-3 border ${over === sk ? 'border-admin-champ/60 bg-admin-champ/[0.04]' : border} transition-colors`}>
+                className={`flex-1 min-w-[220px] glass rounded-2xl p-3 border ${over === sk ? 'border-admin-champ/60 bg-admin-champ/[0.04]' : border} transition-colors`}>
                 <div className="flex items-center justify-between mb-3 px-1">
                   <div><p className="text-sm text-admin-text font-medium">{sl}</p><p className="text-admin-muted/40 text-[10px]">{col.length} · {brl(colTotal)}</p></div>
                   <button onClick={() => openNew(sk)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="plus" className="w-3.5 h-3.5" /></button>
@@ -181,25 +182,32 @@ export function FranqueadosPanel({ notify }) {
   )
 }
 
-// ---- Implantações ----
+// ---- Implantações (kanban por etapa de obra) ----
 export function ImplantacoesPanel({ notify }) {
-  const STAGE = { briefing: 'Briefing', arquitetura: 'Arquitetura', mobiliario: 'Mobiliário', equipamentos: 'Equipamentos', marketing: 'Marketing', inauguracao: 'Inauguração' }
   return (
-    <ResourcePanel notify={notify} module="implantacoes" table="implementations" title="Implantações" subtitle="aberturas em andamento" icon="layout" exportName="implantacoes"
-      orderBy={{ column: 'created_at', ascending: false }}
+    <KanbanBoard notify={notify} module="implantacoes" table="implementations" title="Implantações" subtitle="aberturas em andamento" icon="layout"
+      stageField="stage" stageLabel="Etapa" primary="title"
+      stages={[
+        ['briefing', 'Briefing', 'border-admin-muted/30'],
+        ['arquitetura', 'Arquitetura', 'border-admin-champ/40'],
+        ['mobiliario', 'Mobiliário', 'border-admin-gold/40'],
+        ['equipamentos', 'Equipamentos', 'border-admin-gold/40'],
+        ['marketing', 'Marketing', 'border-admin-champ/40'],
+        ['inauguracao', 'Inauguração', 'border-admin-sage/50'],
+      ]}
+      chips={['unit_ref', 'model', 'deadline']}
       fields={[
         { key: 'title', label: 'Projeto', type: 'text', primary: true, required: true, full: true, placeholder: 'Ex: Abertura Unidade Centro' },
-        { key: 'unit_ref', label: 'Unidade', type: 'text', chip: true },
-        { key: 'model', label: 'Modelo', type: 'select', options: MODELS, chip: true, filter: true },
-        { key: 'stage', label: 'Etapa', type: 'status', options: STAGE, default: 'briefing', filter: true },
+        { key: 'unit_ref', label: 'Unidade', type: 'text' },
+        { key: 'model', label: 'Modelo', type: 'select', options: MODELS },
         { key: 'start_date', label: 'Início', type: 'date' },
         { key: 'deadline', label: 'Inauguração prevista', type: 'date' },
         { key: 'notes', label: 'Observações', type: 'textarea' },
       ]}
       kpis={[
-        { label: 'Implantações', calc: (r) => r.length, fmt: 'int' },
-        { label: 'Em arquitetura', calc: (r) => r.filter((x) => x.stage === 'arquitetura').length, fmt: 'int' },
-        { label: 'Prontas p/ inaugurar', calc: (r) => r.filter((x) => x.stage === 'inauguracao').length, fmt: 'int' },
+        { label: 'Implantações', fmt: 'int', calc: (r) => r.length },
+        { label: 'Em arquitetura', fmt: 'int', calc: (r) => r.filter((x) => x.stage === 'arquitetura').length },
+        { label: 'Prontas p/ inaugurar', fmt: 'int', calc: (r) => r.filter((x) => x.stage === 'inauguracao').length },
       ]}
     />
   )
@@ -231,26 +239,31 @@ export function StandardsPanel({ notify }) {
   )
 }
 
-// ---- Experience Certification ----
+// ---- Experience Certification (kanban por situação de auditoria) ----
 export function CertificationPanel({ notify }) {
-  const STATUS = { pending: 'Pendente', certified: 'Certificada', failed: 'Reprovada', expired: 'Vencida' }
   return (
-    <ResourcePanel notify={notify} module="certification" table="unit_certifications" title="Experience Certification" subtitle="auditorias e selos da rede" icon="check" exportName="certificacoes"
-      orderBy={{ column: 'created_at', ascending: false }}
+    <KanbanBoard notify={notify} module="certification" table="unit_certifications" title="Experience Certification" subtitle="auditorias e selos da rede" icon="check"
+      stageField="status" stageLabel="Situação" primary="unit_id"
+      stages={[
+        ['pending', 'Pendente', 'border-admin-muted/30'],
+        ['certified', 'Certificada', 'border-admin-sage/50'],
+        ['failed', 'Reprovada', 'border-admin-rose/40'],
+        ['expired', 'Vencida', 'border-admin-gold/40'],
+      ]}
+      chips={['level', 'score', 'audited_at']}
       fields={[
-        { key: 'unit_id', label: 'Unidade', type: 'ref', refTable: 'units', refLabel: 'name', primary: true, chip: true, placeholder: '— selecione a unidade —' },
-        { key: 'score', label: 'Pontuação (0–100)', type: 'int', chip: true },
-        { key: 'level', label: 'Nível', type: 'select', options: LEVELS, default: 'bronze', chip: true, filter: true },
-        { key: 'status', label: 'Situação', type: 'status', options: STATUS, default: 'pending', filter: true },
+        { key: 'unit_id', label: 'Unidade', type: 'ref', refTable: 'units', refLabel: 'name', primary: true, required: true, placeholder: '— selecione a unidade —' },
+        { key: 'score', label: 'Pontuação (0–100)', type: 'int' },
+        { key: 'level', label: 'Nível', type: 'select', options: LEVELS, default: 'bronze' },
         { key: 'audited_at', label: 'Data da auditoria', type: 'date' },
         { key: 'valid_until', label: 'Validade do selo', type: 'date' },
-        { key: 'notes', label: 'Observações', type: 'textarea' },
+        { key: 'notes', label: 'Observações', type: 'textarea', full: true },
       ]}
       kpis={[
-        { label: 'Auditorias', calc: (r) => r.length, fmt: 'int' },
-        { label: 'Certificadas', calc: (r) => r.filter((x) => x.status === 'certified').length, fmt: 'int' },
-        { label: 'Pontuação média', calc: (r) => { const v = r.filter((x) => x.score != null); return v.length ? Math.round(v.reduce((s, x) => s + x.score, 0) / v.length) : 0 }, fmt: 'int' },
-        { label: 'Selos Ouro+', calc: (r) => r.filter((x) => x.status === 'certified' && ['ouro', 'signature'].includes(x.level)).length, fmt: 'int' },
+        { label: 'Auditorias', fmt: 'int', calc: (r) => r.length },
+        { label: 'Certificadas', fmt: 'int', calc: (r) => r.filter((x) => x.status === 'certified').length },
+        { label: 'Pontuação média', fmt: 'int', calc: (r) => { const v = r.filter((x) => x.score != null); return v.length ? Math.round(v.reduce((s, x) => s + x.score, 0) / v.length) : 0 } },
+        { label: 'Selos Ouro+', fmt: 'int', calc: (r) => r.filter((x) => x.status === 'certified' && ['ouro', 'signature'].includes(x.level)).length },
       ]}
     />
   )
