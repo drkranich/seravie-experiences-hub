@@ -41,6 +41,26 @@ export function SubscriptionPanel({ notify }) {
     })()
   }, [])
 
+  const [checkout, setCheckout] = useState(null)
+  const subscribe = async (p, cycle = 'monthly') => {
+    setCheckout(p.id)
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-subscription', {
+        body: { plan_id: p.id, cycle, origin: window.location.origin },
+      })
+      if (error || data?.error) {
+        const code = data?.error || error?.message
+        if (code === 'stripe_not_configured') notify('A cobrança online (Stripe) ainda não foi ativada. Assim que as chaves forem configuradas, este botão levará direto ao checkout.', 'info')
+        else if (code === 'plan_has_no_stripe_price') notify('Este plano ainda não tem o Price ID do Stripe configurado em "Planos da Plataforma".', 'error')
+        else notify('Não foi possível iniciar o checkout: ' + (code || 'erro'), 'error')
+        return
+      }
+      if (data?.url) window.location.href = data.url
+    } catch (e) {
+      notify('Falha ao contatar o checkout. Tente novamente.', 'error')
+    } finally { setCheckout(null) }
+  }
+
   const status = sub?.status || 'none'
   const limits = plan?.limits || {}
 
@@ -107,10 +127,10 @@ export function SubscriptionPanel({ notify }) {
                 </div>
               )}
               <button
-                onClick={() => current ? null : notify('Cobrança online (Stripe) será ativada na próxima etapa. Fale com o suporte para alterar seu plano.', 'info')}
-                disabled={current}
+                onClick={() => current ? null : subscribe(p, sub?.billing_cycle === 'yearly' ? 'yearly' : 'monthly')}
+                disabled={current || checkout === p.id}
                 className={`mt-4 py-2.5 rounded-xl text-sm transition-colors ${current ? 'bg-white/[0.04] text-admin-muted/40 cursor-default' : 'bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ'}`}>
-                {current ? 'Plano atual' : 'Assinar / fazer upgrade'}
+                {current ? 'Plano atual' : checkout === p.id ? 'Abrindo checkout…' : 'Assinar / fazer upgrade'}
               </button>
             </div>
           )
