@@ -5,6 +5,7 @@ import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassMulti } from './ui'
 import { ResourceTabs } from './ResourcePanel'
 import { KanbanBoard } from './Kanban'
+import { LegalGate, useLegalGate } from './LegalGate'
 import { logAudit } from '../../lib/audit'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
@@ -169,6 +170,8 @@ const EMPTY = { name: '', category: '', description: '', city: '', logo_url: '',
 function MyProfile({ notify }) {
   const { profile } = useTenant()
   const tenantId = profile?.tenant_id
+  const { pending, docs, recheck } = useLegalGate()
+  const [gate, setGate] = useState(false)
   const [row, setRow] = useState(null)
   const [form, setForm] = useState(EMPTY)
   const [loading, setLoading] = useState(true)
@@ -209,10 +212,14 @@ function MyProfile({ notify }) {
     notify(publish ? 'Perfil publicado no diretório Seravie Suppliers' : 'Perfil salvo', 'success')
   }
 
+  // Publicar no diretório exige aceite dos documentos vigentes.
+  const tryPublish = () => { if (pending.length > 0) setGate(true); else save(true) }
+
   if (loading) return <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando…</p>
 
   return (
     <div className="max-w-3xl">
+      {gate && <LegalGate docs={docs} notify={notify} onClose={() => setGate(false)} onAccept={async () => { setGate(false); await recheck(); await save(true) }} />}
       <div className="glass rounded-2xl p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <span className={`text-xs px-2.5 py-1 rounded-lg ${form.status === 'published' ? 'bg-admin-sage/15 text-admin-sage' : 'bg-white/[0.06] text-admin-muted/60'}`}>{form.status === 'published' ? 'Publicado no diretório' : 'Rascunho (não visível)'}</span>
@@ -244,7 +251,7 @@ function MyProfile({ notify }) {
         </div>
         <div className="flex gap-3 pt-2">
           <button onClick={() => save(null)} disabled={saving} className="px-5 py-2.5 rounded-xl text-sm bg-white/[0.05] text-admin-muted/80 hover:text-admin-text">Salvar rascunho</button>
-          <button onClick={() => save(true)} disabled={saving} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">{form.status === 'published' ? 'Atualizar publicação' : 'Publicar no diretório'}</button>
+          <button onClick={tryPublish} disabled={saving} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">{form.status === 'published' ? 'Atualizar publicação' : 'Publicar no diretório'}</button>
           {form.status === 'published' && <button onClick={() => save(false)} disabled={saving} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted/60">Despublicar</button>}
         </div>
       </div>

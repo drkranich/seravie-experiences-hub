@@ -56,6 +56,7 @@ import { ExpansaoPanel, FranqueadosPanel, ImplantacoesPanel, StandardsPanel, Cer
 import { OfficialCatalogPanel } from '../components/admin/OfficialCatalogPanel'
 import { SuppliersPanel } from '../components/admin/SuppliersPanel'
 import { NetworkHubPanel } from '../components/admin/NetworkHubPanel'
+import { LegalPanel } from '../components/admin/LegalPanel'
 import { SubscriptionPanel } from '../components/admin/SubscriptionPanel'
 import { ReceivablesPanel } from '../components/admin/ReceivablesPanel'
 import { Onboarding } from '../components/admin/Onboarding'
@@ -167,6 +168,7 @@ export function AdminDashboard({ onExit }) {
     certification: <CertificationPanel notify={notify} />,
     suppliers: <SuppliersPanel notify={notify} />,
     network_hub: <NetworkHubPanel notify={notify} />,
+    legal: <LegalPanel notify={notify} />,
   }
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).

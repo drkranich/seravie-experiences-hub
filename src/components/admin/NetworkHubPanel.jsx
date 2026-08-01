@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
 import { ResourceTabs } from './ResourcePanel'
+import { LegalGate, useLegalGate } from './LegalGate'
 import { logAudit } from '../../lib/audit'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
@@ -177,7 +178,7 @@ function Events({ notify }) {
       )}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass-pop rounded-2xl p-7 w-full max-w-lg max-h-[92vh] overflow-y-auto">
+          <div className="glass-pop rounded-2xl p-7 w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Novo evento</h2><button onClick={() => setModal(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2"><input value={form.title} onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))} placeholder="Título do evento" className={inputCls} /></div>
@@ -314,6 +315,8 @@ function MemberProfile({ notify }) {
   const { user } = useAuth()
   const { profile } = useTenant()
   const tenantId = profile?.tenant_id
+  const { pending, docs, recheck } = useLegalGate()
+  const [gate, setGate] = useState(false)
   const [row, setRow] = useState(null)
   const [form, setForm] = useState(M_EMPTY)
   const [loading, setLoading] = useState(true)
@@ -339,10 +342,13 @@ function MemberProfile({ notify }) {
     logAudit({ action: row ? 'update' : 'create', resource_type: 'network_members', resource_id: id, new_data: payload }, tenantId)
     if (!row) setRow({ id, ...payload }); notify('Perfil profissional salvo', 'success')
   }
+  const trySave = () => { if (pending.length > 0) setGate(true); else save() }
+
   if (loading) return <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando…</p>
 
   return (
     <div className="max-w-2xl glass rounded-2xl p-6 space-y-3">
+      {gate && <LegalGate docs={docs} notify={notify} onClose={() => setGate(false)} onAccept={async () => { setGate(false); await recheck(); await save() }} />}
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Nome *</label><input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputCls} /></div>
         <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Headline</label><input value={form.headline} onChange={(e) => set('headline', e.target.value)} placeholder="Ex: Arquiteta especialista em varejo premium" className={inputCls} /></div>
@@ -356,7 +362,7 @@ function MemberProfile({ notify }) {
         <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Instagram</label><input value={form.instagram} onChange={(e) => set('instagram', e.target.value)} className={inputCls} /></div>
         <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">LinkedIn</label><input value={form.linkedin} onChange={(e) => set('linkedin', e.target.value)} className={inputCls} /></div>
       </div>
-      <button onClick={save} className="w-full bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Salvar perfil</button>
+      <button onClick={trySave} className="w-full bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Salvar perfil</button>
     </div>
   )
 }
