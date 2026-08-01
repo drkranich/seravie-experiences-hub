@@ -1,33 +1,154 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../lib/supabase'
+import { useTenant } from '../../hooks/useTenant'
+import { Icon, GlassSelect } from './ui'
+import { logAudit } from '../../lib/audit'
 import { ResourcePanel } from './ResourcePanel'
 
 const MODELS = { studio: 'Seravie Studio', experience_center: 'Experience Center', regional_hub: 'Regional Hub', signature: 'Signature Center' }
 const LEVELS = { bronze: 'Bronze', prata: 'Prata', ouro: 'Ouro', signature: 'Signature' }
+const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 
-// ---- Expansão: candidatos / prospecção ----
+// ---- Expansão: kanban de triagem de leads com arrastar e soltar ----
+const STAGES = [
+  ['prospect', 'Prospecção', 'border-admin-muted/30'],
+  ['qualified', 'Qualificado', 'border-admin-champ/40'],
+  ['negotiation', 'Negociação', 'border-admin-gold/40'],
+  ['contract', 'Contrato', 'border-admin-champ/40'],
+  ['signed', 'Assinado', 'border-admin-sage/50'],
+  ['lost', 'Perdido', 'border-admin-rose/40'],
+]
+
 export function ExpansaoPanel({ notify }) {
-  const STAGE = { prospect: 'Prospecção', qualified: 'Qualificado', negotiation: 'Negociação', contract: 'Contrato', signed: 'Assinado', lost: 'Perdido' }
+  const { profile, canManage } = useTenant()
+  const tenantId = profile?.tenant_id
+  const mayDelete = canManage ? canManage('expansao') : true
+  const [leads, setLeads] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState({})
+  const [dragId, setDragId] = useState(null)
+  const [over, setOver] = useState(null)
+
+  const load = async () => { setLoading(true); const { data } = await supabase.from('franchise_leads').select('*').order('created_at', { ascending: false }); setLeads(data || []); setLoading(false) }
+  useEffect(() => { load() }, [])
+
+  const openNew = (stage) => { setEditing(null); setForm({ name: '', region: '', segment: '', model: '', investment: '', contact: '', phone: '', email: '', notes: '', stage: stage || 'prospect' }); setModal(true) }
+  const openEdit = (l) => { setEditing(l); setForm({ name: l.name, region: l.region || '', segment: l.segment || '', model: l.model || '', investment: l.investment ?? '', contact: l.contact || '', phone: l.phone || '', email: l.email || '', notes: l.notes || '', stage: l.stage || 'prospect' }); setModal(true) }
+
+  const save = async () => {
+    if (!form.name.trim()) return notify('Informe o candidato', 'error')
+    const payload = { name: form.name, region: form.region, segment: form.segment, model: form.model || null, investment: Number(form.investment) || null, contact: form.contact, phone: form.phone, email: form.email, notes: form.notes, stage: form.stage }
+    let error, id
+    if (editing) { const r = await supabase.from('franchise_leads').update(payload).eq('id', editing.id); error = r.error; id = editing.id }
+    else { const r = await supabase.from('franchise_leads').insert({ ...payload, tenant_id: tenantId }).select('id').single(); error = r.error; id = r.data?.id }
+    if (error) return notify('Erro ao salvar: ' + error.message, 'error')
+    logAudit({ action: editing ? 'update' : 'create', resource_type: 'franchise_leads', resource_id: id, new_data: payload }, tenantId)
+    setModal(false); setEditing(null); load()
+  }
+  const remove = async (l) => {
+    if (!confirm(`Remover o candidato "${l.name}"?`)) return
+    const { error } = await supabase.from('franchise_leads').delete().eq('id', l.id)
+    if (error) return notify('Erro ao excluir', 'error')
+    logAudit({ action: 'delete', resource_type: 'franchise_leads', resource_id: l.id, old_data: l }, tenantId)
+    notify('Candidato removido', 'success'); load()
+  }
+
+  // arrasta e solta
+  const moveTo = async (stage) => {
+    const id = dragId; setDragId(null); setOver(null)
+    if (!id) return
+    const lead = leads.find((l) => l.id === id)
+    if (!lead || lead.stage === stage) return
+    setLeads((ls) => ls.map((l) => l.id === id ? { ...l, stage } : l)) // otimista
+    const { error } = await supabase.from('franchise_leads').update({ stage }).eq('id', id)
+    if (error) { notify('Erro ao mover', 'error'); load(); return }
+    logAudit({ action: 'update', resource_type: 'franchise_leads', resource_id: id, new_data: { stage } }, tenantId)
+  }
+
+  const total = leads.length
+  const pipeline = leads.filter((l) => l.stage !== 'lost').reduce((s, l) => s + Number(l.investment || 0), 0)
+  const signed = leads.filter((l) => l.stage === 'signed').length
+
   return (
-    <ResourcePanel notify={notify} module="expansao" table="franchise_leads" title="Expansão" subtitle="candidatos a franquia" icon="map" exportName="expansao"
-      orderBy={{ column: 'created_at', ascending: false }}
-      fields={[
-        { key: 'name', label: 'Candidato', type: 'text', primary: true, required: true, full: true },
-        { key: 'region', label: 'Região', type: 'text', chip: true },
-        { key: 'segment', label: 'Segmento', type: 'text', chip: true },
-        { key: 'model', label: 'Modelo de interesse', type: 'select', options: MODELS, chip: true, filter: true },
-        { key: 'stage', label: 'Etapa', type: 'status', options: STAGE, default: 'prospect', filter: true },
-        { key: 'investment', label: 'Investimento (R$)', type: 'currency' },
-        { key: 'contact', label: 'Contato', type: 'text' },
-        { key: 'phone', label: 'Telefone', type: 'text' },
-        { key: 'email', label: 'E-mail', type: 'text' },
-        { key: 'notes', label: 'Observações', type: 'textarea' },
-      ]}
-      kpis={[
-        { label: 'Candidatos', calc: (r) => r.length, fmt: 'int' },
-        { label: 'Em negociação', calc: (r) => r.filter((x) => ['negotiation', 'contract'].includes(x.stage)).length, fmt: 'int' },
-        { label: 'Assinados', calc: (r) => r.filter((x) => x.stage === 'signed').length, fmt: 'int' },
-        { label: 'Pipeline (R$)', calc: (r) => r.filter((x) => x.stage !== 'lost').reduce((s, x) => s + Number(x.investment || 0), 0), fmt: 'currency' },
-      ]}
-    />
+    <div>
+      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <div><h1 className="font-serif text-4xl text-admin-text">Expansão</h1><p className="text-admin-muted/60 text-sm mt-1">Triagem de candidatos a franquia — arraste os cards entre as etapas</p></div>
+        <button onClick={() => openNew()} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Novo candidato</button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Candidatos</p><p className="text-admin-champ text-2xl font-medium">{total}</p></div>
+        <div className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Assinados</p><p className="text-admin-sage text-2xl font-medium">{signed}</p></div>
+        <div className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Pipeline</p><p className="text-admin-gold text-2xl font-medium">{brl(pipeline)}</p></div>
+      </div>
+
+      {loading ? <p className="text-admin-muted/30 text-sm py-8 text-center">Carregando…</p> : (
+        <div className="flex gap-3 overflow-x-auto pb-3">
+          {STAGES.map(([sk, sl, border]) => {
+            const col = leads.filter((l) => (l.stage || 'prospect') === sk)
+            const colTotal = col.reduce((s, l) => s + Number(l.investment || 0), 0)
+            return (
+              <div key={sk}
+                onDragOver={(e) => { e.preventDefault(); setOver(sk) }}
+                onDragLeave={() => setOver((o) => (o === sk ? null : o))}
+                onDrop={() => moveTo(sk)}
+                className={`shrink-0 w-64 glass rounded-2xl p-3 border ${over === sk ? 'border-admin-champ/60 bg-admin-champ/[0.04]' : border} transition-colors`}>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div><p className="text-sm text-admin-text font-medium">{sl}</p><p className="text-admin-muted/40 text-[10px]">{col.length} · {brl(colTotal)}</p></div>
+                  <button onClick={() => openNew(sk)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="plus" className="w-3.5 h-3.5" /></button>
+                </div>
+                <div className="space-y-2 min-h-[80px]">
+                  {col.map((l) => (
+                    <div key={l.id} draggable
+                      onDragStart={() => setDragId(l.id)} onDragEnd={() => { setDragId(null); setOver(null) }}
+                      className={`glass-soft rounded-xl px-3 py-2.5 cursor-grab active:cursor-grabbing group ${dragId === l.id ? 'opacity-40' : ''}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-admin-text text-sm leading-tight">{l.name}</p>
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <button onClick={() => openEdit(l)} className="p-1 text-admin-muted hover:text-admin-champ rounded"><Icon name="pen" className="w-3 h-3" /></button>
+                          {mayDelete && <button onClick={() => remove(l)} className="p-1 text-admin-muted hover:text-admin-rose rounded"><Icon name="x" className="w-3 h-3" /></button>}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {l.region && <span className="text-[10px] text-admin-muted/50">{l.region}</span>}
+                        {l.segment && <span className="text-[10px] text-admin-muted/50">· {l.segment}</span>}
+                        {l.model && <span className="text-[10px] text-admin-champ/60">· {MODELS[l.model] || l.model}</span>}
+                      </div>
+                      {l.investment > 0 && <p className="text-admin-gold/80 text-xs mt-1">{brl(l.investment)}</p>}
+                    </div>
+                  ))}
+                  {col.length === 0 && <div className="text-admin-muted/25 text-[11px] text-center py-4 border border-dashed border-white/[0.06] rounded-xl">solte aqui</div>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="glass-pop rounded-2xl p-7 w-full max-w-lg overflow-visible max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">{editing ? 'Editar candidato' : 'Novo candidato'}</h2><button onClick={() => setModal(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Candidato *</label><input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Região</label><input value={form.region} onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))} className={inputCls} /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Segmento</label><input value={form.segment} onChange={(e) => setForm((f) => ({ ...f, segment: e.target.value }))} className={inputCls} /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Modelo</label><GlassSelect value={form.model} onChange={(v) => setForm((f) => ({ ...f, model: v }))} options={[{ value: '', label: '—' }, ...Object.entries(MODELS).map(([value, label]) => ({ value, label }))]} /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Investimento (R$)</label><input type="number" value={form.investment} onChange={(e) => setForm((f) => ({ ...f, investment: e.target.value }))} className={inputCls} /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Etapa</label><GlassSelect value={form.stage} onChange={(v) => setForm((f) => ({ ...f, stage: v }))} options={STAGES.map(([value, label]) => ({ value, label }))} /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Contato</label><input value={form.contact} onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))} className={inputCls} /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Telefone</label><input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className={inputCls} /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">E-mail</label><input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className={inputCls} /></div>
+              <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Observações</label><textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className={`${inputCls} resize-none`} /></div>
+            </div>
+            <div className="flex gap-3 mt-6"><button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">{editing ? 'Salvar' : 'Adicionar'}</button><button onClick={() => setModal(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
