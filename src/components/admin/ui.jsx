@@ -1,4 +1,41 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+
+/**
+ * useAnchoredPopover — abre um popover em position:fixed via portal no <body>,
+ * ancorado ao elemento gatilho. Como é fixo e fora da árvore, NENHUM ancestral
+ * com overflow (inclusive o `overflow-x:hidden` do body) consegue recortá-lo.
+ * Fecha ao rolar/redimensionar para não "descolar" do gatilho.
+ */
+function useAnchoredPopover(triggerRef, open, setOpen, { width = 'trigger', ideal = 280 } = {}) {
+  const [style, setStyle] = useState(null)
+  useEffect(() => {
+    if (!open) return
+    const compute = () => {
+      const el = triggerRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const vw = window.innerWidth, vh = window.innerHeight
+      const below = vh - r.bottom, above = r.top
+      const up = below < ideal && above > below
+      const maxH = Math.max(160, Math.floor((up ? above : below) - 12))
+      const w = width === 'trigger' ? r.width : width
+      let left = r.left
+      if (left + w > vw - 8) left = Math.max(8, vw - 8 - w)
+      setStyle({
+        position: 'fixed', left: `${left}px`, width: `${w}px`, maxHeight: `${maxH}px`, zIndex: 100,
+        ...(up ? { bottom: `${vh - r.top + 6}px` } : { top: `${r.bottom + 6}px` }),
+      })
+    }
+    compute()
+    const close = () => setOpen(false)
+    // recomputa em resize; fecha ao rolar qualquer container
+    window.addEventListener('resize', compute)
+    window.addEventListener('scroll', close, true)
+    return () => { window.removeEventListener('resize', compute); window.removeEventListener('scroll', close, true) }
+  }, [open])
+  return style
+}
 
 export function Icon({ name, className = 'w-5 h-5' }) {
   const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' }
@@ -234,19 +271,15 @@ export function Toggle({ checked, onChange }) {
  */
 export function GlassSelect({ value, onChange, options = [], placeholder = 'Selecione', className = '', disabled }) {
   const [open, setOpen] = useState(false)
-  const [place, setPlace] = useState({ up: false, maxH: 256 })
   const ref = useRef(null)
-  const toggle = () => setOpen((o) => {
-    const willOpen = !o
-    if (willOpen && ref.current) setPlace(popoverPlacement(ref.current, 280))
-    return willOpen
-  })
+  const popRef = useRef(null)
+  const style = useAnchoredPopover(ref, open, setOpen, { width: 'trigger', ideal: 300 })
   const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
   const current = opts.find((o) => String(o.value) === String(value))
 
   useEffect(() => {
     if (!open) return
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target) && popRef.current && !popRef.current.contains(e.target)) setOpen(false) }
     const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onEsc)
@@ -258,14 +291,14 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
       <button
         type="button"
         disabled={disabled}
-        onClick={toggle}
+        onClick={() => setOpen((o) => !o)}
         className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none flex items-center justify-between gap-2 text-left disabled:opacity-50"
       >
         <span className={`truncate ${current ? '' : 'text-admin-muted/40'}`}>{current ? current.label : placeholder}</span>
         <Icon name={open ? 'up' : 'down'} className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
-      {open && (
-        <div style={{ maxHeight: place.maxH }} className={`absolute left-0 z-[60] w-full glass-pop rounded-xl p-1 overflow-auto ${place.up ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+      {open && style && createPortal(
+        <div ref={popRef} style={style} className="glass-pop rounded-xl p-1 overflow-auto">
           {opts.length === 0 && <p className="px-3.5 py-2 text-sm text-admin-muted/40">Sem opções</p>}
           {opts.map((o) => (
             <button
@@ -281,7 +314,7 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
               {o.label}
             </button>
           ))}
-        </div>
+        </div>, document.body
       )}
     </div>
   )
@@ -293,19 +326,15 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
  */
 export function GlassMulti({ value = [], onChange, options = [], placeholder = 'Selecione', className = '', disabled }) {
   const [open, setOpen] = useState(false)
-  const [place, setPlace] = useState({ up: false, maxH: 256 })
   const ref = useRef(null)
+  const popRef = useRef(null)
+  const style = useAnchoredPopover(ref, open, setOpen, { width: 'trigger', ideal: 300 })
   const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
   const sel = Array.isArray(value) ? value : []
-  const toggle = () => setOpen((o) => {
-    const willOpen = !o
-    if (willOpen && ref.current) setPlace(popoverPlacement(ref.current, 280))
-    return willOpen
-  })
   const flip = (v) => { onChange(sel.includes(v) ? sel.filter((x) => x !== v) : [...sel, v]) }
   useEffect(() => {
     if (!open) return
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target) && popRef.current && !popRef.current.contains(e.target)) setOpen(false) }
     const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onEsc)
@@ -313,13 +342,13 @@ export function GlassMulti({ value = [], onChange, options = [], placeholder = '
   }, [open])
   return (
     <div ref={ref} className={`relative ${className}`}>
-      <button type="button" disabled={disabled} onClick={toggle}
+      <button type="button" disabled={disabled} onClick={() => setOpen((o) => !o)}
         className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none flex items-center justify-between gap-2 text-left disabled:opacity-50">
         <span className={`truncate ${sel.length ? '' : 'text-admin-muted/40'}`}>{sel.length ? `${sel.length} selecionado${sel.length > 1 ? 's' : ''}: ${sel.slice(0, 6).join(', ')}${sel.length > 6 ? '…' : ''}` : placeholder}</span>
         <Icon name={open ? 'up' : 'down'} className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
-      {open && (
-        <div style={{ maxHeight: place.maxH }} className={`absolute left-0 z-[60] w-full glass-pop rounded-xl p-1 overflow-auto ${place.up ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+      {open && style && createPortal(
+        <div ref={popRef} style={style} className="glass-pop rounded-xl p-1 overflow-auto">
           {opts.map((o) => {
             const on = sel.includes(o.value)
             return (
@@ -330,7 +359,7 @@ export function GlassMulti({ value = [], onChange, options = [], placeholder = '
               </button>
             )
           })}
-        </div>
+        </div>, document.body
       )}
     </div>
   )
@@ -371,14 +400,16 @@ function popoverPlacement(el, ideal) {
 export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', className = '' }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const popRef = useRef(null)
   const selected = value ? parseYMD(value) : null
   const [view, setView] = useState(selected || new Date())
+  const style = useAnchoredPopover(ref, open, setOpen, { width: 256, ideal: 340 })
 
   const toggle = () => setOpen((o) => { if (!o) setView(selected || new Date()); return !o })
 
   useEffect(() => {
     if (!open) return
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target) && popRef.current && !popRef.current.contains(e.target)) setOpen(false) }
     const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onEsc)
@@ -401,8 +432,8 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
         <span className={selected ? 'text-admin-text' : 'text-admin-muted/40'}>{selected ? `${pad2(selected.getDate())}/${pad2(selected.getMonth() + 1)}/${selected.getFullYear()}` : placeholder}</span>
         <Icon name="calendar" className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-2 z-[90] w-64 glass-pop rounded-xl p-2.5 shadow-2xl">
+      {open && style && createPortal(
+        <div ref={popRef} style={style} className="glass-pop rounded-xl p-2.5 shadow-2xl overflow-auto">
           <div className="flex items-center justify-between mb-1.5">
             <p className="text-admin-champ text-xs font-medium capitalize">{monthLabel}</p>
             <div className="flex gap-1">
@@ -425,7 +456,7 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
             <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-[11px] text-admin-muted/60 hover:text-admin-rose">Limpar</button>
             <button type="button" onClick={() => pick(new Date())} className="text-[11px] text-admin-champ hover:underline">Hoje</button>
           </div>
-        </div>
+        </div>, document.body
       )}
     </div>
   )
@@ -438,6 +469,9 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
 export function GlassMonth({ value, onChange, className = '' }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const labelRef = useRef(null)
+  const popRef = useRef(null)
+  const style = useAnchoredPopover(labelRef, open, setOpen, { width: 256, ideal: 300 })
   const [y, m] = String(value || '').split('-').map(Number)
   const cy = y || new Date().getFullYear()
   const cm = m || (new Date().getMonth() + 1)
@@ -458,10 +492,10 @@ export function GlassMonth({ value, onChange, className = '' }) {
   return (
     <div ref={ref} className={`relative flex items-center gap-1 ${className}`}>
       <button type="button" onClick={() => shift(-1)} className="w-8 h-8 rounded-lg glass-input hover:bg-white/[0.06] flex items-center justify-center text-admin-muted shrink-0"><Icon name="up" className="w-4 h-4 -rotate-90" /></button>
-      <button type="button" onClick={() => { setViewYear(cy); setOpen((o) => !o) }} className="glass-input rounded-xl px-3 py-2 text-sm text-admin-text capitalize min-w-[9rem] text-center">{label}</button>
+      <button ref={labelRef} type="button" onClick={() => { setViewYear(cy); setOpen((o) => !o) }} className="glass-input rounded-xl px-3 py-2 text-sm text-admin-text capitalize min-w-[9rem] text-center">{label}</button>
       <button type="button" onClick={() => shift(1)} className="w-8 h-8 rounded-lg glass-input hover:bg-white/[0.06] flex items-center justify-center text-admin-muted shrink-0"><Icon name="down" className="w-4 h-4 -rotate-90" /></button>
-      {open && (
-        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-[90] w-64 glass-pop rounded-xl p-2.5 shadow-2xl">
+      {open && style && createPortal(
+        <div ref={popRef} style={style} className="glass-pop rounded-xl p-2.5 shadow-2xl overflow-auto">
           <div className="flex items-center justify-between mb-2">
             <button type="button" onClick={() => setViewYear((v) => v - 1)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
             <p className="text-admin-champ text-sm font-medium">{viewYear}</p>
@@ -473,7 +507,7 @@ export function GlassMonth({ value, onChange, className = '' }) {
               return <button key={i} type="button" onClick={() => pick(i)} className={`py-2 rounded-lg text-xs transition-colors ${sel ? 'bg-admin-champ text-admin-bg font-medium' : 'text-admin-text hover:bg-white/[0.06]'}`}>{mm}</button>
             })}
           </div>
-        </div>
+        </div>, document.body
       )}
     </div>
   )
