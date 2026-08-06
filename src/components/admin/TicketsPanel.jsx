@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 import { FlowImageField } from './FlowImageField'
+import { AttachButton, PendingAttachments, AttachmentList } from './AttachmentField'
 import { exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
 
@@ -47,7 +48,7 @@ export function TicketsPanel({ notify }) {
   const [notes, setNotes] = useState([])
   const [history, setHistory] = useState([])
   const [note, setNote] = useState('')
-  const [noteFile, setNoteFile] = useState('')
+  const [noteFiles, setNoteFiles] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ subject: '', description: '', type: 'support', priority: 'normal', category: '' })
   const [ctxOpen, setCtxOpen] = useState(true)
@@ -109,11 +110,10 @@ export function TicketsPanel({ notify }) {
   }
 
   const addNote = async (isInternal) => {
-    if (!note.trim() && !noteFile) return
-    const attachments = noteFile ? [{ url: noteFile }] : []
-    const { data, error } = await supabase.from('ticket_notes').insert({ tenant_id: tenantId, ticket_id: selected.id, author_id: profile?.user_id, content: note.trim(), is_internal: isInternal, attachments }).select('*').single()
+    if (!note.trim() && noteFiles.length === 0) return
+    const { data, error } = await supabase.from('ticket_notes').insert({ tenant_id: tenantId, ticket_id: selected.id, author_id: profile?.user_id, content: note.trim(), is_internal: isInternal, attachments: noteFiles }).select('*').single()
     if (error) return notify('Erro ao adicionar', 'error')
-    setNotes((n) => [...n, data]); setNote(''); setNoteFile('')
+    setNotes((n) => [...n, data]); setNote(''); setNoteFiles([])
   }
 
   const linkDeal = async () => {
@@ -238,7 +238,7 @@ export function TicketsPanel({ notify }) {
                     <div key={n.id} className={`rounded-xl px-4 py-3 text-sm ${n.is_internal ? 'bg-admin-gold/[0.07] border border-admin-gold/15' : 'bg-white/[0.04]'}`}>
                       {n.is_internal && <span className="text-[9px] block mb-1 text-admin-gold/60 uppercase tracking-wider">Nota interna</span>}
                       {n.content && <p className={`whitespace-pre-wrap ${n.is_internal ? 'text-admin-gold/90' : 'text-admin-text'}`}>{n.content}</p>}
-                      {(n.attachments || []).map((a, i) => <a key={i} href={a.url} target="_blank" rel="noreferrer" className="text-admin-champ text-xs hover:underline inline-block mt-1">Ver anexo ↗</a>)}
+                      <AttachmentList items={n.attachments} compact />
                       <p className="text-[9px] opacity-40 mt-1">{new Date(n.created_at).toLocaleString('pt-BR')}</p>
                     </div>
                   ))}
@@ -257,14 +257,14 @@ export function TicketsPanel({ notify }) {
             {/* compositor */}
             {mayEdit && (
               <div className="px-5 py-4 border-t border-white/[0.06] space-y-2">
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Escreva uma resposta ou nota interna…" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" />
-                {noteFile && <p className="text-admin-champ text-xs">Anexo pronto ✓ <button onClick={() => setNoteFile('')} className="text-admin-rose ml-2">remover</button></p>}
-                <div className="flex gap-2 items-center">
-                  <div className="flex-1"><FlowImageField label="" value={noteFile} onChange={setNoteFile} folder="tickets" accept="any" /></div>
+                <PendingAttachments items={noteFiles} onRemove={(i) => setNoteFiles((a) => a.filter((_, j) => j !== i))} />
+                <div className="flex gap-2 items-start">
+                  <AttachButton onAdd={(a) => setNoteFiles((xs) => [...xs, a])} folder="tickets" notify={notify} />
+                  <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Escreva uma resposta ou nota interna… (imagem, vídeo ou PDF pelo clipe)" className="flex-1 glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" />
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => addNote(false)} disabled={!note.trim() && !noteFile} className="flex-1 text-[11px] py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors disabled:opacity-40">Resposta ao cliente</button>
-                  <button onClick={() => addNote(true)} disabled={!note.trim() && !noteFile} className="flex-1 text-[11px] py-2 rounded-xl bg-admin-gold/10 hover:bg-admin-gold/20 text-admin-gold transition-colors disabled:opacity-40">Nota interna</button>
+                  <button onClick={() => addNote(false)} disabled={!note.trim() && noteFiles.length === 0} className="flex-1 text-[11px] py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors disabled:opacity-40">Resposta ao cliente</button>
+                  <button onClick={() => addNote(true)} disabled={!note.trim() && noteFiles.length === 0} className="flex-1 text-[11px] py-2 rounded-xl bg-admin-gold/10 hover:bg-admin-gold/20 text-admin-gold transition-colors disabled:opacity-40">Nota interna</button>
                 </div>
               </div>
             )}

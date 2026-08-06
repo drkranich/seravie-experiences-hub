@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
+import { AttachButton, PendingAttachments, AttachmentList } from './AttachmentField'
 
 const CHANNELS = ['email','whatsapp','instagram','messenger','chat','internal']
 const CHANNEL_ICONS = { email:'mail', whatsapp:'mail', instagram:'star', messenger:'mail', chat:'mail', internal:'user', phone:'user', telegram:'mail', google_business:'leaf' }
@@ -16,6 +17,7 @@ export function ConversationsInbox({ notify }) {
   const [filterStatus, setFilterStatus] = useState('open')
   const [filterChannel, setFilterChannel] = useState('')
   const [newMsg, setNewMsg] = useState('')
+  const [attachments, setAttachments] = useState([])
   const [sending, setSending] = useState(false)
   const bottomRef = useRef(null)
 
@@ -39,7 +41,7 @@ export function ConversationsInbox({ notify }) {
   useEffect(() => { if (active) loadMessages(active.id) }, [active])
 
   const send = async () => {
-    if (!newMsg.trim() || !active) return
+    if ((!newMsg.trim() && attachments.length === 0) || !active) return
     setSending(true)
     const { error } = await supabase.from('messages').insert({
       tenant_id: profile?.tenant_id,
@@ -47,11 +49,12 @@ export function ConversationsInbox({ notify }) {
       sender_type: 'agent',
       sender_id: profile?.user_id,
       content: newMsg.trim(),
-      content_type: 'text'
+      content_type: attachments.length ? 'mixed' : 'text',
+      attachments,
     })
     if (!error) {
       await supabase.from('conversations').update({ last_message_at: new Date().toISOString(), status: 'pending' }).eq('id', active.id)
-      setNewMsg('')
+      setNewMsg(''); setAttachments([])
       loadMessages(active.id)
       loadConversations()
     } else notify('Erro ao enviar', 'error')
@@ -153,7 +156,8 @@ export function ConversationsInbox({ notify }) {
                         : 'bg-white/[0.05] text-admin-text rounded-bl-sm'
                   }`}>
                     {m.is_internal && <span className="text-[9px] block mb-1 opacity-60">nota interna</span>}
-                    <p>{m.content}</p>
+                    {m.content && <p>{m.content}</p>}
+                    <AttachmentList items={m.attachments} compact />
                     <p className="text-[9px] opacity-40 mt-1">{new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 </div>
@@ -163,12 +167,14 @@ export function ConversationsInbox({ notify }) {
           </div>
 
           <div className="px-5 py-3.5 border-t border-white/[0.06]">
+            <PendingAttachments items={attachments} onRemove={(i) => setAttachments((a) => a.filter((_, j) => j !== i))} />
             <div className="flex gap-3">
+              <AttachButton onAdd={(a) => setAttachments((xs) => [...xs, a])} folder="conversas" notify={notify} />
               <input value={newMsg} onChange={e => setNewMsg(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
                 placeholder="Digite uma mensagem…"
                 className="flex-1 glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
-              <button onClick={send} disabled={sending || !newMsg.trim()}
+              <button onClick={send} disabled={sending || (!newMsg.trim() && attachments.length === 0)}
                 className="px-4 py-2.5 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ rounded-xl transition-colors disabled:opacity-40">
                 <Icon name="spark" className="w-4 h-4" />
               </button>
