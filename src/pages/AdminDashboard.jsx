@@ -207,8 +207,8 @@ export function AdminDashboard({ onExit }) {
     // Grupos e itens EXCLUSIVOS do dono da plataforma (super admin):
     // - "Site & Conteúdo" = CMS do site público institucional da Seravie.
     // - itens de plataforma no grupo Sistema (planos, super admin).
-    const SUPER_ONLY_GROUPS = new Set(['Site & Conteúdo'])
-    const SUPER_ONLY_ITEMS = new Set(['superadmin', 'plans'])
+    const SUPER_ONLY_GROUPS = new Set(['Site & Conteúdo', 'Rede Seravie'])
+    const SUPER_ONLY_ITEMS = new Set(['superadmin', 'plans', 'verticals'])
     const gateItem = (item) => {
       if (SUPER_ONLY_ITEMS.has(item.key)) return isSuper ? item : null
       if (full || item.key === 'overview' || String(item.key).startsWith('vertical.')) return item
@@ -252,7 +252,14 @@ export function AdminDashboard({ onExit }) {
   // Obs: 'faqs' fica de fora — é rota compartilhada com o FAQ do módulo
   // Conhecimento (do tenant). O item de menu "FAQ" do site já é escondido pelo
   // filtro de grupo "Site & Conteúdo".
-  const PLATFORM_ROUTES = new Set(['content', 'services', 'portfolio', 'process', 'segments', 'jornal', 'testimonials', 'pages', 'menus', 'newsletter', 'plans', 'superadmin'])
+  const PLATFORM_ROUTES = new Set([
+    // CMS do site institucional
+    'content', 'services', 'portfolio', 'process', 'segments', 'jornal', 'testimonials', 'pages', 'menus', 'newsletter',
+    // Rede Seravie (franqueador)
+    'expansao', 'franqueados', 'royalties', 'implantacoes', 'catalogo_oficial', 'standards', 'certification',
+    // Plataforma / sistema
+    'plans', 'superadmin', 'verticals',
+  ])
   const isSuperUser = profile?.role_slug === 'super_admin'
 
   // Conteúdo: painel real ou ScaffoldPage
