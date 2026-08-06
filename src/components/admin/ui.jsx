@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom'
  * com overflow (inclusive o `overflow-x:hidden` do body) consegue recortá-lo.
  * Fecha ao rolar/redimensionar para não "descolar" do gatilho.
  */
-function useAnchoredPopover(triggerRef, open, setOpen, { width = 'trigger', ideal = 280 } = {}) {
+function useAnchoredPopover(triggerRef, open, setOpen, { width = 'trigger', ideal = 280, popRef = null } = {}) {
   const [style, setStyle] = useState(null)
   useEffect(() => {
     if (!open) return
@@ -28,11 +28,25 @@ function useAnchoredPopover(triggerRef, open, setOpen, { width = 'trigger', idea
       })
     }
     compute()
-    const close = () => setOpen(false)
-    // recomputa em resize; fecha ao rolar qualquer container
+    // Reposiciona o popover ao rolar/redimensionar em vez de fechá-lo.
+    // Importante: rolar DENTRO do próprio popover (lista de opções com
+    // overflow) não deve fechá-lo — por isso ignoramos scrolls cujo alvo
+    // esteja contido no popover. Scrolls de containers externos apenas
+    // reancoram o popover ao gatilho (throttle via requestAnimationFrame).
+    let raf = 0
+    const onScroll = (e) => {
+      const pop = popRef && popRef.current
+      if (pop && e.target instanceof Node && pop.contains(e.target)) return // scroll interno: manter aberto
+      if (raf) return
+      raf = requestAnimationFrame(() => { raf = 0; compute() })
+    }
     window.addEventListener('resize', compute)
-    window.addEventListener('scroll', close, true)
-    return () => { window.removeEventListener('resize', compute); window.removeEventListener('scroll', close, true) }
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      window.removeEventListener('resize', compute)
+      window.removeEventListener('scroll', onScroll, true)
+    }
   }, [open])
   return style
 }
@@ -273,7 +287,7 @@ export function GlassSelect({ value, onChange, options = [], placeholder = 'Sele
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const popRef = useRef(null)
-  const style = useAnchoredPopover(ref, open, setOpen, { width: 'trigger', ideal: 300 })
+  const style = useAnchoredPopover(ref, open, setOpen, { width: 'trigger', ideal: 300, popRef })
   const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
   const current = opts.find((o) => String(o.value) === String(value))
 
@@ -328,7 +342,7 @@ export function GlassMulti({ value = [], onChange, options = [], placeholder = '
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const popRef = useRef(null)
-  const style = useAnchoredPopover(ref, open, setOpen, { width: 'trigger', ideal: 300 })
+  const style = useAnchoredPopover(ref, open, setOpen, { width: 'trigger', ideal: 300, popRef })
   const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
   const sel = Array.isArray(value) ? value : []
   const flip = (v) => { onChange(sel.includes(v) ? sel.filter((x) => x !== v) : [...sel, v]) }
@@ -403,7 +417,7 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
   const popRef = useRef(null)
   const selected = value ? parseYMD(value) : null
   const [view, setView] = useState(selected || new Date())
-  const style = useAnchoredPopover(ref, open, setOpen, { width: 256, ideal: 340 })
+  const style = useAnchoredPopover(ref, open, setOpen, { width: 256, ideal: 340, popRef })
 
   const toggle = () => setOpen((o) => { if (!o) setView(selected || new Date()); return !o })
 
@@ -471,7 +485,7 @@ export function GlassMonth({ value, onChange, className = '' }) {
   const ref = useRef(null)
   const labelRef = useRef(null)
   const popRef = useRef(null)
-  const style = useAnchoredPopover(labelRef, open, setOpen, { width: 256, ideal: 300 })
+  const style = useAnchoredPopover(labelRef, open, setOpen, { width: 256, ideal: 300, popRef })
   const [y, m] = String(value || '').split('-').map(Number)
   const cy = y || new Date().getFullYear()
   const cm = m || (new Date().getMonth() + 1)
