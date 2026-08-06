@@ -58,11 +58,21 @@ Deno.serve(async (req) => {
     if (tid) await upsertSub(tid, { plan_id: null, billing_cycle: combo?.billing_cycle || 'monthly', status: 'active', provider_subscription_id: subId || null, payment_provider: 'stripe' })
   }
 
+  // Ativa uma frente (vertical) no tenant após pagamento confirmado.
+  const activateVertical = async (vertical, tenantId) => {
+    if (!vertical || !tenantId) return
+    const { data: ex } = await admin.from('vertical_configs').select('id').eq('tenant_id', tenantId).eq('vertical', vertical).maybeSingle()
+    if (!ex) await admin.from('vertical_configs').insert({ tenant_id: tenantId, vertical, config: { enabled: true, source: 'stripe' } })
+  }
+
   try {
     const obj = event.data?.object || {}
     switch (event.type) {
       case 'checkout.session.completed':
-        if (obj.metadata?.combo_id) {
+        if (obj.metadata?.activate_vertical) {
+          await activateVertical(obj.metadata.activate_vertical, obj.metadata?.tenant_id)
+          await upsertSub(obj.metadata?.tenant_id, { status: 'active', provider_subscription_id: obj.subscription || null, payment_provider: 'stripe' })
+        } else if (obj.metadata?.combo_id) {
           await activateCombo(obj.metadata.combo_id, obj.metadata?.tenant_id, obj.subscription || null)
         } else {
           await upsertSub(obj.metadata?.tenant_id, { plan_id: obj.metadata?.plan_id || null, billing_cycle: obj.metadata?.cycle || 'monthly', status: 'active', provider_subscription_id: obj.subscription || null, payment_provider: 'stripe' })

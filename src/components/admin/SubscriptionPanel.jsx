@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
+import { VERTICAL_CORES } from './navigation.config'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const STATUS = { active: 'Ativa', trialing: 'Em teste', past_due: 'Pagamento pendente', canceled: 'Cancelada', cancelled: 'Cancelada', none: 'Sem assinatura' }
@@ -23,16 +24,19 @@ export function SubscriptionPanel({ notify }) {
   const [activeCombo, setActiveCombo] = useState(null)
   const [comboSel, setComboSel] = useState([])
   const [comboCycle, setComboCycle] = useState('monthly')
+  const [activeVerticals, setActiveVerticals] = useState([])
+  const [contracting, setContracting] = useState(null)
 
   useEffect(() => {
     (async () => {
       setLoading(true)
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
-      const [{ data: s }, { data: allPlans }, { data: mods }, { data: combo }, pdv, online, units, users, products] = await Promise.all([
+      const [{ data: s }, { data: allPlans }, { data: mods }, { data: combo }, { data: vc }, pdv, online, units, users, products] = await Promise.all([
         supabase.from('subscriptions').select('*').maybeSingle(),
         supabase.from('plans').select('*').eq('is_active', true).order('sort_order').order('price_monthly'),
         supabase.from('modules').select('slug,name,category,price_monthly,price_yearly,sellable').eq('sellable', true).order('name'),
         supabase.from('custom_combos').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('vertical_configs').select('vertical'),
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('channel', 'pdv').gte('created_at', monthStart.toISOString()),
         supabase.from('store_orders').select('*', { count: 'exact', head: true }).gte('created_at', monthStart.toISOString()),
         supabase.from('units').select('*', { count: 'exact', head: true }),
@@ -43,6 +47,7 @@ export function SubscriptionPanel({ notify }) {
       setPlans(allPlans || [])
       setModules((mods || []).filter((m) => (m.price_monthly || 0) > 0))
       setActiveCombo(combo || null)
+      setActiveVerticals((vc || []).map((x) => x.vertical))
       setUsage({ pdv_sales: pdv.count || 0, online_orders: online.count || 0, units: units.count || 0, users: users.count || 0, products: products.count || 0 })
       if (s?.plan_id) setPlan((allPlans || []).find((p) => p.id === s.plan_id) || null)
       setLoading(false)
@@ -61,6 +66,25 @@ export function SubscriptionPanel({ notify }) {
     }
     if (data?.checkout_url) { window.location.href = data.checkout_url; return }
     notify('Combo registrado!', 'success')
+  }
+
+  // Frentes (verticais) disponíveis para contratar = todas do catálogo menos as já ativas.
+  const availableVerticals = Object.entries(VERTICAL_CORES)
+    .filter(([key]) => key !== 'franchise' && !activeVerticals.includes(key))
+    .map(([key, v]) => {
+      const mod = modules.find((m) => m.slug === key) || {}
+      return { key, label: v.label, icon: v.icon, price: Number(mod.price_monthly) || 0 }
+    })
+  const contractVertical = async (key) => {
+    setContracting(key)
+    const { data, error } = await supabase.functions.invoke('vertical-subscribe', { body: { vertical: key, cycle: 'monthly', origin: window.location.origin } })
+    setContracting(null)
+    if (error || data?.error) return notify('Não foi possível contratar: ' + (data?.error || 'erro'), 'error')
+    if (data?.checkout_url) { window.location.href = data.checkout_url; return }
+    if (data?.activated) {
+      notify(data.free ? 'Frente ativada!' : (data.note === 'stripe_not_configured' ? 'Frente ativada (cobrança será configurada).' : 'Frente ativada!'), 'success')
+      setActiveVerticals((v) => [...v, key])
+    }
   }
 
   const [checkout, setCheckout] = useState(null)
@@ -190,6 +214,25 @@ export function SubscriptionPanel({ notify }) {
               </div>
               <button onClick={subscribeCombo} disabled={!comboSel.length} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-6 py-2.5 rounded-xl text-sm disabled:opacity-40">Assinar meu combo</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Adicionar frentes (contratar vertical, ativa após pagamento) */}
+      {availableVerticals.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-1">Adicionar frentes ao seu negócio</h2>
+          <p className="text-admin-muted/50 text-sm mb-4">Contrate uma nova frente e ela é ativada automaticamente após o pagamento.</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {availableVerticals.map((v) => (
+              <div key={v.key} className="glass rounded-2xl p-4 flex flex-col">
+                <div className="flex items-center gap-2 mb-1"><Icon name={v.icon} className="w-4 h-4 text-admin-champ" /><span className="text-admin-text text-sm font-medium">{v.label}</span></div>
+                <p className="text-admin-champ text-lg font-medium mt-1">{v.price > 0 ? <>{brl(v.price)}<span className="text-admin-muted/40 text-xs font-normal"> /mês</span></> : <span className="text-admin-sage text-sm">Incluído</span>}</p>
+                <button onClick={() => contractVertical(v.key)} disabled={contracting === v.key} className="mt-3 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ disabled:opacity-40">
+                  {contracting === v.key ? 'Processando…' : (v.price > 0 ? 'Contratar' : 'Ativar')}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
