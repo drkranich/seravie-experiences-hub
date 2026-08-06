@@ -211,7 +211,7 @@ export function TeamPanel({ notify }) {
 
             {/* foto + nome */}
             <div className="flex gap-4 items-start mb-4">
-              <div className="w-24 shrink-0"><FlowImageField label="Foto" value={modal.form.avatar_url} onChange={(url) => setF('avatar_url', url)} folder="equipe/fotos" accept="image" /></div>
+              <div className="w-28 shrink-0"><FlowImageField label="Foto" value={modal.form.avatar_url} onChange={(url) => setF('avatar_url', url)} folder="equipe/fotos" accept="image" compact /></div>
               <div className="flex-1 grid grid-cols-2 gap-3">
                 <div className="col-span-2"><label className={lbl}>Nome completo *</label><input value={modal.form.name} onChange={(e) => setF('name', e.target.value)} className={inputCls} /></div>
                 <div><label className={lbl}>Setor / Categoria</label><GlassSelect value={modal.form.department} onChange={(v) => setF('department', v)} options={[{ value: '', label: '— selecione —' }, ...DEPARTMENTS.map((d) => ({ value: d, label: d }))]} /></div>

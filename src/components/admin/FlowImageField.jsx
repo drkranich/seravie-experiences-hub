@@ -4,7 +4,7 @@ import { Icon } from './ui'
 
 // Campo de imagem do Seravie Flow: upload real (bucket 'flow') + alternativa por URL.
 // Compacto e on-brand com o admin (glassmorphism champagne).
-export function FlowImageField({ value, onChange, label = 'Imagem', folder = 'admin', accept = 'image', maxMB = 8, hint }) {
+export function FlowImageField({ value, onChange, label = 'Imagem', folder = 'admin', accept = 'image', maxMB = 8, hint, compact = false }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const ref = useRef(null)
@@ -18,6 +18,29 @@ export function FlowImageField({ value, onChange, label = 'Imagem', folder = 'ad
   }
 
   const isImg = accept === 'image'
+
+  // Layout compacto: thumbnail em cima, ações embaixo (ideal p/ colunas estreitas, ex. foto de perfil)
+  if (compact) {
+    return (
+      <div>
+        {label && <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">{label}</label>}
+        <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handle(e.dataTransfer.files[0]) }}
+          className="border border-dashed border-admin-champ/25 rounded-xl p-2.5 flex flex-col items-center gap-2">
+          <input ref={ref} type="file" accept={isImg ? 'image/*' : undefined} className="hidden" onChange={(e) => handle(e.target.files[0])} />
+          <button type="button" onClick={() => ref.current?.click()} disabled={busy}
+            className="w-full aspect-square rounded-lg overflow-hidden bg-white/[0.04] border border-white/[0.06] flex items-center justify-center hover:border-admin-champ/40 transition-colors">
+            {value ? (isImg ? <img src={value} alt="" className="w-full h-full object-cover" /> : <Icon name="check" className="w-7 h-7 text-admin-sage" />) : <Icon name={busy ? 'spark' : 'image'} className="w-7 h-7 text-admin-muted/30" />}
+          </button>
+          <div className="flex items-center gap-2 text-[10px]">
+            <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="text-admin-champ hover:underline disabled:opacity-50">{busy ? 'Enviando…' : value ? 'Trocar' : 'Enviar'}</button>
+            {value && <button type="button" onClick={() => onChange('')} className="text-admin-muted/50 hover:text-admin-rose">Remover</button>}
+          </div>
+          {err && <p className="text-admin-rose text-[10px] text-center">{err}</p>}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       {label && <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">{label}</label>}
