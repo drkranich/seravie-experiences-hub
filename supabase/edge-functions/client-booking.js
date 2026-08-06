@@ -1,22 +1,27 @@
 // client-booking — agendamentos, reservas e assinaturas do CLIENTE final (anônimo).
-// Usa service role. Valida o tenant pelo slug e o recurso pelo id.
-// (Deploy: verify_jwt=false — cliente anônimo.)
+// Usa service role. Valida o tenant pelo slug e o recurso pelo id. Dispara o
+// motor de automações no evento correspondente. (Deploy: verify_jwt=false.)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const cors = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 const json = (b, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } })
+
+async function fireAutomation(event, tenantId, context) {
+  try {
+    const base = Deno.env.get('SUPABASE_URL')
+    await fetch(`${base}/functions/v1/automation-run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+      body: JSON.stringify({ event, tenant_id: tenantId, context }),
+    })
+  } catch { /* best-effort */ }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   const admin = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
-  let p = {}
-  try { p = await req.json() } catch { /* vazio */ }
-  const slug = String(p.slug || '')
-  const kind = String(p.kind || '')
+  let p = {}; try { p = await req.json() } catch { /* vazio */ }
+  const slug = String(p.slug || ''); const kind = String(p.kind || '')
   if (!slug) return json({ error: 'missing_slug' }, 400)
   const { data: tenant } = await admin.from('tenants').select('id,name').eq('slug', slug).maybeSingle()
   if (!tenant) return json({ error: 'tenant_not_found' }, 404)
@@ -32,6 +37,7 @@ Deno.serve(async (req) => {
     }
     const { data: appt, error } = await admin.from('appointments').insert({ tenant_id: tenantId, customer_name: p.customer_name || 'Cliente', service: svc.name, professional: p.professional || null, date: p.date, time: p.time, status: 'scheduled', notes: p.notes || null }).select('id').single()
     if (error) return json({ error: error.message }, 400)
+    await fireAutomation('new_appointment', tenantId, { appointment_id: appt.id, service: svc.name, date: p.date, time: p.time, customer_name: p.customer_name, customer_email: p.customer_email })
     return json({ ok: true, appointment_id: appt.id })
   }
   if (kind === 'tour') {
@@ -41,6 +47,7 @@ Deno.serve(async (req) => {
     const total = (Number(tour.price) || 0) * people
     const { data: order, error } = await admin.from('orders').insert({ tenant_id: tenantId, status: 'confirmed', payment_status: 'pending', total, customer_name: p.customer_name || 'Cliente', channel: 'reserva', items: [{ name: tour.name, qty: people, unit_price: tour.price, date: p.date }], notes: `Reserva: ${tour.name} · ${p.date} · ${people} pessoa(s)` }).select('id').single()
     if (error) return json({ error: error.message }, 400)
+    await fireAutomation('new_reservation', tenantId, { order_id: order.id, tour: tour.name, date: p.date, people, total, customer_name: p.customer_name, customer_email: p.customer_email })
     return json({ ok: true, order_id: order.id, total })
   }
   if (kind === 'club') {
@@ -48,6 +55,7 @@ Deno.serve(async (req) => {
     if (!plan) return json({ error: 'plan_not_found' }, 404)
     const { data: sub, error } = await admin.from('club_subscriptions').insert({ tenant_id: tenantId, plan_id: plan.id, customer_name: p.customer_name || 'Cliente', customer_email: p.customer_email || null, status: 'active' }).select('id').single()
     if (error) return json({ error: error.message }, 400)
+    await fireAutomation('new_subscription', tenantId, { subscription_id: sub.id, plan: plan.name, price: plan.price, customer_name: p.customer_name, customer_email: p.customer_email })
     return json({ ok: true, subscription_id: sub.id, plan: plan.name, price: plan.price })
   }
   return json({ error: 'invalid_kind' }, 400)

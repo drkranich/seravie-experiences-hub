@@ -272,6 +272,7 @@ export function POSPanel({ notify }) {
       payment_method: primary, reference_id: order.id, reference_type: 'order', created_by: user?.id || null,
     })
     // Baixa de estoque + movimento de estoque
+    const lowStockHits = []
     for (const i of cart) {
       if (i.stock != null) {
         const bal = Math.max(0, i.stock - i.qty)
@@ -284,7 +285,12 @@ export function POSPanel({ notify }) {
             reference_id: order.id, reference_type: 'order', created_by: user?.id || null,
           })
         }
+        if (i.min_stock != null && bal <= i.min_stock) lowStockHits.push({ name: i.name, stock: bal, min_stock: i.min_stock })
       }
+    }
+    // Gatilho de automação: estoque baixo
+    if (lowStockHits.length) {
+      try { supabase.functions.invoke('automation-run', { body: { event: 'low_stock', tenant_id: tenantId, context: { products: lowStockHits } } }) } catch { /* noop */ }
     }
 
     // ---- Integrações da venda (fidelidade, LTV, cupom, fiscal) ----
