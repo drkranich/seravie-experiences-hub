@@ -20,6 +20,7 @@ export function SubscriptionPanel({ notify }) {
   const [plans, setPlans] = useState([])
   const [usage, setUsage] = useState({})
   const [modules, setModules] = useState([])
+  const [activeCombo, setActiveCombo] = useState(null)
   const [comboSel, setComboSel] = useState([])
   const [comboCycle, setComboCycle] = useState('monthly')
 
@@ -27,10 +28,11 @@ export function SubscriptionPanel({ notify }) {
     (async () => {
       setLoading(true)
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
-      const [{ data: s }, { data: allPlans }, { data: mods }, pdv, online, units, users, products] = await Promise.all([
+      const [{ data: s }, { data: allPlans }, { data: mods }, { data: combo }, pdv, online, units, users, products] = await Promise.all([
         supabase.from('subscriptions').select('*').maybeSingle(),
         supabase.from('plans').select('*').eq('is_active', true).order('sort_order').order('price_monthly'),
         supabase.from('modules').select('slug,name,category,price_monthly,price_yearly,sellable').eq('sellable', true).order('name'),
+        supabase.from('custom_combos').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('channel', 'pdv').gte('created_at', monthStart.toISOString()),
         supabase.from('store_orders').select('*', { count: 'exact', head: true }).gte('created_at', monthStart.toISOString()),
         supabase.from('units').select('*', { count: 'exact', head: true }),
@@ -40,6 +42,7 @@ export function SubscriptionPanel({ notify }) {
       setSub(s || null)
       setPlans(allPlans || [])
       setModules((mods || []).filter((m) => (m.price_monthly || 0) > 0))
+      setActiveCombo(combo || null)
       setUsage({ pdv_sales: pdv.count || 0, online_orders: online.count || 0, units: units.count || 0, users: users.count || 0, products: products.count || 0 })
       if (s?.plan_id) setPlan((allPlans || []).find((p) => p.id === s.plan_id) || null)
       setLoading(false)
@@ -94,11 +97,13 @@ export function SubscriptionPanel({ notify }) {
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Plano atual</p>
-            <p className="font-serif text-3xl text-admin-text">{plan?.name || 'Nenhum plano'}</p>
+            <p className="font-serif text-3xl text-admin-text">{plan?.name || (activeCombo ? (activeCombo.name || 'Combo personalizado') : 'Nenhum plano')}</p>
+            {!plan && activeCombo && <p className="text-admin-muted/40 text-xs mt-0.5">{(activeCombo.module_slugs || []).length} módulo(s)</p>}
             <div className="flex items-center gap-3 mt-2">
               <span className={`text-sm ${STATUS_STYLE[status]}`}>● {STATUS[status] || status}</span>
               {sub?.billing_cycle && <span className="text-admin-muted/50 text-sm">· {sub.billing_cycle === 'yearly' ? 'anual' : 'mensal'}</span>}
               {plan && <span className="text-admin-champ text-sm">· {brl(sub?.billing_cycle === 'yearly' ? plan.price_yearly : plan.price_monthly)}{sub?.billing_cycle === 'yearly' ? '/ano' : '/mês'}</span>}
+              {!plan && activeCombo && <span className="text-admin-champ text-sm">· {brl(activeCombo.computed_price)}{activeCombo.billing_cycle === 'yearly' ? '/ano' : '/mês'}</span>}
             </div>
             {sub?.current_period_end && <p className="text-admin-muted/40 text-xs mt-2">Renova em {new Date(sub.current_period_end).toLocaleDateString('pt-BR')}</p>}
             {sub?.trial_end && status === 'trialing' && <p className="text-admin-gold/70 text-xs mt-1">Teste até {new Date(sub.trial_end).toLocaleDateString('pt-BR')}</p>}

@@ -48,19 +48,40 @@ Deno.serve(async (req) => {
     }
     return {}
   }
+  // Ativa um combo custom (custom_combos) e reflete como assinatura ativa.
+  const activateCombo = async (comboId, tenantId, subId) => {
+    if (!comboId) return
+    await admin.from('custom_combos').update({ status: 'active', provider_subscription_id: subId || null }).eq('id', comboId)
+    // Descobre o tenant/ciclo pelo próprio combo se não veio no metadata
+    const { data: combo } = await admin.from('custom_combos').select('tenant_id, billing_cycle').eq('id', comboId).maybeSingle()
+    const tid = tenantId || combo?.tenant_id
+    if (tid) await upsertSub(tid, { plan_id: null, billing_cycle: combo?.billing_cycle || 'monthly', status: 'active', provider_subscription_id: subId || null, payment_provider: 'stripe' })
+  }
+
   try {
     const obj = event.data?.object || {}
     switch (event.type) {
       case 'checkout.session.completed':
-        await upsertSub(obj.metadata?.tenant_id, { plan_id: obj.metadata?.plan_id || null, billing_cycle: obj.metadata?.cycle || 'monthly', status: 'active', provider_subscription_id: obj.subscription || null, payment_provider: 'stripe' })
+        if (obj.metadata?.combo_id) {
+          await activateCombo(obj.metadata.combo_id, obj.metadata?.tenant_id, obj.subscription || null)
+        } else {
+          await upsertSub(obj.metadata?.tenant_id, { plan_id: obj.metadata?.plan_id || null, billing_cycle: obj.metadata?.cycle || 'monthly', status: 'active', provider_subscription_id: obj.subscription || null, payment_provider: 'stripe' })
+        }
         break
       case 'customer.subscription.updated':
       case 'customer.subscription.created': {
+        if (obj.metadata?.combo_id) {
+          // Combo custom: sincroniza status/período sem plan_id.
+          await activateCombo(obj.metadata.combo_id, obj.metadata?.tenant_id, obj.id)
+          await upsertSub(obj.metadata?.tenant_id, { status: obj.status === 'trialing' ? 'trialing' : (obj.status === 'active' ? 'active' : (obj.status || 'active')), provider_subscription_id: obj.id, current_period_start: obj.current_period_start ? new Date(obj.current_period_start * 1000).toISOString() : null, current_period_end: obj.current_period_end ? new Date(obj.current_period_end * 1000).toISOString() : null, trial_end: obj.trial_end ? new Date(obj.trial_end * 1000).toISOString() : null })
+          break
+        }
         const planInfo = await resolvePlanFromPrice(obj)
         await upsertSub(obj.metadata?.tenant_id, { status: obj.status === 'trialing' ? 'trialing' : (obj.status === 'active' ? 'active' : (obj.status || 'active')), provider_subscription_id: obj.id, ...planInfo, current_period_start: obj.current_period_start ? new Date(obj.current_period_start * 1000).toISOString() : null, current_period_end: obj.current_period_end ? new Date(obj.current_period_end * 1000).toISOString() : null, trial_end: obj.trial_end ? new Date(obj.trial_end * 1000).toISOString() : null })
         break
       }
       case 'customer.subscription.deleted':
+        if (obj.metadata?.combo_id) await admin.from('custom_combos').update({ status: 'cancelled' }).eq('id', obj.metadata.combo_id)
         await upsertSub(obj.metadata?.tenant_id, { status: 'cancelled', cancelled_at: new Date().toISOString() })
         break
       case 'invoice.payment_failed': {
