@@ -7,7 +7,7 @@ import { ResourcePanel, ResourceTabs } from './ResourcePanel'
 import { KanbanBoard } from './Kanban'
 import { logAudit } from '../../lib/audit'
 import { FlowStudio } from './FlowStudio'
-import { PhoneFrame, StorePreview } from './FlowPreview'
+import { PhoneFrame, StorePreview, ProductPreview, OrderReceiptPreview } from './FlowPreview'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -134,9 +134,54 @@ function PointsTab({ notify }) {
   )
 }
 
+// Preview interativo reutilizável: escolhe um item da lista e mostra no celular como o cliente vê.
+function PreviewShelf({ label, emptyHint, load, itemLabel, render }) {
+  const [open, setOpen] = useState(false)
+  const [items, setItems] = useState([])
+  const [sel, setSel] = useState(null)
+  const [loading, setLoading] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    setLoading(true)
+    load().then((data) => { const list = data || []; setItems(list); setSel((s) => s || list[0] || null); setLoading(false) })
+  }, [open])
+  return (
+    <>
+      <div className="flex justify-end mb-3">
+        <button onClick={() => setOpen(true)} className="flex items-center gap-2 text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ"><Icon name="eye" className="w-3.5 h-3.5" />{label}</button>
+      </div>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto" onClick={() => setOpen(false)}>
+          <div className="glass-pop rounded-2xl p-7 max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">{label}</h2><button onClick={() => setOpen(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p> : items.length === 0 ? (
+              <p className="text-admin-muted/40 text-sm py-12 text-center">{emptyHint}</p>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-6">
+                <div className="sm:w-56 shrink-0 max-h-[520px] overflow-y-auto space-y-1.5">
+                  {items.map((it) => (
+                    <button key={it.id} onClick={() => setSel(it)} className={`w-full text-left px-3 py-2 rounded-xl text-sm transition-colors ${sel?.id === it.id ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.03] text-admin-muted/70 hover:text-admin-text'}`}>{itemLabel(it)}</button>
+                  ))}
+                </div>
+                <div className="flex-1 flex justify-center"><PhoneFrame label="Como o cliente vê">{sel ? render(sel) : null}</PhoneFrame></div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 // ---------- Catálogo ----------
 function CatalogTab({ notify }) {
   return (
+    <div>
+    <PreviewShelf label="Ver na loja" emptyHint="Cadastre um produto para ver como ele aparece na loja do cliente."
+      load={() => supabase.from('flow_products').select('*').order('sort_order').then((r) => r.data)}
+      itemLabel={(p) => p.name}
+      render={(p) => <ProductPreview product={p} />}
+    />
     <ResourcePanel notify={notify} module="flow" table="flow_products" embedded exportName="flow-catalogo" newLabel="Novo produto"
       orderBy={{ column: 'sort_order', ascending: true }}
       fields={[
@@ -160,12 +205,19 @@ function CatalogTab({ notify }) {
         { label: 'Estoque baixo', calc: (r) => r.filter((x) => x.stock != null && x.min_stock != null && x.stock <= x.min_stock).length, fmt: 'int' },
       ]}
     />
+    </div>
   )
 }
 
 // ---------- Pedidos ----------
 function OrdersTab({ notify }) {
   return (
+    <div>
+    <PreviewShelf label="Ver comprovante" emptyHint="Quando chegar um pedido, você vê aqui o comprovante como o cliente recebe."
+      load={() => supabase.from('flow_orders').select('*').order('created_at', { ascending: false }).limit(30).then((r) => r.data)}
+      itemLabel={(o) => `${o.point_name || 'Pedido'}${o.reference ? ' · ' + o.reference : ''} — ${brl(o.total)}`}
+      render={(o) => <OrderReceiptPreview order={o} />}
+    />
     <KanbanBoard notify={notify} module="flow" table="flow_orders" title="" subtitle="pedidos recebidos pelos QR Codes" icon="cart"
       stageField="status" stageLabel="Status" primary="point_name" valueField="total"
       stages={[
@@ -190,6 +242,7 @@ function OrdersTab({ notify }) {
         { label: 'Faturamento', fmt: 'currency', calc: (r) => r.filter((x) => !['cancelled'].includes(x.status)).reduce((s, x) => s + Number(x.total || 0), 0) },
       ]}
     />
+    </div>
   )
 }
 

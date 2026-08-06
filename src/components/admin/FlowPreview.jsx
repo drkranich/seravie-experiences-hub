@@ -93,3 +93,61 @@ export function StorePreview({ point, products = [] }) {
     </div>
   )
 }
+
+// Preview de um PRODUTO isolado como aparece na loja do cliente.
+export function ProductPreview({ product = {} }) {
+  const bg = { backgroundImage: 'radial-gradient(70% 45% at 80% 0%, rgba(214,196,154,0.14), transparent 60%), linear-gradient(170deg, #14160f 0%, #0b0a08 100%)', minHeight: '100%' }
+  const glass = { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16 }
+  const hasPromo = Number(product.promo_price) > 0
+  return (
+    <div style={bg} className="pb-6">
+      <div className="h-48 bg-gradient-to-br from-[#D6C49A]/25 to-[#8a7a4a]/20 relative">
+        {product.image_url && <img src={product.image_url} alt="" className="w-full h-full object-cover" />}
+        {hasPromo && <span className="absolute top-3 left-3 text-[9px] tracking-wider uppercase px-2 py-1" style={{ background: '#D6C49A', color: '#14160f', borderRadius: 8 }}>Oferta</span>}
+      </div>
+      <div className="px-5 pt-5">
+        {product.category && <p className="text-[9px] tracking-wider uppercase mb-1" style={{ color: '#D6C49A' }}>{product.category}</p>}
+        <h1 className="font-serif text-2xl text-[#f4f0e6] leading-tight">{product.name || 'Nome do produto'}</h1>
+        <div className="flex items-baseline gap-2 mt-2">
+          <span className="text-2xl" style={{ color: '#D6C49A' }}>{brl(hasPromo ? product.promo_price : product.price)}</span>
+          {hasPromo && <span className="text-sm line-through text-[#f4f0e6]/30">{brl(product.price)}</span>}
+        </div>
+        {product.description && <p className="text-[#f4f0e6]/55 text-sm mt-3 leading-relaxed whitespace-pre-wrap">{product.description}</p>}
+        {product.stock != null && Number(product.stock) <= Number(product.min_stock || 0) && <p className="text-[#e0a98a] text-xs mt-3">Últimas unidades</p>}
+      </div>
+      <div className="px-5 mt-6 flex items-center gap-3">
+        <div className="flex items-center gap-3 px-4 py-2.5" style={glass}><span className="text-[#f4f0e6]/50">−</span><span className="text-[#f4f0e6] text-sm">1</span><span className="text-[#D6C49A]">+</span></div>
+        <div className="flex-1 py-3 text-center text-[11px] tracking-wider uppercase" style={{ background: '#D6C49A', color: '#14160f', borderRadius: 14 }}>Adicionar</div>
+      </div>
+    </div>
+  )
+}
+
+// Preview do RECIBO/COMPROVANTE do pedido como o cliente vê após finalizar.
+export function OrderReceiptPreview({ order = {} }) {
+  const bg = { backgroundImage: 'radial-gradient(70% 45% at 50% 0%, rgba(214,196,154,0.14), transparent 60%), linear-gradient(170deg, #14160f 0%, #0b0a08 100%)', minHeight: '100%' }
+  const glass = { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(18px)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16 }
+  const items = Array.isArray(order.items) ? order.items : []
+  const STATUS = { pending: 'Recebido', paid: 'Pago', preparing: 'Em preparo', delivered: 'Entregue', cancelled: 'Cancelado' }
+  return (
+    <div style={bg} className="px-5 py-8 flex flex-col items-center">
+      <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl mb-3" style={{ background: 'rgba(214,196,154,0.15)', color: '#D6C49A' }}>✓</div>
+      <h1 className="font-serif text-xl text-[#f4f0e6]">Pedido confirmado</h1>
+      <p className="text-[#f4f0e6]/40 text-xs mt-1">{order.point_name || 'Ponto'}{order.reference ? ` · ${order.reference}` : ''}</p>
+      <span className="text-[9px] tracking-wider uppercase px-2.5 py-1 mt-3" style={{ background: 'rgba(214,196,154,0.15)', color: '#D6C49A', borderRadius: 8 }}>{STATUS[order.status] || order.status || 'Recebido'}</span>
+      <div className="w-full mt-6 p-4 space-y-2.5" style={glass}>
+        {items.length === 0 ? <p className="text-[#f4f0e6]/40 text-xs text-center py-2">Itens do pedido aparecem aqui.</p> : items.map((it, i) => (
+          <div key={i} className="flex justify-between text-sm"><span className="text-[#f4f0e6]/80 truncate pr-2">{it.qty || 1}× {it.name}</span><span className="text-[#f4f0e6]/60 shrink-0">{brl((it.price || 0) * (it.qty || 1))}</span></div>
+        ))}
+        <div className="pt-2.5 mt-1 border-t border-white/[0.08] space-y-1.5">
+          {Number(order.discount) > 0 && <div className="flex justify-between text-xs text-[#f4f0e6]/45"><span>Desconto{order.coupon ? ` (${order.coupon})` : ''}</span><span>− {brl(order.discount)}</span></div>}
+          {Number(order.tip) > 0 && <div className="flex justify-between text-xs text-[#f4f0e6]/45"><span>Gorjeta</span><span>{brl(order.tip)}</span></div>}
+          <div className="flex justify-between items-baseline"><span className="text-[#f4f0e6] text-sm">Total</span><span className="text-xl" style={{ color: '#D6C49A' }}>{brl(order.total)}</span></div>
+        </div>
+      </div>
+      {order.payment_method && <p className="text-[#f4f0e6]/40 text-xs mt-4">Pagamento · {order.payment_method}</p>}
+      {order.notes && <p className="text-[#f4f0e6]/40 text-xs mt-2 text-center italic">"{order.notes}"</p>}
+      <div className="w-full mt-6 py-3 text-center text-[11px] tracking-wider uppercase" style={{ background: '#D6C49A', color: '#14160f', borderRadius: 14 }}>Acompanhar pedido</div>
+    </div>
+  )
+}
