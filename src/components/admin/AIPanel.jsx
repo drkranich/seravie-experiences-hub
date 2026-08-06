@@ -28,20 +28,18 @@ export function AIPanel({ notify }) {
     setMessages(m => [...m, userMsg])
     setInput('')
     setLoading(true)
-
-    // Respostas contextuais simuladas para demonstração
-    const q = userMsg.content.toLowerCase()
-    let reply = 'Estou processando sua solicitação. Para respostas completas baseadas em seus dados, conecte a chave da API de IA nas configurações.'
-    if (q.includes('ticket') || q.includes('chamado')) reply = 'Você pode acessar o Help Desk na sidebar para gerenciar tickets. Lá você encontra SLA, prioridades e histórico de atendimentos.'
-    else if (q.includes('cliente') || q.includes('crm')) reply = 'O CRM da Seravie permite cadastrar clientes com histórico completo, preferências, LTV e datas especiais. Acesse via "CRM" na sidebar.'
-    else if (q.includes('franquia') || q.includes('unidade')) reply = 'O módulo Franquias permite gerenciar a rede completa: unidades, comunicados, auditorias e visual merchandising.'
-    else if (q.includes('relatório') || q.includes('analytics')) reply = 'Em breve o módulo Analytics estará disponível com dashboards por papel, metas e insights de IA.'
-    else if (q.includes('produto') || q.includes('catálogo')) reply = 'O Catálogo permite gerenciar produtos com SKU, preço, estoque e variantes. Acesse via "Catálogo" na sidebar.'
-
-    setTimeout(() => {
+    // Chama a Seravie AI real (edge function ai-chat, com contexto do tenant).
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-chat', { body: { message: userMsg.content } })
+      const reply = (error || data?.error)
+        ? 'Não consegui responder agora. Tente novamente em instantes.'
+        : (data?.reply || 'Sem resposta.')
       setMessages(m => [...m, { role: 'assistant', content: reply, ts: new Date().toISOString() }])
+    } catch {
+      setMessages(m => [...m, { role: 'assistant', content: 'Falha ao contatar a IA.', ts: new Date().toISOString() }])
+    } finally {
       setLoading(false)
-    }, 800)
+    }
   }
 
   const saveAutomation = async () => {

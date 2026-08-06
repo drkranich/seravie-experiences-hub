@@ -325,6 +325,9 @@ export function POSPanel({ notify }) {
       else fiscalNote = { status: 'pending' }
     } catch { fiscalNote = { status: 'pending' } }
 
+    // Dispara o motor de automações (best-effort, não bloqueia a venda)
+    try { supabase.functions.invoke('automation-run', { body: { event: 'new_order', tenant_id: tenantId, context: { order_id: order.id, total, customer_name: customer?.name || null } } }) } catch { /* noop */ }
+
     setBusy(false)
     setMovements((m) => [...newMovs, ...m])
     setReceipt({ number: order.number, items, total, discount: discountValue, payments: pays, change, customer: customer?.name, notes: saleNotes, at: new Date(), points: earnedPoints, fiscal: fiscalNote })

@@ -60,6 +60,13 @@ export function UsersPanel({ notify }) {
     if (!email) return notify('Informe o e-mail', 'error')
     const perms = levelsToPerms(form.levels)
     if (perms.length === 0) return notify('Marque ao menos uma permissão de acesso', 'error')
+    // Enforcement de limite do plano (usuários)
+    try {
+      const { data: lim } = await supabase.rpc('check_plan_limit', { p_resource: 'users' })
+      if (lim && lim.allowed === false && lim.limit != null) {
+        return notify(`Limite do plano atingido: ${lim.used}/${lim.limit} usuários no plano ${lim.plan}. Faça upgrade em Minha Assinatura.`, 'error')
+      }
+    } catch { /* se a checagem falhar, não bloqueia */ }
     let roleId
     try { roleId = await resolveRoleId(email, perms) } catch (e) { return notify('Erro ao definir permissões: ' + e.message, 'error') }
     const token = uuid()
