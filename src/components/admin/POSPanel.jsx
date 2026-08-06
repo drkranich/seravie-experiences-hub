@@ -32,6 +32,8 @@ export function POSPanel({ notify }) {
   const [catFilter, setCatFilter] = useState('')
   const [cart, setCart] = useState([])
   const [discount, setDiscount] = useState('')
+  const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [saleNotes, setSaleNotes] = useState('')
   const [customer, setCustomer] = useState(null) // { id, name } | null
   const [custQuery, setCustQuery] = useState('')
@@ -192,7 +194,10 @@ export function POSPanel({ notify }) {
 
   const lineTotal = (i) => Math.max(0, i.price * i.qty - (i.discount || 0))
   const subtotal = cart.reduce((s, i) => s + lineTotal(i), 0)
-  const discountValue = Math.min(num(discount), subtotal)
+  const couponValue = appliedCoupon
+    ? (appliedCoupon.type === 'percent' ? Math.round(subtotal * (Number(appliedCoupon.value) || 0)) / 100 : Math.min(Number(appliedCoupon.value) || 0, subtotal))
+    : 0
+  const discountValue = Math.min(num(discount) + couponValue, subtotal)
   const total = Math.max(0, subtotal - discountValue)
   const paidTotal = payments.reduce((s, p) => s + num(p.amount), 0)
   const remaining = Math.max(0, total - paidTotal)
@@ -219,7 +224,21 @@ export function POSPanel({ notify }) {
     setStripeLink({ url: data.url, amount: amt })
   }
 
-  const resetSale = () => { setCart([]); setDiscount(''); setPayments([]); setPayAmount(''); setSaleNotes(''); setCustomer(null) }
+  const resetSale = () => { setCart([]); setDiscount(''); setPayments([]); setPayAmount(''); setSaleNotes(''); setCustomer(null); setCouponCode(''); setAppliedCoupon(null) }
+
+  // Aplica um cupom validando código, validade, mínimo e limite de usos.
+  const applyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase()
+    if (!code) return
+    const { data: c } = await supabase.from('coupons').select('*').eq('code', code).eq('is_active', true).maybeSingle()
+    if (!c) return notify('Cupom inválido ou inativo', 'error')
+    const now = new Date()
+    if (c.valid_from && new Date(c.valid_from) > now) return notify('Cupom ainda não vigente', 'error')
+    if (c.valid_until && new Date(c.valid_until) < now) return notify('Cupom expirado', 'error')
+    if (c.max_uses != null && (c.used_count || 0) >= c.max_uses) return notify('Cupom esgotado', 'error')
+    if (c.min_order != null && subtotal < Number(c.min_order)) return notify(`Pedido mínimo de ${brl(c.min_order)} para este cupom`, 'error')
+    setAppliedCoupon(c); notify(`Cupom ${code} aplicado`, 'success')
+  }
 
   const finalizeSale = async () => {
     if (cart.length === 0) { notify('Carrinho vazio', 'error'); return }
@@ -267,11 +286,50 @@ export function POSPanel({ notify }) {
         }
       }
     }
+
+    // ---- Integrações da venda (fidelidade, LTV, cupom, fiscal) ----
+    let earnedPoints = 0
+    if (customer?.id) {
+      // LTV do cliente: acumula o total da venda no contato
+      try {
+        const { data: c } = await supabase.from('contacts').select('ltv').eq('id', customer.id).maybeSingle()
+        await supabase.from('contacts').update({ ltv: Number(c?.ltv || 0) + total }).eq('id', customer.id)
+      } catch { /* best-effort */ }
+      // Fidelidade: 1 ponto por real (regra padrão); cria conta se não existir
+      earnedPoints = Math.floor(total)
+      if (earnedPoints > 0) {
+        try {
+          const { data: acc } = await supabase.from('loyalty_accounts').select('*').eq('contact_id', customer.id).maybeSingle()
+          if (acc) {
+            await supabase.from('loyalty_accounts').update({ points: (acc.points || 0) + earnedPoints, lifetime_points: (acc.lifetime_points || 0) + earnedPoints }).eq('id', acc.id)
+            await supabase.from('loyalty_transactions').insert({ tenant_id: tenantId, account_id: acc.id, type: 'earn', points: earnedPoints, description: `Venda PDV #${order.number}`, reference_id: order.id })
+          } else {
+            const { data: newAcc } = await supabase.from('loyalty_accounts').insert({ tenant_id: tenantId, contact_id: customer.id, points: earnedPoints, lifetime_points: earnedPoints, tier: 'bronze' }).select('id').single()
+            if (newAcc) await supabase.from('loyalty_transactions').insert({ tenant_id: tenantId, account_id: newAcc.id, type: 'earn', points: earnedPoints, description: `Venda PDV #${order.number}`, reference_id: order.id })
+          }
+        } catch { /* best-effort */ }
+      }
+    }
+    // Cupom aplicado: incrementa uso
+    if (appliedCoupon?.id) {
+      try { await supabase.from('coupons').update({ used_count: (appliedCoupon.used_count || 0) + 1 }).eq('id', appliedCoupon.id) } catch { /* noop */ }
+    }
+    // Emissão fiscal (NFC-e) — pronto para plugar: chama a edge function; se o
+    // gateway não estiver configurado, registra pendente sem travar a venda.
+    let fiscalNote = null
+    try {
+      const { data: fx } = await supabase.functions.invoke('fiscal-emit', {
+        body: { order_id: order.id, doc_type: 'nfce', amount: total, customer: { name: customer?.name || null }, items },
+      })
+      if (fx?.document?.status === 'authorized') fiscalNote = { status: 'authorized', url: fx.document.danfe_url }
+      else fiscalNote = { status: 'pending' }
+    } catch { fiscalNote = { status: 'pending' } }
+
     setBusy(false)
     setMovements((m) => [...newMovs, ...m])
-    setReceipt({ number: order.number, items, total, discount: discountValue, payments: pays, change, customer: customer?.name, notes: saleNotes, at: new Date() })
+    setReceipt({ number: order.number, items, total, discount: discountValue, payments: pays, change, customer: customer?.name, notes: saleNotes, at: new Date(), points: earnedPoints, fiscal: fiscalNote })
     resetSale(); loadProducts()
-    notify(`Venda #${order.number} registrada`, 'success')
+    notify(`Venda #${order.number} registrada${earnedPoints ? ` · +${earnedPoints} pts` : ''}`, 'success')
   }
 
   // ---------- Comandas (holds) ----------
@@ -452,6 +510,18 @@ export function POSPanel({ notify }) {
               <div className="relative w-28"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-admin-muted/40 text-xs">R$</span>
                 <input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0,00" className="w-full glass-input rounded-lg pl-7 pr-2 py-1.5 text-sm text-admin-text outline-none text-right" /></div>
             </div>
+            {/* Cupom */}
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-admin-sage">Cupom {appliedCoupon.code} · − {brl(couponValue)}</span>
+                <button onClick={() => { setAppliedCoupon(null); setCouponCode('') }} className="text-admin-muted/40 hover:text-admin-rose text-xs">remover</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input value={couponCode} onChange={(e) => setCouponCode(e.target.value)} placeholder="Cupom" className="flex-1 glass-input rounded-lg px-3 py-1.5 text-sm text-admin-text outline-none uppercase" />
+                <button onClick={applyCoupon} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">Aplicar</button>
+              </div>
+            )}
             <div className="flex items-center justify-between"><span className="text-admin-text font-medium">Total</span><span className="text-admin-champ text-xl font-medium">{brl(total)}</span></div>
 
             {/* Pagamentos adicionados */}
@@ -648,6 +718,8 @@ function ReceiptModal({ receipt, tenantName, onPrint, onClose }) {
           {receipt.payments.map((p, i) => (<div key={i} className="flex justify-between text-[11px]"><span>{PM_LABEL[p.method]}</span><span>{brl(p.amount)}</span></div>))}
           {receipt.change > 0 && <div className="flex justify-between text-[11px]"><span>Troco</span><span>{brl(receipt.change)}</span></div>}
           {receipt.notes && <p className="text-[11px] mt-2 border-t border-black/20 pt-1">Obs: {receipt.notes}</p>}
+          {receipt.points > 0 && <p className="text-[11px] mt-1 text-center">★ {receipt.points} pontos de fidelidade acumulados</p>}
+          {receipt.fiscal && <p className="text-[10px] mt-1 text-center">{receipt.fiscal.status === 'authorized' ? 'NFC-e autorizada' : 'NFC-e pendente (configurar emissão)'}</p>}
           <p className="text-center text-[10px] mt-3">Obrigado pela preferência!</p>
         </div>
         <div className="flex gap-3 mt-5">

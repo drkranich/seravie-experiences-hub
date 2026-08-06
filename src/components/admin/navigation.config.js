@@ -41,6 +41,7 @@ export const CORE_SECTIONS = [
       { key: 'delivery_hub', label: 'Hub Delivery', icon: 'cart', route: 'delivery_hub' },
       { key: 'fiscal', label: 'Emissão Fiscal', icon: 'check', route: 'fiscal' },
       { key: 'loyalty', label: 'Fidelidade', icon: 'star', route: 'loyalty' },
+      { key: 'client_exp', label: 'Experiências do Cliente', icon: 'spark', route: 'client_exp' },
       { key: 'receivables', label: 'Recebíveis', icon: 'chart', route: 'receivables' },
       { key: 'ecommerce', label: 'E-commerce', icon: 'cart', route: 'ecommerce', pages: [
         { key: 'ec.storefront', label: 'Vitrine', route: 'ecommerce' },
@@ -95,6 +96,7 @@ export const CORE_SECTIONS = [
     items: [
       { key: 'expansao', label: 'Expansão', icon: 'map', route: 'expansao' },
       { key: 'franqueados', label: 'Franqueados', icon: 'building', route: 'franqueados' },
+      { key: 'royalties', label: 'Royalties & Faturamento', icon: 'chart', route: 'royalties' },
       { key: 'implantacoes', label: 'Implantações', icon: 'layout', route: 'implantacoes' },
       { key: 'catalogo_oficial', label: 'Catálogo Oficial', icon: 'box', route: 'catalogo_oficial' },
       { key: 'standards', label: 'Experience Standards', icon: 'star', route: 'standards' },
