@@ -19,6 +19,7 @@ export const CORE_SECTIONS = [
         { key: 'exec.conversations', label: 'Últimas Conversas', route: 'conversations' },
       ]},
       { key: 'crm', label: 'Experience CRM', icon: 'user', route: 'crm', pages: [
+        { key: 'crm.pipeline', label: 'Pipeline (Negócios)', route: 'pipeline' },
         { key: 'crm.all', label: 'Todos os Clientes', route: 'crm' },
         { key: 'crm.leads', label: 'Leads', route: 'crm_leads' },
         { key: 'crm.companies', label: 'Empresas', route: 'crm_companies' },

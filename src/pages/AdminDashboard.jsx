@@ -15,6 +15,7 @@ import { CollectionManager } from '../components/admin/CollectionManager'
 import { collectionConfigs } from '../components/admin/collections.config'
 import { NewsletterInbox } from '../components/admin/NewsletterInbox'
 import { CRMPanel } from '../components/admin/CRMPanel'
+import { PipelinePanel } from '../components/admin/PipelinePanel'
 import { ConversationsInbox } from '../components/admin/ConversationsInbox'
 import { TicketsPanel } from '../components/admin/TicketsPanel'
 import { OperationsPanel } from '../components/admin/OperationsPanel'
@@ -104,6 +105,7 @@ export function AdminDashboard({ onExit }) {
     analytics: <AnalyticsPanel />,
     ai: <AIPanel notify={notify} />,
     crm: <CRMPanel notify={notify} />,
+    pipeline: <PipelinePanel notify={notify} />,
     conversations: <ConversationsInbox notify={notify} />,
     helpdesk: <TicketsPanel notify={notify} />,
     operations: <OperationsPanel notify={notify} />,

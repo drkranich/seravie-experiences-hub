@@ -230,6 +230,9 @@ function FormBuilder({ form, notify, onBack }) {
         <div><label className={lbl}>Título da experiência</label><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} onBlur={(e) => saveForm({ title: e.target.value })} className={inputCls} /></div>
         <div><label className={lbl}>Imagem de capa (URL)</label><input value={f.cover_url || ''} onChange={(e) => setF({ ...f, cover_url: e.target.value })} onBlur={(e) => saveForm({ cover_url: e.target.value || null })} className={inputCls} /></div>
         <div className="sm:col-span-2"><label className={lbl}>Mensagem final</label><input value={f.submit_message || ''} onChange={(e) => setF({ ...f, submit_message: e.target.value })} onBlur={(e) => saveForm({ submit_message: e.target.value })} className={inputCls} /></div>
+        {/* Spine: geração automática de lead no pipeline */}
+        <label className="flex items-center gap-2 text-sm text-admin-muted/70 sm:col-span-2 pt-1 border-t border-white/[0.05] mt-1"><input type="checkbox" checked={f.creates_lead !== false} onChange={(e) => { setF({ ...f, creates_lead: e.target.checked }); saveForm({ creates_lead: e.target.checked }) }} className="accent-admin-champ" />Gerar negócio no CRM automaticamente a cada resposta</label>
+        {f.creates_lead !== false && <div className="sm:col-span-2"><label className={lbl}>Etapa inicial no pipeline</label><GlassSelect value={f.lead_stage || 'new'} onChange={(v) => { setF({ ...f, lead_stage: v }); saveForm({ lead_stage: v }) }} options={[{ value: 'new', label: 'Novo Lead' }, { value: 'qualified', label: 'Qualificado' }, { value: 'proposal', label: 'Proposta' }]} /></div>}
       </div>
 
       <div className="grid lg:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] gap-4">
@@ -289,6 +292,27 @@ function FormBuilder({ form, notify, onBack }) {
                 </div>
               )}
               {!isStatic(sel.type) && <label className="flex items-center gap-2 text-sm text-admin-muted/70 pt-1"><input type="checkbox" checked={!!sel.required} onChange={(e) => saveBlock({ required: e.target.checked })} className="accent-admin-champ" />Resposta obrigatória</label>}
+              {/* Spine: mapear esta resposta para um campo do lead/negócio */}
+              {!isStatic(sel.type) && (
+                <div className="pt-2 border-t border-white/[0.05]">
+                  <label className={lbl}>Vincular ao CRM (opcional)</label>
+                  <GlassSelect value={sel.maps_to || ''} onChange={(v) => { setSel({ ...sel, maps_to: v || null }); saveBlock({ maps_to: v || null }) }}
+                    options={[
+                      { value: '', label: '— só guardar a resposta —' },
+                      { value: 'contact_name', label: 'Nome do contato' },
+                      { value: 'contact_email', label: 'E-mail do contato' },
+                      { value: 'contact_phone', label: 'Telefone do contato' },
+                      { value: 'contact_document', label: 'CPF / CNPJ' },
+                      { value: 'company', label: 'Empresa' },
+                      { value: 'segment', label: 'Segmento' },
+                      { value: 'deal_title', label: 'Título do negócio' },
+                      { value: 'deal_value', label: 'Valor do negócio' },
+                      { value: 'budget', label: 'Orçamento disponível' },
+                      { value: 'notes', label: 'Observações' },
+                    ]} />
+                  <p className="text-admin-muted/30 text-[10px] mt-1">O que o cliente responder aqui preenche este campo no negócio criado.</p>
+                </div>
+              )}
             </div>
           )}
         </div>
