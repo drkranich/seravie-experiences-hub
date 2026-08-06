@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 // Canais de atendimento. Cada tenant conecta as próprias contas (como no frete/marketplaces).
 const CHANNELS = [
@@ -78,13 +78,16 @@ const STATUS_LABEL = { connected: 'Conectado', disconnected: 'Desconectado', err
 const STATUS_STYLE = { connected: 'bg-admin-sage/10 text-admin-sage', disconnected: 'bg-white/[0.05] text-admin-muted/50', error: 'bg-admin-rose/10 text-admin-rose' }
 const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}`)
 
-export function MessagingChannels({ notify }) {
+const TEAMS = ['Suporte', 'Financeiro', 'Trocas & Devoluções', 'Técnico', 'Comercial']
+const PRIORITIES = [['low', 'Baixa'], ['normal', 'Normal'], ['high', 'Alta'], ['urgent', 'Urgente']]
+
+export function MessagingChannels({ notify, context = 'conversations' }) {
   const { profile } = useTenant()
   const tenantId = profile?.tenant_id
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({ credentials: {}, is_enabled: false })
+  const [form, setForm] = useState({ credentials: {}, is_enabled: false, settings: {} })
   const [reveal, setReveal] = useState({})
   const [saving, setSaving] = useState(false)
 
@@ -96,16 +99,17 @@ export function MessagingChannels({ notify }) {
     const ex = byKey(def.key)
     const creds = ex?.credentials || {}
     if (def.key === 'webchat' && !creds.widget_id) creds.widget_id = uuid().slice(0, 8)
-    setForm({ credentials: creds, is_enabled: ex?.is_enabled ?? false }); setReveal({}); setEditing(def)
+    setForm({ credentials: creds, is_enabled: ex?.is_enabled ?? false, settings: ex?.settings || { create_ticket: true, ticket_priority: 'normal', ticket_team: '' } }); setReveal({}); setEditing(def)
   }
   const setCred = (k, v) => setForm((f) => ({ ...f, credentials: { ...f.credentials, [k]: v } }))
+  const setSetting = (k, v) => setForm((f) => ({ ...f, settings: { ...f.settings, [k]: v } }))
 
   const save = async () => {
     if (!editing || !tenantId) return
     setSaving(true)
     const hasPrimary = !!String(form.credentials[editing.primary] || '').trim()
     const status = form.is_enabled && hasPrimary ? 'connected' : 'disconnected'
-    const payload = { tenant_id: tenantId, channel: editing.key, credentials: form.credentials, is_enabled: !!form.is_enabled, status, updated_at: new Date().toISOString() }
+    const payload = { tenant_id: tenantId, channel: editing.key, credentials: form.credentials, settings: form.settings || {}, is_enabled: !!form.is_enabled, status, updated_at: new Date().toISOString() }
     const { error } = await supabase.from('messaging_channels').upsert(payload, { onConflict: 'tenant_id,channel' })
     setSaving(false)
     if (error) return notify('Erro ao salvar: ' + error.message, 'error')
@@ -119,11 +123,11 @@ export function MessagingChannels({ notify }) {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="font-serif text-4xl text-admin-text">Canais de Atendimento</h1><p className="text-admin-muted/60 text-sm mt-1">Conecte WhatsApp, Instagram, Messenger, Telegram, e-mail e chat do site</p></div>
+      <div className="mb-6"><h1 className="font-serif text-4xl text-admin-text">Canais de Atendimento</h1><p className="text-admin-muted/60 text-sm mt-1">{context === 'helpdesk' ? 'Conecte suas contas — as mensagens recebidas viram chamados no Help Desk' : 'Conecte WhatsApp, Instagram, Messenger, Telegram, e-mail e chat do site'}</p></div>
 
       <div className="glass-soft rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
         <Icon name="mail" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
-        <p className="text-admin-muted/60 text-xs leading-relaxed">Cada loja conecta as próprias contas (isoladas por tenant). Aqui você deixa as conexões prontas; o envio/recebimento em tempo real de cada canal é ativado com o app aprovado na plataforma (WhatsApp Cloud API, Meta, etc.), junto da etapa de webhooks.</p>
+        <p className="text-admin-muted/60 text-xs leading-relaxed">Cada loja conecta as próprias contas (isoladas por tenant). Ao conectar, defina em <strong>Regras de atendimento</strong> se as mensagens recebidas devem abrir um chamado automaticamente no Help Desk, com qual prioridade e equipe. O recebimento em tempo real de cada canal é ativado com o app aprovado na plataforma (WhatsApp Cloud API, Meta, etc.), na etapa de webhooks.</p>
       </div>
 
       {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p> : (
@@ -168,6 +172,22 @@ export function MessagingChannels({ notify }) {
               ))}
             </div>
             <label className="flex items-center gap-3 mt-4 cursor-pointer"><input type="checkbox" checked={!!form.is_enabled} onChange={(e) => setForm((f) => ({ ...f, is_enabled: e.target.checked }))} className="w-4 h-4 rounded" /><span className="text-sm text-admin-muted">Ativar canal</span></label>
+
+            {/* Regras de atendimento — mensagem recebida vira chamado no Help Desk */}
+            {editing.key !== 'webchat' && (
+              <div className="mt-5 pt-4 border-t border-white/[0.06] space-y-3">
+                <p className="text-[11px] tracking-wider uppercase text-admin-champ/70">Regras de atendimento</p>
+                <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={form.settings?.create_ticket !== false} onChange={(e) => setSetting('create_ticket', e.target.checked)} className="w-4 h-4 rounded" /><span className="text-sm text-admin-muted">Abrir chamado no Help Desk a cada nova mensagem</span></label>
+                {form.settings?.create_ticket !== false && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Prioridade do chamado</label><GlassSelect value={form.settings?.ticket_priority || 'normal'} onChange={(v) => setSetting('ticket_priority', v)} options={PRIORITIES.map(([value, label]) => ({ value, label }))} /></div>
+                    <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Equipe responsável</label><GlassSelect value={form.settings?.ticket_team || ''} onChange={(v) => setSetting('ticket_team', v)} options={[{ value: '', label: '— nenhuma —' }, ...TEAMS.map((t) => ({ value: t, label: t }))]} /></div>
+                  </div>
+                )}
+                <p className="text-admin-muted/30 text-[10px]">Quando o webhook do canal estiver ativo, cada mensagem recebida criará (ou atualizará) um chamado seguindo estas regras.</p>
+              </div>
+            )}
+
             <div className="flex gap-3 mt-6"><button onClick={save} disabled={saving} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar conexão'}</button><button onClick={() => setEditing(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
           </div>
         </div>

@@ -31,6 +31,7 @@ export const CORE_SECTIONS = [
       ]},
       { key: 'helpdesk', label: 'Help Desk', icon: 'check', route: 'helpdesk', pages: [
         { key: 'hd.tickets', label: 'Chamados', route: 'helpdesk' },
+        { key: 'hd.channels', label: 'Canais de Atendimento', route: 'hd_channels' },
         { key: 'hd.sla', label: 'SLA', route: 'sla' },
         { key: 'hd.nps', label: 'Pesquisas NPS', route: 'nps' },
         { key: 'hd.kb', label: 'Base de Conhecimento', route: 'knowledge' },

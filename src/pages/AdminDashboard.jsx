@@ -166,6 +166,7 @@ export function AdminDashboard({ onExit }) {
     dre: <DrePanel notify={notify} />,
     nps: <NpsPanel notify={notify} />,
     msgchannels: <MessagingChannels notify={notify} />,
+    hd_channels: <MessagingChannels notify={notify} context="helpdesk" />,
     salesview: <SalesView notify={notify} />,
     stockview: <StockView notify={notify} />,
     crm_leads: <ContactsView segment="leads" notify={notify} />,
