@@ -84,6 +84,19 @@ export function DocumentStudio({ notify }) {
     else notify('Link desativado', 'success')
   }
 
+  const [invoicing, setInvoicing] = useState(false)
+  const issueInvoice = async () => {
+    setInvoicing(true)
+    const { data, error } = await supabase.functions.invoke('document-invoice', { body: { document_id: editing.id } })
+    setInvoicing(false)
+    if (error || data?.error) {
+      const msg = { stripe_not_configured: 'Configure o Stripe na plataforma primeiro.', connect_required: 'Conecte a conta Stripe (Recebimentos) antes de faturar.', contact_email_required: 'O contato precisa ter e-mail.', invalid_amount: 'Vincule um orçamento com valor.', invoice_exists: 'Este documento já tem uma fatura emitida.' }[data?.error] || data?.detail || 'Erro ao emitir fatura'
+      return notify(msg, data?.error === 'invoice_exists' ? 'info' : 'error')
+    }
+    await setField({ stripe_invoice_id: data.invoice_id, stripe_invoice_url: data.hosted_invoice_url, invoice_status: data.status })
+    notify('Fatura emitida e enviada ao cliente', 'success')
+  }
+
   const setBlock = (i, patch) => { setBlocks((xs) => xs.map((b, j) => j === i ? { ...b, ...patch } : b)); setDirty(true) }
   const addBlock = (type) => { setBlocks((xs) => [...xs, { type, ...(type === 'cover' ? { title: '{{title}}' } : {}) }]); setDirty(true) }
   const removeBlock = (i) => { setBlocks((xs) => xs.filter((_, j) => j !== i)); setSel(null); setDirty(true) }
@@ -134,6 +147,11 @@ export function DocumentStudio({ notify }) {
         <div className="flex items-center gap-3"><button onClick={() => { setEditing(null); load() }} className="text-[11px] tracking-wider uppercase text-admin-muted/60 hover:text-admin-champ">← Propostas</button><StatusBadge s={editing.status} /></div>
         <div className="flex items-center gap-2">
           {editing.public_enabled && <a href={publicUrl(editing.slug)} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Ver ao vivo</a>}
+          {editing.stripe_invoice_id ? (
+            <a href={editing.stripe_invoice_url || '#'} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-admin-sage/15 text-admin-sage">Fatura {editing.invoice_status === 'paid' ? 'paga ✓' : 'emitida'}</a>
+          ) : mayEdit && ['accepted', 'signed'].includes(editing.status) && editing.quote_id && (
+            <button onClick={issueInvoice} disabled={invoicing} className="text-xs px-4 py-2 rounded-xl bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 disabled:opacity-50">{invoicing ? 'Emitindo…' : 'Emitir fatura'}</button>
+          )}
           {mayEdit && dirty && <button onClick={save} className="text-xs px-4 py-2 rounded-xl bg-admin-sage/15 text-admin-sage hover:bg-admin-sage/25">Salvar</button>}
           {mayEdit && <button onClick={publish} className={`text-xs px-4 py-2 rounded-xl ${editing.public_enabled ? 'bg-admin-gold/15 text-admin-gold' : 'bg-admin-champ/15 text-admin-champ'}`}>{editing.public_enabled ? 'Despublicar' : 'Publicar link'}</button>}
         </div>
