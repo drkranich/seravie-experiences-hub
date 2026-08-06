@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
+import { VERTICAL_CORES } from './navigation.config'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -71,7 +72,10 @@ export function Overview({ go }) {
         floriculture: catalog('floriculture', 'Floricultura', 'leaf'),
         beauty: catalog('beauty', 'Beauty', 'heart'),
       }
-      const segs = (await Promise.all(active.filter((v) => L[v]).map((v) => L[v]()))).filter(Boolean)
+      // Toda frente ativa aparece: usa o builder específico quando existe; senão,
+      // um fallback baseado no VERTICAL_CORES (rótulo/ícone) com contagem por tag.
+      const builderFor = (v) => L[v] || catalog(v, VERTICAL_CORES[v]?.label || v, VERTICAL_CORES[v]?.icon || 'leaf')
+      const segs = (await Promise.all(active.map((v) => builderFor(v)()))).filter(Boolean)
       setSegments(segs)
 
       // ---- Feed de atenção ----
