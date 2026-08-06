@@ -59,6 +59,7 @@ import { SuppliersPanel } from '../components/admin/SuppliersPanel'
 import { NetworkHubPanel } from '../components/admin/NetworkHubPanel'
 import { LegalPanel } from '../components/admin/LegalPanel'
 import { FlowPanel } from '../components/admin/FlowPanel'
+import { QuoteStudio } from '../components/admin/QuoteStudio'
 import { KDSPanel } from '../components/admin/KDSPanel'
 import { TablesPanel } from '../components/admin/TablesPanel'
 import { DeliveryHubPanel } from '../components/admin/DeliveryHubPanel'
@@ -183,6 +184,7 @@ export function AdminDashboard({ onExit }) {
     network_hub: <NetworkHubPanel notify={notify} />,
     legal: <LegalPanel notify={notify} />,
     flow: <FlowPanel notify={notify} />,
+    quotes: <QuoteStudio notify={notify} />,
     kds: <KDSPanel notify={notify} />,
     tables: <TablesPanel notify={notify} />,
     delivery_hub: <DeliveryHubPanel notify={notify} />,

@@ -109,6 +109,7 @@ export const CORE_SECTIONS = [
     group: 'Seravie Hub',
     items: [
       { key: 'flow', label: 'Seravie Flow', icon: 'tag', route: 'flow' },
+      { key: 'quotes', label: 'Seravie Quote Studio', icon: 'chart', route: 'quotes' },
       { key: 'suppliers', label: 'Seravie Suppliers', icon: 'box', route: 'suppliers' },
       { key: 'network_hub', label: 'Seravie Network', icon: 'user', route: 'network_hub' },
       { key: 'legal', label: 'Termos & Conformidade', icon: 'check', route: 'legal' },
