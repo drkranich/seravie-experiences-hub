@@ -105,7 +105,7 @@ export function KdsBoard({ kind = 'kitchen', tv = false, soundOn = true, station
   if (loading) return <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando produção…</p>
 
   return (
-    <div className={`grid gap-3 ${tv ? 'grid-cols-7' : 'grid-flow-col auto-cols-[minmax(240px,1fr)] overflow-x-auto pb-3'}`} style={tv ? {} : { scrollbarWidth: 'thin' }}>
+    <div className={`grid gap-2.5 ${tv ? 'grid-cols-7' : 'grid-cols-2 sm:grid-cols-4 xl:grid-cols-7'}`}>
       {preset.stages.map((stage) => {
         const list = shown.filter((t) => t.status === stage.status)
         const isOver = dragOver === stage.status
