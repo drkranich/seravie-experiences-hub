@@ -148,9 +148,9 @@ export function TicketsPanel({ notify }) {
   const teams = ['Suporte', 'Financeiro', 'Trocas & Devoluções', 'Técnico', 'Comercial']
 
   return (
-    <div className="flex h-[calc(100vh-64px)] -m-6 md:-m-8">
+    <div className="flex gap-0 h-[calc(100vh-64px)]">
       {/* Coluna 1 — Filas */}
-      <div className="w-52 shrink-0 border-r border-white/[0.06] flex flex-col bg-white/[0.01]">
+      <div className="w-48 shrink-0 border-r border-white/[0.06] flex flex-col bg-white/[0.01]">
         <div className="p-4">
           {mayEdit && <button onClick={() => setShowForm(true)} className="w-full flex items-center justify-center gap-2 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm mb-4 transition-colors"><Icon name="plus" className="w-4 h-4" />Novo chamado</button>}
           <p className="text-[10px] tracking-wider uppercase text-admin-muted/40 mb-2 px-1">Filas</p>
