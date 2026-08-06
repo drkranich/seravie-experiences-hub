@@ -31,21 +31,18 @@ export function TicketCard({ t, now, stage, onAdvance, onCancel, onDragStart, tv
     <div
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart && onDragStart(e, t)}
-      className={`group relative rounded-2xl border ${accentBorder} bg-white/[0.03] backdrop-blur-sm ${tv ? 'p-4' : 'p-3'} transition-all hover:bg-white/[0.05] hover:-translate-y-0.5 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} animate-[fadeUp_0.4s_ease-out]`}
+      className={`group relative rounded-2xl border ${accentBorder} bg-white/[0.03] backdrop-blur-sm ${tv ? 'p-4' : 'p-3.5'} transition-all hover:bg-white/[0.05] hover:-translate-y-0.5 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''} animate-[fadeUp_0.4s_ease-out]`}
     >
-      {/* topo: referência + canal + timer */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className={`font-serif ${tv ? 'text-2xl' : 'text-base'} text-admin-text leading-none`}>{t.reference || '—'}</span>
-            <span className="flex items-center gap-1 text-[9px] text-admin-muted/60 uppercase tracking-wider"><Icon name={ch.icon} className="w-3 h-3" />{ch.label}</span>
-          </div>
-          <div className="flex items-center gap-2 mt-1 text-[11px] text-admin-muted/60">
-            {t.table_label && t.table_label !== '—' && <span>{t.table_label}</span>}
-            {t.customer_name && <span className="truncate">· {t.customer_name}</span>}
-          </div>
-        </div>
+      {/* topo: referência à esquerda, timer à direita (sem sobrepor) */}
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className={`font-serif ${tv ? 'text-2xl' : 'text-lg'} text-admin-text leading-none`}>{t.reference || '—'}</span>
         <KdsTimer since={t.created_at} slaSec={t.sla_seconds} now={now} big={tv} />
+      </div>
+      {/* segunda linha: canal + mesa + cliente */}
+      <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap mb-2 text-[10px] text-admin-muted/60">
+        <span className="flex items-center gap-1 uppercase tracking-wider"><Icon name={ch.icon} className="w-3 h-3" />{ch.label}</span>
+        {t.table_label && t.table_label !== '—' && <span>· {t.table_label}</span>}
+        {t.customer_name && <span className="truncate">· {t.customer_name}</span>}
       </div>
 
       {/* tags premium */}

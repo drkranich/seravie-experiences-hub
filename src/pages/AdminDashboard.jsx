@@ -75,6 +75,9 @@ import { ScaffoldPage } from '../components/admin/ScaffoldPage'
 import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.config'
 
 const FULLSCREEN = ['conversations', 'helpdesk', 'pos']
+// Rotas que usam a largura total da tela (sem o limite max-w-6xl), mas mantendo
+// o respiro das margens — ideal para painéis operacionais largos como o KDS.
+const WIDE = ['kds']
 const ROUTE_LABELS = { catalog: 'Catálogo', messages: 'Formulários', franchise: 'Franquias' }
 
 export function AdminDashboard({ onExit }) {
@@ -371,7 +374,7 @@ export function AdminDashboard({ onExit }) {
           </div>
         )}
 
-        <main className={`flex-1 ${FULLSCREEN.includes(active) ? '' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>{needsOnboarding ? <Onboarding onDone={loadVerticals} /> : content}</main>
+        <main className={`flex-1 ${FULLSCREEN.includes(active) ? '' : WIDE.includes(active) ? 'p-6 lg:p-10 w-full' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>{needsOnboarding ? <Onboarding onDone={loadVerticals} /> : content}</main>
       </div>
 
       <div className="fixed bottom-6 right-6 z-50 space-y-3 pointer-events-none">
