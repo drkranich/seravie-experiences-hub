@@ -109,7 +109,7 @@ export function KDSPanel({ notify }) {
       )}
       {tab === 'map' && <KdsKitchenMap kind={kind} />}
       {tab === 'stations' && <KdsStations notify={notify} kind={kind} />}
-      {tab === 'team' && <KdsTeam kind={kind} />}
+      {tab === 'team' && <KdsTeam kind={kind} notify={notify} />}
       {tab === 'assistant' && <KdsAssistant kind={kind} />}
       {tab === 'analytics' && <KdsAnalytics kind={kind} />}
       {tab === 'history' && <KdsHistory kind={kind} />}
