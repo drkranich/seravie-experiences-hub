@@ -5,6 +5,8 @@ import { Icon, GlassSelect, GlassDate } from './ui'
 import { FlowImageField } from './FlowImageField'
 import { AttachButton, PendingAttachments, AttachmentList } from './AttachmentField'
 import { exportCsv } from '../../lib/export'
+import { parseCsvLower } from '../../lib/csv'
+import { printFicha, shareFicha } from '../../lib/employeePdf'
 
 const STATUS = { active: ['Ativo', 'text-admin-sage bg-admin-sage/10'], inactive: ['Inativo', 'text-admin-muted/40 bg-white/[0.04]'], vacation: ['Férias', 'text-admin-gold bg-admin-gold/10'], terminated: ['Desligado', 'text-admin-rose bg-admin-rose/10'] }
 // Setores/categorias padrão (o usuário pode digitar outro livremente)
@@ -20,33 +22,6 @@ const emptyForm = () => ({
 
 // Colunas da planilha-modelo Seravie (ordem fixa)
 const TEMPLATE_COLS = ['nome', 'setor', 'cargo', 'email', 'telefone', 'aniversario', 'admissao', 'status']
-
-// Parser CSV (aspas + separador auto ; ou ,). Retorna objetos pela 1ª linha (cabeçalho).
-function parseCsv(text) {
-  const clean = text.replace(/^﻿/, '') // remove BOM
-  // detecta separador pela 1ª linha
-  const firstLine = clean.split(/\r?\n/)[0] || ''
-  const sep = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : ','
-  const rows = []
-  let field = '', row = [], inQ = false
-  for (let i = 0; i < clean.length; i++) {
-    const c = clean[i]
-    if (inQ) {
-      if (c === '"' && clean[i + 1] === '"') { field += '"'; i++ }
-      else if (c === '"') inQ = false
-      else field += c
-    } else {
-      if (c === '"') inQ = true
-      else if (c === sep) { row.push(field); field = '' }
-      else if (c === '\n' || c === '\r') { if (field !== '' || row.length) { row.push(field); rows.push(row); row = []; field = '' } if (c === '\r' && clean[i + 1] === '\n') i++ }
-      else field += c
-    }
-  }
-  if (field !== '' || row.length) { row.push(field); rows.push(row) }
-  if (!rows.length) return []
-  const header = rows[0].map((h) => h.trim().toLowerCase())
-  return rows.slice(1).filter((r) => r.some((c) => c.trim())).map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] || '').trim()])))
-}
 
 // Cabeçalho de seção do formulário
 function Section({ title }) {
@@ -64,17 +39,27 @@ export function TeamPanel({ notify }) {
   const [importing, setImporting] = useState(false)
   const [preview, setPreview] = useState([])
   const [teamSheet, setTeamSheet] = useState('') // planilha geral da equipe (arquivo único)
+  const [tenantName, setTenantName] = useState('Seravie Experiences')
   const fileRef = useRef(null)
 
   const load = async () => {
     setLoading(true)
     const { data } = await supabase.from('employees').select('*').order('name')
     setEmployees(data || [])
-    // planilha geral fica em settings do tenant
-    const { data: t } = await supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle()
+    // planilha geral + nome ficam no tenant
+    const { data: t } = await supabase.from('tenants').select('name, settings').eq('id', tenantId).maybeSingle()
     setTeamSheet(t?.settings?.team_sheet_url || '')
+    if (t?.name) setTenantName(t.name)
     setLoading(false)
   }
+
+  // Ficha do colaborador: PDF (impressão) e Compartilhar (Web Share / copiar)
+  const onShare = async (e) => {
+    const r = await shareFicha(e)
+    if (r === 'copied') notify('Resumo da ficha copiado', 'success')
+    else if (r === 'error') notify('Não foi possível compartilhar', 'error')
+  }
+  const onPdf = (e) => { if (!printFicha(e, tenantName)) notify('Permita pop-ups para gerar o PDF', 'error') }
   useEffect(() => { if (tenantId) load() }, [tenantId])
 
   const openNew = () => setModal({ form: emptyForm(), editingId: null })
@@ -113,7 +98,7 @@ export function TeamPanel({ notify }) {
   const onImportFile = async (file) => {
     if (!file) return
     const text = await file.text()
-    const rows = parseCsv(text)
+    const rows = parseCsvLower(text)
     if (!rows.length) return notify('Planilha vazia ou inválida', 'error')
     setPreview(rows.slice(0, 200))
     setImportOpen(true)
@@ -192,10 +177,15 @@ export function TeamPanel({ notify }) {
                 </div>
                 <div className="mt-2 space-y-0.5">
                   {e.email && <p className="text-admin-muted/50 text-[11px] truncate">{e.email}</p>}
-                  <div className="flex gap-3 flex-wrap">
+                  <div className="flex gap-3 flex-wrap items-center">
                     {e.registration_file && <a href={e.registration_file} target="_blank" rel="noreferrer" className="text-admin-champ text-[11px] hover:underline">Ficha ↗</a>}
                     {Array.isArray(e.documents) && e.documents.length > 0 && <span className="text-admin-muted/40 text-[11px]">{e.documents.length} doc(s)</span>}
                   </div>
+                </div>
+                {/* Ações da ficha: PDF + Compartilhar */}
+                <div className="flex gap-1.5 mt-3 pt-3 border-t border-white/[0.05]">
+                  <button onClick={() => onPdf(e)} className="flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ transition-colors" title="Gerar ficha em PDF"><Icon name="download" className="w-3.5 h-3.5" />Ficha PDF</button>
+                  <button onClick={() => onShare(e)} className="flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ transition-colors" title="Compartilhar ficha"><Icon name="share" className="w-3.5 h-3.5" />Compartilhar</button>
                 </div>
               </div>
             )

@@ -101,6 +101,15 @@ export function Icon({ name, className = 'w-5 h-5' }) {
     check: <path d="M5 12l4 4 10-11" />,
     x: <path d="M6 6l12 12M18 6L6 18" />,
     upload: <path d="M12 16V4M7 9l5-5 5 5M5 20h14" />,
+    download: <path d="M12 4v12M7 11l5 5 5-5M5 20h14" />,
+    share: (
+      <>
+        <circle cx="18" cy="5" r="2.5" />
+        <circle cx="6" cy="12" r="2.5" />
+        <circle cx="18" cy="19" r="2.5" />
+        <path d="M8.2 10.8l7.6-4.6M8.2 13.2l7.6 4.6" />
+      </>
+    ),
     search: (
       <>
         <circle cx="11" cy="11" r="7" />

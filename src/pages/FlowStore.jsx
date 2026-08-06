@@ -1,10 +1,43 @@
 import { useState, useEffect, useMemo } from 'react'
+import QRCode from 'qrcode'
 import { supabase } from '../lib/supabase'
 import { routeParam, routeQuery } from '../lib/publicRoute'
+import { uploadTo } from '../lib/storage'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const priceOf = (p) => (p.promo_price != null && p.promo_price > 0 ? p.promo_price : p.price)
 const KIND_LABEL = { quarto: 'Quarto', mesa: 'Mesa', chale: 'Chalé', suite: 'Suíte', loja: 'Loja', setor: 'Setor', geladeira: 'Frigobar', adega: 'Adega', prateleira: 'Prateleira', expositor: 'Expositor', evento: 'Evento', piscina: 'Piscina', spa: 'Spa', mercado: 'Mercado autônomo' }
+
+// Rótulo amigável do método de pagamento vindo da config do tenant.
+const METHOD_LABEL = { card: 'Cartão', pix: 'PIX', pix_static: 'PIX', manual: 'No local' }
+
+// Bloco do PIX estático: mostra a chave (copiável) e um QR Code opcional.
+function PixStaticBox({ cfg, onCopy }) {
+  const [qr, setQr] = useState('')
+  useEffect(() => {
+    // Prioriza a imagem de QR informada pelo lojista; senão gera a partir da chave.
+    if (cfg.pix_qr_url) { setQr(cfg.pix_qr_url); return }
+    if (cfg.pix_key) {
+      QRCode.toDataURL(cfg.pix_key, { margin: 1, width: 360, color: { dark: '#14160f', light: '#f4f0e6' } }).then(setQr).catch(() => setQr(''))
+    }
+  }, [cfg.pix_key, cfg.pix_qr_url])
+  return (
+    <div className="rounded-xl border border-gold/20 bg-white/[0.03] p-3.5 space-y-3">
+      {qr && <img src={qr} alt="QR PIX" className="w-40 h-40 mx-auto rounded-lg bg-[#f4f0e6] p-1.5" />}
+      {cfg.pix_key && (
+        <div>
+          <p className="text-ivory/45 text-[10px] uppercase tracking-widerx mb-1">Chave PIX{cfg.pix_key_type ? ` · ${cfg.pix_key_type}` : ''}</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 min-w-0 truncate text-ivory text-sm bg-white/[0.05] rounded-lg px-3 py-2">{cfg.pix_key}</code>
+            <button onClick={() => onCopy(cfg.pix_key)} className="shrink-0 text-[10px] uppercase tracking-widerx text-gold border border-gold/40 rounded-lg px-3 py-2 hover:bg-gold/10">Copiar</button>
+          </div>
+        </div>
+      )}
+      {cfg.pix_holder && <p className="text-ivory/50 text-xs">Favorecido: <span className="text-ivory/80">{cfg.pix_holder}</span></p>}
+      {cfg.pix_instructions && <p className="text-ivory/45 text-xs whitespace-pre-wrap">{cfg.pix_instructions}</p>}
+    </div>
+  )
+}
 
 export function FlowStore() {
   const code = routeParam('flow')
@@ -12,14 +45,18 @@ export function FlowStore() {
   const totem = params.get('totem') === '1' // modo autoatendimento (quiosque, tela cheia)
   const [point, setPoint] = useState(null)
   const [products, setProducts] = useState([])
+  const [pay, setPay] = useState(null) // config pública de pagamento vinda do prepare
   const [loading, setLoading] = useState(true)
   const [cart, setCart] = useState({})
   const [openCart, setOpenCart] = useState(false)
   const [reference, setReference] = useState('')
   const [customer, setCustomer] = useState('')
+  const [phone, setPhone] = useState('')
   const [notes, setNotes] = useState('')
   const [tip, setTip] = useState(0)
-  const [method, setMethod] = useState('card')
+  const [method, setMethod] = useState('')
+  const [receiptUrl, setReceiptUrl] = useState('')
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [done, setDone] = useState(params.get('paid') === '1' ? 'paid' : null)
   const [err, setErr] = useState('')
@@ -33,6 +70,15 @@ export function FlowStore() {
         const { data: pr } = await supabase.from('flow_products').select('*').eq('tenant_id', pt.tenant_id).eq('active', true).or(`point_id.eq.${pt.id},point_id.is.null`).order('sort_order').order('name')
         setProducts(pr || [])
       }
+      // Busca a config pública de pagamento do tenant (PIX estático, cartão, etc.)
+      try {
+        const { data: prep } = await supabase.functions.invoke('flow-order', { body: { code, prepare: true } })
+        if (prep?.payment) {
+          setPay(prep.payment)
+          const first = (prep.payment.methods || [])[0]
+          if (first) setMethod(first)
+        }
+      } catch { /* segue com pagamento no local */ }
       setLoading(false)
     })()
   }, [code])
@@ -44,22 +90,47 @@ export function FlowStore() {
   const total = subtotal + Number(tip || 0)
   const count = cartLines.reduce((s, l) => s + l.qty, 0)
 
+  // Métodos disponíveis (da config do tenant) com fallback para pagar no local.
+  const methods = (pay?.methods && pay.methods.length ? pay.methods : ['manual'])
+  const isPixStatic = method === 'pix_static'
+  const requireReceipt = isPixStatic && pay?.require_receipt !== false
+
   const categories = useMemo(() => {
     const map = {}
     products.forEach((p) => { const c = p.category || 'Itens'; (map[c] = map[c] || []).push(p) })
     return Object.entries(map)
   }, [products])
 
+  const copy = (txt) => { navigator.clipboard?.writeText(txt) }
+
+  const onReceiptFile = async (file) => {
+    if (!file) return
+    setUploadingReceipt(true); setErr('')
+    const { url, error } = await uploadTo(file, { bucket: 'flow', folder: 'comprovantes', accept: 'any', maxMB: 10 })
+    setUploadingReceipt(false)
+    if (error) { setErr('Não foi possível enviar o comprovante: ' + error); return }
+    setReceiptUrl(url)
+  }
+
   const checkout = async () => {
     if (!cartLines.length) return
+    if (requireReceipt && !receiptUrl) { setErr('Anexe o comprovante do PIX para concluir.'); return }
     setErr(''); setPlacing(true)
     const { data, error } = await supabase.functions.invoke('flow-order', {
-      body: { code, items: cartLines.map((l) => ({ product_id: l.p.id, qty: l.qty })), reference, customer_name: customer, tip: Number(tip || 0), notes, payment_method: method, origin: window.location.origin },
+      body: {
+        code,
+        items: cartLines.map((l) => ({ product_id: l.p.id, qty: l.qty })),
+        reference, customer_name: customer, customer_phone: phone,
+        tip: Number(tip || 0), notes, payment_method: method,
+        receipt_url: receiptUrl || undefined, origin: window.location.origin,
+      },
     })
     setPlacing(false)
     if (error || data?.error) return setErr('Não foi possível concluir o pedido. Tente novamente.')
     if (data?.checkout_url) { window.location.href = data.checkout_url; return }
-    setDone(method === 'manual' ? 'manual' : 'pending'); setCart({}); setOpenCart(false)
+    // pix estático com comprovante -> conferência; manual -> no local; demais -> pendente
+    setDone(isPixStatic ? 'receipt' : method === 'manual' ? 'manual' : 'pending')
+    setCart({}); setOpenCart(false); setReceiptUrl('')
   }
 
   const bg = { backgroundImage: 'radial-gradient(70% 50% at 80% 0%, rgba(214,196,154,0.14), transparent 60%), linear-gradient(170deg, #14160f 0%, #0b0a08 100%)' }
@@ -70,8 +141,13 @@ export function FlowStore() {
   if (done) return (
     <div className="min-h-screen flex flex-col items-center justify-center text-center px-6" style={bg}>
       <div className="w-16 h-16 rounded-full border-2 border-gold/60 text-gold flex items-center justify-center mb-6"><svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l4 4 10-11" /></svg></div>
-      <h1 className="font-serif text-3xl text-ivory">{done === 'paid' ? 'Pagamento confirmado!' : 'Pedido registrado!'}</h1>
-      <p className="text-ivory/60 mt-3 max-w-sm">{done === 'manual' ? 'Seu pedido foi enviado. O pagamento será feito no local.' : done === 'paid' ? 'Recebemos seu pagamento. Seu pedido já está a caminho.' : 'Seu pedido foi enviado ao estabelecimento e será preparado. Se escolheu pagar online, conclua o pagamento.'}</p>
+      <h1 className="font-serif text-3xl text-ivory">{done === 'paid' ? 'Pagamento confirmado!' : done === 'receipt' ? 'Comprovante recebido!' : 'Pedido registrado!'}</h1>
+      <p className="text-ivory/60 mt-3 max-w-sm">{
+        done === 'manual' ? 'Seu pedido foi enviado. O pagamento será feito no local.'
+          : done === 'paid' ? 'Recebemos seu pagamento. Seu pedido já está a caminho.'
+          : done === 'receipt' ? 'Seu comprovante foi enviado e está em conferência. Assim que confirmado, seu pedido será preparado.'
+          : 'Seu pedido foi enviado ao estabelecimento e será preparado. Se escolheu pagar online, conclua o pagamento.'
+      }</p>
       <button onClick={() => { setDone(null) }} className="mt-8 bg-gold text-ink px-7 py-3 text-[11px] tracking-widerx uppercase">Fazer outro pedido</button>
     </div>
   )
@@ -171,6 +247,7 @@ export function FlowStore() {
                 <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder={`Nº do ${KIND_LABEL[point.kind]?.toLowerCase() || 'ponto'}`} className="bg-white/[0.04] border border-gold/20 rounded-xl px-3 py-2.5 text-ivory placeholder-ivory/35 text-sm outline-none" />
                 <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Seu nome (opcional)" className="bg-white/[0.04] border border-gold/20 rounded-xl px-3 py-2.5 text-ivory placeholder-ivory/35 text-sm outline-none" />
               </div>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="WhatsApp / telefone (para contato)" className="w-full bg-white/[0.04] border border-gold/20 rounded-xl px-3 py-2.5 text-ivory placeholder-ivory/35 text-sm outline-none" />
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Observações (opcional)" className="w-full bg-white/[0.04] border border-gold/20 rounded-xl px-3 py-2.5 text-ivory placeholder-ivory/35 text-sm outline-none resize-none" />
               <div className="flex items-center gap-2">
                 <span className="text-ivory/50 text-xs">Gorjeta:</span>
@@ -178,18 +255,44 @@ export function FlowStore() {
               </div>
               <div>
                 <p className="text-ivory/50 text-xs mb-1.5">Pagamento</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {[['card', 'Cartão'], ['pix', 'PIX'], ['manual', 'No local']].map(([m, label]) => (
-                    <button key={m} onClick={() => setMethod(m)} className={`text-xs py-2.5 rounded-xl border transition-colors ${method === m ? 'border-gold bg-gold/15 text-gold' : 'border-gold/20 text-ivory/60'}`}>{label}</button>
+                <div className={`grid gap-2 ${methods.length >= 3 ? 'grid-cols-3' : methods.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {methods.map((m) => (
+                    <button key={m} onClick={() => { setMethod(m); setReceiptUrl(''); setErr('') }} className={`text-xs py-2.5 rounded-xl border transition-colors ${method === m ? 'border-gold bg-gold/15 text-gold' : 'border-gold/20 text-ivory/60'}`}>{METHOD_LABEL[m] || m}</button>
                   ))}
                 </div>
               </div>
+
+              {/* PIX estático: chave/QR + upload de comprovante */}
+              {isPixStatic && pay && (
+                <div className="space-y-3 pt-1">
+                  <PixStaticBox cfg={pay} onCopy={copy} />
+                  <div>
+                    <p className="text-ivory/50 text-xs mb-1.5">Comprovante do PIX{requireReceipt ? ' *' : ' (opcional)'}</p>
+                    {receiptUrl ? (
+                      <div className="flex items-center gap-2 bg-admin-sage/10 border border-admin-sage/30 rounded-xl px-3 py-2.5">
+                        <span className="text-admin-sage text-xs flex-1">✓ Comprovante anexado</span>
+                        <a href={receiptUrl} target="_blank" rel="noreferrer" className="text-gold text-[11px] hover:underline">Ver</a>
+                        <button onClick={() => setReceiptUrl('')} className="text-ivory/40 text-[11px] hover:text-rose-300">Trocar</button>
+                      </div>
+                    ) : (
+                      <label className={`flex items-center justify-center gap-2 border border-dashed border-gold/30 rounded-xl px-3 py-3 text-xs cursor-pointer hover:bg-white/[0.03] ${uploadingReceipt ? 'opacity-60 pointer-events-none' : 'text-ivory/60'}`}>
+                        <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { onReceiptFile(e.target.files[0]); e.target.value = '' }} />
+                        {uploadingReceipt ? 'Enviando…' : 'Anexar comprovante (foto ou PDF)'}
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-between mt-4 mb-3 text-ivory">
               <span className="text-ivory/60">Total</span><span className="font-serif text-2xl text-gold">{brl(total)}</span>
             </div>
-            <button onClick={checkout} disabled={placing} className="w-full bg-gold text-ink py-4 rounded-xl text-[12px] tracking-widerx uppercase font-medium disabled:opacity-60">
-              {placing ? 'Enviando…' : method === 'card' ? 'Pagar com cartão' : method === 'pix' ? 'Gerar pedido (PIX)' : 'Enviar pedido'}
+            <button onClick={checkout} disabled={placing || uploadingReceipt} className="w-full bg-gold text-ink py-4 rounded-xl text-[12px] tracking-widerx uppercase font-medium disabled:opacity-60">
+              {placing ? 'Enviando…'
+                : method === 'card' ? 'Pagar com cartão'
+                : method === 'pix' ? 'Gerar pedido (PIX)'
+                : method === 'pix_static' ? 'Enviar comprovante e pedido'
+                : 'Enviar pedido'}
             </button>
             <p className="text-ivory/30 text-[10px] text-center mt-2">Seravie Flow · transforme qualquer espaço em um ponto de venda</p>
           </div>

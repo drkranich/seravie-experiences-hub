@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
+import { parseCsv, autoMap, downloadCsvTemplate } from '../../lib/csv'
 import { logAudit } from '../../lib/audit'
 import { FlowImageField } from './FlowImageField'
 
@@ -117,6 +118,10 @@ export function ResourcePanel({
   const [detail, setDetail] = useState(null)
   const [confirm, setConfirm] = useState(null)
   const [dynOpts, setDynOpts] = useState({})
+  // Importação de planilha (CSV) com mapeamento de colunas
+  const [imp, setImp] = useState(null) // { headers, rows, map }
+  const [importing, setImporting] = useState(false)
+  const fileRef = useRef(null)
 
   const refFields = fields.filter((f) => f.type === 'ref' && f.refTable)
   useEffect(() => {
@@ -208,6 +213,69 @@ export function ResourcePanel({
     notify('Registro excluído', 'success'); load()
   }
 
+  // --- Importação de planilha (CSV genérico com mapeamento de colunas) ---
+  // Campos que podem ser importados (exclui imagens, que dependem de upload).
+  const importFields = fields.filter((f) => f.type !== 'image')
+
+  const downloadModel = () => {
+    const cols = importFields.map((f) => f.label)
+    const example = {}
+    importFields.forEach((f) => {
+      example[f.label] = f.type === 'currency' || f.type === 'number' ? '0'
+        : f.type === 'int' || f.type === 'year' ? '0'
+        : f.type === 'bool' ? 'sim'
+        : f.type === 'date' ? '2024-01-31'
+        : f.options ? Object.keys(f.options)[0] || ''
+        : `Ex: ${f.label}`
+    })
+    downloadCsvTemplate(`modelo-${exportName || table}.csv`, cols, example)
+    notify('Modelo baixado — preencha e importe', 'success')
+  }
+
+  const onPickFile = async (file) => {
+    if (!file) return
+    const text = await file.text()
+    const { headers, rows } = parseCsv(text)
+    if (!headers.length || !rows.length) { notify('Planilha vazia ou inválida', 'error'); return }
+    setImp({ headers, rows, map: autoMap(headers, importFields) })
+  }
+
+  // Converte um valor de célula (texto) para o tipo do campo.
+  const coerceImport = (f, raw) => {
+    const val = String(raw ?? '').trim()
+    if (val === '') return f.type === 'bool' ? false : null
+    if (f.type === 'currency' || f.type === 'number') return Number(val.replace(/\./g, '').replace(',', '.')) || Number(val) || 0
+    if (f.type === 'int' || f.type === 'year') return parseInt(val, 10) || null
+    if (f.type === 'bool') return /^(sim|true|1|x|yes|y|s)$/i.test(val)
+    if (f.options) {
+      // aceita a chave OU o rótulo (case-insensitive)
+      if (f.options[val] !== undefined) return val
+      const hit = Object.entries(f.options).find(([, label]) => String(label).toLowerCase() === val.toLowerCase())
+      return hit ? hit[0] : val
+    }
+    return val
+  }
+
+  const runImport = async () => {
+    if (!imp) return
+    const mapped = importFields.filter((f) => imp.map[f.key])
+    if (!mapped.length) { notify('Mapeie ao menos uma coluna', 'error'); return }
+    const payloads = imp.rows.map((row) => {
+      const o = {}
+      mapped.forEach((f) => { o[f.key] = coerceImport(f, row[imp.map[f.key]]) })
+      return o
+    }).filter((o) => (primary ? String(o[primary.key] ?? '').trim() !== '' : true))
+    if (!payloads.length) { notify(`Nenhuma linha com "${primary?.label || 'valor'}" preenchido`, 'error'); return }
+    setImporting(true)
+    const toInsert = payloads.map((o) => ({ ...inject, ...o, ...(noTenant ? {} : { tenant_id: tenantId }) }))
+    const { error } = await supabase.from(table).insert(toInsert)
+    setImporting(false)
+    if (error) { notify('Erro ao importar: ' + error.message, 'error'); return }
+    logAudit({ action: 'create', resource_type: table, resource_id: null, new_data: { imported: toInsert.length } }, tenantId)
+    notify(`${toInsert.length} registro(s) importado(s)`, 'success')
+    setImp(null); load()
+  }
+
   const filtered = useMemo(() => {
     let out = rows
     if (search.trim()) {
@@ -242,6 +310,13 @@ export function ResourcePanel({
         <div className="flex gap-2 ml-auto">
           <button onClick={() => exportCsv(`${exportName || table}.csv`, exportRows()) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />CSV</button>
           <button onClick={() => exportPdf(title, exportRows(), subtitle) || notify('Nada para exportar', 'error')} className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />PDF</button>
+          {allowEdit && (
+            <>
+              <button onClick={downloadModel} title="Baixar planilha-modelo (.csv)" className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="download" className="w-4 h-4" />Modelo</button>
+              <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { onPickFile(e.target.files[0]); e.target.value = '' }} />
+              <button onClick={() => fileRef.current?.click()} title="Importar registros de uma planilha CSV" className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors"><Icon name="upload" className="w-4 h-4" />Importar</button>
+            </>
+          )}
           {allowEdit && <button onClick={openNew} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />{newLabel}</button>}
         </div>
       </div>
@@ -339,6 +414,60 @@ export function ResourcePanel({
                 {allowDelete && <button onClick={() => setConfirm(detail)} className="px-4 py-2.5 rounded-xl text-sm text-admin-rose hover:bg-admin-rose/10 transition-colors">Excluir</button>}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de importação: mapeamento de colunas + prévia */}
+      {imp && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => !importing && setImp(null)}>
+          <div className="glass-pop rounded-2xl p-7 w-full max-w-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2"><h2 className="font-serif text-2xl text-admin-text">Importar planilha</h2><button onClick={() => !importing && setImp(null)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            <p className="text-admin-muted/60 text-sm mb-5">{imp.rows.length} linha(s) lida(s). Confirme para quais campos vão as colunas da sua planilha:</p>
+
+            <div className="grid sm:grid-cols-2 gap-x-5 gap-y-3 mb-6">
+              {importFields.map((f) => (
+                <div key={f.key} className="flex items-center gap-3">
+                  <label className="text-sm text-admin-text w-32 shrink-0 truncate" title={f.label}>{f.label}{f.primary || f.required ? <span className="text-admin-rose"> *</span> : ''}</label>
+                  <div className="flex-1 min-w-0">
+                    <GlassSelect
+                      value={imp.map[f.key] || ''}
+                      onChange={(v) => setImp((s) => ({ ...s, map: { ...s.map, [f.key]: v } }))}
+                      options={[{ value: '', label: '— não importar —' }, ...imp.headers.map((h) => ({ value: h, label: h }))]}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Prévia das primeiras linhas com os campos já mapeados */}
+            <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2">Prévia</p>
+            <div className="glass rounded-xl overflow-hidden overflow-x-auto mb-5">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-admin-muted/50 uppercase tracking-wider border-b border-white/[0.06]">
+                    {importFields.filter((f) => imp.map[f.key]).map((f) => <th key={f.key} className="text-left px-3 py-2 whitespace-nowrap">{f.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {imp.rows.slice(0, 8).map((row, i) => (
+                    <tr key={i} className="border-b border-white/[0.03]">
+                      {importFields.filter((f) => imp.map[f.key]).map((f) => {
+                        const v = coerceImport(f, row[imp.map[f.key]])
+                        const show = f.type === 'currency' ? brl(v) : f.type === 'bool' ? (v ? 'Sim' : 'Não') : f.options ? labelOf(f, v) : v
+                        return <td key={f.key} className="px-3 py-2 text-admin-muted/80 whitespace-nowrap">{show == null || show === '' ? '—' : String(show)}</td>
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {imp.rows.length > 8 && <p className="text-admin-muted/40 text-xs mb-4">…e mais {imp.rows.length - 8} linha(s).</p>}
+
+            <div className="flex gap-3">
+              <button onClick={runImport} disabled={importing} className="flex-1 bg-admin-sage/15 hover:bg-admin-sage/25 text-admin-sage py-2.5 rounded-xl text-sm disabled:opacity-50 transition-colors">{importing ? 'Importando…' : `Importar ${imp.rows.length} registro(s)`}</button>
+              <button onClick={() => setImp(null)} disabled={importing} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted disabled:opacity-50">Cancelar</button>
+            </div>
           </div>
         </div>
       )}

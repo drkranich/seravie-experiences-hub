@@ -135,6 +135,85 @@ function PointsTab({ notify }) {
   )
 }
 
+// ---------- Pagamentos (config do tenant) ----------
+// Grava em tenants.settings.payments. NUNCA guarda segredos do Stripe aqui —
+// as chaves secretas ficam nos Secrets do Supabase. Aqui só flags e dados do PIX.
+function PaymentsTab({ notify }) {
+  const { profile, canManage } = useTenant()
+  const tenantId = profile?.tenant_id
+  const mayEdit = canManage ? canManage('flow') : true
+  const [cfg, setCfg] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!tenantId) return
+    supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle().then(({ data }) => {
+      setCfg({
+        pix_enabled: false, pix_key: '', pix_key_type: 'cpf', pix_holder: '', pix_qr_url: '', pix_instructions: '',
+        require_receipt: true, stripe_enabled: false, pix_dynamic_enabled: false, cash_enabled: true,
+        ...((data?.settings || {}).payments || {}),
+      })
+      setLoading(false)
+    })
+  }, [tenantId])
+
+  const set = (k, v) => setCfg((c) => ({ ...c, [k]: v }))
+  const save = async () => {
+    setSaving(true)
+    const { data: t } = await supabase.from('tenants').select('settings').eq('id', tenantId).maybeSingle()
+    const { error } = await supabase.from('tenants').update({ settings: { ...(t?.settings || {}), payments: cfg } }).eq('id', tenantId)
+    setSaving(false)
+    if (error) return notify('Erro ao salvar: ' + error.message, 'error')
+    logAudit({ action: 'update', resource_type: 'tenant_payments', resource_id: tenantId, new_data: { ...cfg, pix_key: cfg.pix_key ? '***' : '' } }, tenantId)
+    notify('Formas de pagamento salvas', 'success')
+  }
+
+  if (loading || !cfg) return <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p>
+  const PIX_TYPES = { cpf: 'CPF', cnpj: 'CNPJ', email: 'E-mail', phone: 'Telefone', random: 'Chave aleatória' }
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      {/* PIX estático */}
+      <div className="glass rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div><p className="text-admin-text font-medium">PIX (chave estática)</p><p className="text-admin-muted/50 text-xs mt-0.5">O cliente paga na sua chave e anexa o comprovante — abre um chamado no Help Desk para conferência.</p></div>
+          <label className="flex items-center gap-2 shrink-0"><input type="checkbox" checked={!!cfg.pix_enabled} onChange={(e) => set('pix_enabled', e.target.checked)} className="w-4 h-4 accent-admin-champ" disabled={!mayEdit} /><span className="text-xs text-admin-muted/70">Ativo</span></label>
+        </div>
+        {cfg.pix_enabled && (
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Tipo de chave</label><GlassSelect value={cfg.pix_key_type} onChange={(v) => set('pix_key_type', v)} options={Object.entries(PIX_TYPES).map(([value, label]) => ({ value, label }))} /></div>
+            <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Chave PIX</label><input value={cfg.pix_key} onChange={(e) => set('pix_key', e.target.value)} className={inputCls} placeholder="sua chave" /></div>
+            <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Favorecido (nome)</label><input value={cfg.pix_holder} onChange={(e) => set('pix_holder', e.target.value)} className={inputCls} /></div>
+            <div className="col-span-2"><FlowImageField label="QR Code do PIX (imagem — opcional)" value={cfg.pix_qr_url} onChange={(url) => set('pix_qr_url', url)} accept="image" hint="Se vazio, geramos o QR a partir da chave" /></div>
+            <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Instruções ao cliente</label><textarea value={cfg.pix_instructions} onChange={(e) => set('pix_instructions', e.target.value)} rows={2} className={`${inputCls} resize-none`} placeholder="Ex: envie o comprovante para confirmar o pedido" /></div>
+            <label className="col-span-2 flex items-center gap-2 text-sm text-admin-muted/70"><input type="checkbox" checked={cfg.require_receipt !== false} onChange={(e) => set('require_receipt', e.target.checked)} className="accent-admin-champ" />Exigir comprovante para concluir o pedido</label>
+          </div>
+        )}
+      </div>
+
+      {/* Stripe (cartão / PIX dinâmico) */}
+      <div className="glass rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-1">
+          <div><p className="text-admin-text font-medium">Stripe · cartão e PIX dinâmico</p><p className="text-admin-muted/50 text-xs mt-0.5">Checkout automático com confirmação online. As chaves secretas ficam nos Secrets do Supabase, nunca aqui.</p></div>
+          <label className="flex items-center gap-2 shrink-0"><input type="checkbox" checked={!!cfg.stripe_enabled} onChange={(e) => set('stripe_enabled', e.target.checked)} className="w-4 h-4 accent-admin-champ" disabled={!mayEdit} /><span className="text-xs text-admin-muted/70">Ativo</span></label>
+        </div>
+        {cfg.stripe_enabled && (
+          <label className="flex items-center gap-2 text-sm text-admin-muted/70 mt-4"><input type="checkbox" checked={!!cfg.pix_dynamic_enabled} onChange={(e) => set('pix_dynamic_enabled', e.target.checked)} className="accent-admin-champ" />Oferecer também PIX dinâmico (via Stripe)</label>
+        )}
+      </div>
+
+      {/* Pagar no local */}
+      <div className="glass rounded-2xl p-5 flex items-center justify-between">
+        <div><p className="text-admin-text font-medium">Pagar no local</p><p className="text-admin-muted/50 text-xs mt-0.5">Permite enviar o pedido e acertar o pagamento presencialmente.</p></div>
+        <label className="flex items-center gap-2 shrink-0"><input type="checkbox" checked={cfg.cash_enabled !== false} onChange={(e) => set('cash_enabled', e.target.checked)} className="w-4 h-4 accent-admin-champ" disabled={!mayEdit} /><span className="text-xs text-admin-muted/70">Ativo</span></label>
+      </div>
+
+      {mayEdit && <button onClick={save} disabled={saving} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-6 py-2.5 rounded-xl text-sm disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar formas de pagamento'}</button>}
+    </div>
+  )
+}
+
 // Preview interativo reutilizável: escolhe um item da lista e mostra no celular como o cliente vê.
 function PreviewShelf({ label, emptyHint, load, itemLabel, render }) {
   const [open, setOpen] = useState(false)
@@ -210,10 +289,65 @@ function CatalogTab({ notify }) {
   )
 }
 
+// Faixa de comprovantes de PIX estático aguardando conferência manual.
+function ReceiptsStrip({ notify }) {
+  const { profile } = useTenant()
+  const tenantId = profile?.tenant_id
+  const [rows, setRows] = useState([])
+  const load = async () => {
+    const { data } = await supabase.from('flow_orders').select('*').eq('payment_status', 'awaiting_confirmation').order('created_at', { ascending: false }).limit(50)
+    setRows(data || [])
+  }
+  useEffect(() => { load(); const iv = setInterval(load, 20000); return () => clearInterval(iv) }, [])
+
+  const confirmPay = async (o) => {
+    const { error } = await supabase.from('flow_orders').update({ payment_status: 'paid', status: 'paid', paid_at: new Date().toISOString() }).eq('id', o.id)
+    if (error) return notify('Erro ao confirmar', 'error')
+    logAudit({ action: 'update', resource_type: 'flow_orders', resource_id: o.id, new_data: { payment_status: 'paid' } }, tenantId)
+    notify('Pagamento confirmado', 'success'); load()
+  }
+  const rejectPay = async (o) => {
+    if (!confirm('Recusar este comprovante? O pedido volta para pendente.')) return
+    const { error } = await supabase.from('flow_orders').update({ payment_status: 'pending' }).eq('id', o.id)
+    if (error) return notify('Erro ao recusar', 'error')
+    notify('Comprovante recusado', 'success'); load()
+  }
+
+  if (!rows.length) return null
+  return (
+    <div className="glass rounded-2xl p-4 mb-4 border border-admin-gold/25">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon name="eye" className="w-4 h-4 text-admin-gold" />
+        <p className="text-admin-gold text-sm font-medium">Comprovantes aguardando conferência</p>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-admin-gold/15 text-admin-gold">{rows.length}</span>
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {rows.map((o) => (
+          <div key={o.id} className="glass-soft rounded-xl p-3 flex gap-3">
+            <a href={o.receipt_url || '#'} target="_blank" rel="noreferrer" className="shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-white/[0.05] flex items-center justify-center">
+              {o.receipt_url ? <img src={o.receipt_url} alt="comprovante" className="w-full h-full object-cover" /> : <Icon name="image" className="w-5 h-5 text-admin-muted/40" />}
+            </a>
+            <div className="min-w-0 flex-1">
+              <p className="text-admin-text text-sm truncate">{o.point_name || 'Pedido'}{o.reference ? ` · ${o.reference}` : ''}</p>
+              <p className="text-admin-gold text-xs">{brl(o.total)}</p>
+              {(o.customer_name || o.customer_phone) && <p className="text-admin-muted/50 text-[11px] truncate">{[o.customer_name, o.customer_phone].filter(Boolean).join(' · ')}</p>}
+              <div className="flex gap-1.5 mt-2">
+                <button onClick={() => confirmPay(o)} className="text-[10px] px-2 py-1 rounded-lg bg-admin-sage/15 text-admin-sage hover:bg-admin-sage/25">Confirmar</button>
+                <button onClick={() => rejectPay(o)} className="text-[10px] px-2 py-1 rounded-lg bg-white/[0.05] text-admin-muted/60 hover:text-admin-rose">Recusar</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ---------- Pedidos ----------
 function OrdersTab({ notify }) {
   return (
     <div>
+    <ReceiptsStrip notify={notify} />
     <PreviewShelf label="Ver comprovante" emptyHint="Quando chegar um pedido, você vê aqui o comprovante como o cliente recebe."
       load={() => supabase.from('flow_orders').select('*').order('created_at', { ascending: false }).limit(30).then((r) => r.data)}
       itemLabel={(o) => `${o.point_name || 'Pedido'}${o.reference ? ' · ' + o.reference : ''} — ${brl(o.total)}`}
@@ -247,15 +381,52 @@ function OrdersTab({ notify }) {
   )
 }
 
+// Barra animada de ranking: largura cresce com transição CSS ao montar/atualizar.
+function RankBar({ name, value, max, suffix, display, accent = 'champ', rank }) {
+  const [w, setW] = useState(0)
+  useEffect(() => { const id = requestAnimationFrame(() => setW(max > 0 ? Math.max(4, (value / max) * 100) : 0)); return () => cancelAnimationFrame(id) }, [value, max])
+  const barColor = accent === 'rose' ? 'bg-admin-rose/40' : accent === 'gold' ? 'bg-admin-gold/45' : 'bg-admin-champ/50'
+  const valColor = accent === 'rose' ? 'text-admin-rose' : accent === 'gold' ? 'text-admin-gold' : 'text-admin-champ'
+  const shown = display != null ? display : suffix ? `${value} ${suffix}` : value
+  return (
+    <div className="py-1.5">
+      <div className="flex items-center justify-between mb-1 gap-2">
+        <span className="text-admin-text text-sm truncate flex items-center gap-2">
+          {rank != null && <span className="text-admin-muted/40 text-[11px] w-4 shrink-0">{rank}º</span>}
+          <span className="truncate">{name}</span>
+        </span>
+        <span className={`text-sm shrink-0 ${valColor}`}>{shown}</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+        <div className={`h-full rounded-full ${barColor} transition-[width] duration-700 ease-out`} style={{ width: `${w}%` }} />
+      </div>
+    </div>
+  )
+}
+
 // ---------- Painel (dashboard em tempo real) ----------
 function DashboardTab() {
   const [orders, setOrders] = useState([])
+  const [points, setPoints] = useState([])
   const [loading, setLoading] = useState(true)
-  const load = async () => { setLoading(true); const { data } = await supabase.from('flow_orders').select('*').order('created_at', { ascending: false }).limit(1000); setOrders(data || []); setLoading(false) }
+  const [kindFilter, setKindFilter] = useState('') // '' = todas as frentes
+  const load = async () => {
+    setLoading(true)
+    const [{ data: ords }, { data: pts }] = await Promise.all([
+      supabase.from('flow_orders').select('*').order('created_at', { ascending: false }).limit(1000),
+      supabase.from('flow_points').select('id, name, kind'),
+    ])
+    setOrders(ords || []); setPoints(pts || []); setLoading(false)
+  }
   useEffect(() => { load(); const iv = setInterval(load, 15000); return () => clearInterval(iv) }, [])
 
+  // Mapa nome-do-ponto -> kind (o pedido guarda point_name; casamos pelo nome).
+  const kindByPointName = useMemo(() => Object.fromEntries(points.map((p) => [p.name, p.kind])), [points])
+  // Tipos de frente presentes nos pontos, para o filtro.
+  const availableKinds = useMemo(() => [...new Set(points.map((p) => p.kind).filter(Boolean))], [points])
+
   const stats = useMemo(() => {
-    const valid = orders.filter((o) => o.status !== 'cancelled')
+    const valid = orders.filter((o) => o.status !== 'cancelled' && (!kindFilter || kindByPointName[o.point_name] === kindFilter))
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
     const revToday = valid.filter((o) => new Date(o.created_at) >= today).reduce((s, o) => s + Number(o.total || 0), 0)
@@ -267,42 +438,64 @@ function DashboardTab() {
       byHour[new Date(o.created_at).getHours()] += Number(o.total || 0)
         ; (o.items || []).forEach((it) => { byProduct[it.name] = (byProduct[it.name] || 0) + (it.qty || 0) })
     })
-    const topProducts = Object.entries(byProduct).sort((a, b) => b[1] - a[1]).slice(0, 6)
+    const ranked = Object.entries(byProduct).sort((a, b) => b[1] - a[1])
+    const topProducts = ranked.slice(0, 6)
+    const bottomProducts = ranked.length > 6 ? ranked.slice(-5).reverse() : ranked.slice(1).reverse()
     const topPoints = Object.entries(byPoint).sort((a, b) => b[1] - a[1]).slice(0, 6)
     const peakHour = byHour.indexOf(Math.max(...byHour))
-    return { revToday, revMonth, ticket, count: valid.length, topProducts, topPoints, byHour, peakHour }
-  }, [orders])
+    return { revToday, revMonth, ticket, count: valid.length, topProducts, bottomProducts, topPoints, byHour, peakHour }
+  }, [orders, kindFilter, kindByPointName])
 
   if (loading) return <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando…</p>
   const maxHour = Math.max(1, ...stats.byHour)
+  const maxTopProd = Math.max(1, ...stats.topProducts.map((x) => x[1]))
+  const maxBottomProd = Math.max(1, ...stats.bottomProducts.map((x) => x[1]))
+  const maxPoint = Math.max(1, ...stats.topPoints.map((x) => x[1]))
 
   return (
     <div className="space-y-5">
+      {/* Filtro por tipo de frente (kind do ponto) */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-admin-muted/50 text-xs uppercase tracking-wider">Frente:</span>
+        <div className="w-52"><GlassSelect value={kindFilter} onChange={setKindFilter} options={[{ value: '', label: 'Todas as frentes' }, ...availableKinds.map((k) => ({ value: k, label: KINDS[k] || k }))]} /></div>
+        {kindFilter && <span className="text-admin-champ/70 text-xs">Filtrando por {KINDS[kindFilter] || kindFilter}</span>}
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[['Faturamento hoje', brl(stats.revToday), 'text-admin-champ'], ['Faturamento no mês', brl(stats.revMonth), 'text-admin-sage'], ['Ticket médio', brl(stats.ticket), 'text-admin-gold'], ['Pedidos', String(stats.count), 'text-admin-text']].map(([l, v, c]) => (
           <div key={l} className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">{l}</p><p className={`text-2xl font-medium ${c}`}>{v}</p></div>
         ))}
       </div>
+
+      {/* Rankings animados: MAIS e MENOS vendidos */}
       <div className="grid lg:grid-cols-2 gap-5">
         <div className="glass rounded-2xl p-5">
-          <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-4">Mais vendidos</p>
-          {stats.topProducts.length === 0 ? <p className="text-admin-muted/40 text-sm">Sem vendas ainda.</p> : stats.topProducts.map(([name, qty]) => (
-            <div key={name} className="flex items-center justify-between py-1.5 border-b border-white/[0.03] last:border-0"><span className="text-admin-text text-sm truncate">{name}</span><span className="text-admin-champ text-sm">{qty}</span></div>
+          <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-3">🔥 Mais vendidos</p>
+          {stats.topProducts.length === 0 ? <p className="text-admin-muted/40 text-sm">Sem vendas ainda.</p> : stats.topProducts.map(([name, qty], i) => (
+            <RankBar key={name} name={name} value={qty} max={maxTopProd} suffix="un" accent="champ" rank={i + 1} />
           ))}
         </div>
         <div className="glass rounded-2xl p-5">
-          <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-4">Vendas por ponto</p>
-          {stats.topPoints.length === 0 ? <p className="text-admin-muted/40 text-sm">Sem vendas ainda.</p> : stats.topPoints.map(([name, val]) => (
-            <div key={name} className="flex items-center justify-between py-1.5 border-b border-white/[0.03] last:border-0"><span className="text-admin-text text-sm truncate">{name}</span><span className="text-admin-gold text-sm">{brl(val)}</span></div>
+          <p className="text-[11px] tracking-wider uppercase text-admin-rose/70 mb-3">🐢 Menos vendidos</p>
+          {stats.bottomProducts.length === 0 ? <p className="text-admin-muted/40 text-sm">Ainda sem dados suficientes.</p> : stats.bottomProducts.map(([name, qty], i) => (
+            <RankBar key={name} name={name} value={qty} max={maxBottomProd} suffix="un" accent="rose" rank={i + 1} />
           ))}
         </div>
       </div>
+
+      <div className="glass rounded-2xl p-5">
+        <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-3">Vendas por ponto</p>
+        {stats.topPoints.length === 0 ? <p className="text-admin-muted/40 text-sm">Sem vendas ainda.</p> : stats.topPoints.map(([name, val]) => (
+          <RankBar key={name} name={name} value={val} display={brl(val)} max={maxPoint} accent="gold" />
+        ))}
+      </div>
+
       <div className="glass rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70">Faturamento por hora</p>{stats.count > 0 && <p className="text-admin-muted/40 text-xs">Pico às {String(stats.peakHour).padStart(2, '0')}h</p>}</div>
         <div className="flex items-end gap-1 h-32">
           {stats.byHour.map((v, h) => (
             <div key={h} className="flex-1 flex flex-col items-center justify-end h-full" title={`${h}h · ${brl(v)}`}>
-              <div className="w-full rounded-t bg-admin-champ/50" style={{ height: `${(v / maxHour) * 100}%`, minHeight: v > 0 ? 3 : 0 }} />
+              <div className="w-full rounded-t bg-admin-champ/50 transition-[height] duration-700 ease-out" style={{ height: `${(v / maxHour) * 100}%`, minHeight: v > 0 ? 3 : 0 }} />
               {h % 6 === 0 && <span className="text-[8px] text-admin-muted/30 mt-1">{h}h</span>}
             </div>
           ))}
@@ -320,6 +513,7 @@ export function FlowPanel({ notify }) {
         { key: 'points', label: 'Pontos & QR', render: () => <PointsTab notify={notify} /> },
         { key: 'catalog', label: 'Catálogo', render: () => <CatalogTab notify={notify} /> },
         { key: 'orders', label: 'Pedidos', render: () => <OrdersTab notify={notify} /> },
+        { key: 'payments', label: 'Pagamentos', render: () => <PaymentsTab notify={notify} /> },
         { key: 'dash', label: 'Painel', render: () => <DashboardTab /> },
       ]}
     />
