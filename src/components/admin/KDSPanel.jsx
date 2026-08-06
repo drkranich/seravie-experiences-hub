@@ -4,6 +4,11 @@ import { getPreset } from '../../lib/flowEngine'
 import { KdsDashboard } from './kds/KdsDashboard'
 import { KdsBoard } from './kds/KdsBoard'
 import { KdsStations } from './kds/KdsStations'
+import { KdsKitchenMap } from './kds/KdsKitchenMap'
+import { KdsAnalytics } from './kds/KdsAnalytics'
+import { KdsAssistant } from './kds/KdsAssistant'
+import { KdsHistory } from './kds/KdsHistory'
+import { KdsTeam } from './kds/KdsTeam'
 
 // Relógio grande do modo TV.
 function TvClock() {
@@ -48,7 +53,12 @@ export function KDSPanel({ notify }) {
   const tabs = [
     { key: 'dashboard', label: 'Dashboard', icon: 'chart' },
     { key: 'production', label: 'Produção', icon: 'flame' },
+    { key: 'map', label: 'Mapa da Cozinha', icon: 'map' },
     { key: 'stations', label: 'Estações', icon: 'layers' },
+    { key: 'team', label: 'Equipe', icon: 'users' },
+    { key: 'assistant', label: 'IA', icon: 'sparkles' },
+    { key: 'analytics', label: 'Analytics', icon: 'chart' },
+    { key: 'history', label: 'Histórico', icon: 'clock' },
   ]
 
   if (tv) return <TvMode kind={kind} soundOn={soundOn} onExit={() => setTv(false)} />
@@ -90,7 +100,12 @@ export function KDSPanel({ notify }) {
           <KdsBoard kind={kind} soundOn={soundOn} onCounts={setCounts} />
         </div>
       )}
+      {tab === 'map' && <KdsKitchenMap kind={kind} />}
       {tab === 'stations' && <KdsStations notify={notify} kind={kind} />}
+      {tab === 'team' && <KdsTeam kind={kind} />}
+      {tab === 'assistant' && <KdsAssistant kind={kind} />}
+      {tab === 'analytics' && <KdsAnalytics kind={kind} />}
+      {tab === 'history' && <KdsHistory kind={kind} />}
     </div>
   )
 }
