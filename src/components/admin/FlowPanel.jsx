@@ -9,6 +9,7 @@ import { logAudit } from '../../lib/audit'
 import { FlowStudio } from './FlowStudio'
 import { PhoneFrame, StorePreview, ProductPreview, OrderReceiptPreview } from './FlowPreview'
 import { FlowImageField } from './FlowImageField'
+import { ConnectCard } from './ConnectCard'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -199,7 +200,15 @@ function PaymentsTab({ notify }) {
           <label className="flex items-center gap-2 shrink-0"><input type="checkbox" checked={!!cfg.stripe_enabled} onChange={(e) => set('stripe_enabled', e.target.checked)} className="w-4 h-4 accent-admin-champ" disabled={!mayEdit} /><span className="text-xs text-admin-muted/70">Ativo</span></label>
         </div>
         {cfg.stripe_enabled && (
-          <label className="flex items-center gap-2 text-sm text-admin-muted/70 mt-4"><input type="checkbox" checked={!!cfg.pix_dynamic_enabled} onChange={(e) => set('pix_dynamic_enabled', e.target.checked)} className="accent-admin-champ" />Oferecer também PIX dinâmico (via Stripe)</label>
+          <>
+            <label className="flex items-center gap-2 text-sm text-admin-muted/70 mt-4"><input type="checkbox" checked={!!cfg.pix_dynamic_enabled} onChange={(e) => set('pix_dynamic_enabled', e.target.checked)} className="accent-admin-champ" />Oferecer também PIX dinâmico (via Stripe)</label>
+            {/* Conexão da conta Stripe do lojista (onboarding Connect — sem colar chave) */}
+            <div className="mt-4 pt-4 border-t border-white/[0.06]">
+              <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2">Conta de recebimento</p>
+              <ConnectCard notify={notify} />
+              <p className="text-admin-muted/40 text-[11px] -mt-3">O cartão/PIX dinâmico só cobra depois que sua conta Stripe estiver conectada e ativa. Você não digita chaves aqui — o cadastro é feito no próprio Stripe.</p>
+            </div>
+          </>
         )}
       </div>
 
@@ -264,6 +273,13 @@ function CatalogTab({ notify }) {
     />
     <ResourcePanel notify={notify} module="flow" table="flow_products" embedded exportName="flow-catalogo" newLabel="Novo produto"
       orderBy={{ column: 'sort_order', ascending: true }}
+      rowAlert={(p) => {
+        // Estoque baixo: mesma regra do KPI. Só quando há estoque e mínimo definidos.
+        if (p.stock == null || p.min_stock == null) return null
+        if (p.stock <= 0) return { title: 'Estoque baixo', label: 'esgotado', tone: 'rose' }
+        if (p.stock <= p.min_stock) return { title: 'Estoque baixo', label: `${p.stock} un (mín. ${p.min_stock})`, tone: 'rose' }
+        return null
+      }}
       fields={[
         { key: 'name', label: 'Produto', type: 'text', primary: true, required: true, full: true, search: true },
         { key: 'point_id', label: 'Ponto (vazio = todos)', type: 'ref', refTable: 'flow_points', refLabel: 'name', chip: true, filter: true, placeholder: '— todos os pontos —' },

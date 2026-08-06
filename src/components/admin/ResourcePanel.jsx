@@ -101,7 +101,7 @@ export function ResourceTabs({ title, subtitle, tabs }) {
 export function ResourcePanel({
   notify, table, title, subtitle, icon = 'box', fields = [], kpis = [],
   orderBy = { column: 'created_at', ascending: false }, select = '*',
-  noTenant = false, exportName, embedded = false, inject = {}, baseFilter, newLabel = 'Novo', module,
+  noTenant = false, exportName, embedded = false, inject = {}, baseFilter, newLabel = 'Novo', module, rowAlert,
 }) {
   // Rótulo seguro para títulos: no modo embedded, `title` pode não ser passado.
   // Deriva de newLabel ("Novo produto" -> "produto") ou cai em "registro".
@@ -304,6 +304,14 @@ export function ResourcePanel({
 
   const kpiValues = kpis.map((k) => ({ label: k.label, value: fmtVal(k.fmt, k.calc(rows)) }))
 
+  // Alertas por linha (ex.: estoque baixo). rowAlert(row) -> { label, tone } | null.
+  // Usa os registros filtrados para refletir busca/filtros ativos.
+  const alerts = useMemo(() => {
+    if (typeof rowAlert !== 'function') return []
+    return filtered.map((r) => { const a = rowAlert(r); return a ? { row: r, ...a } : null }).filter(Boolean)
+  }, [filtered, rowAlert])
+  const alertKey = (r) => (typeof rowAlert === 'function' ? (rowAlert(r) || null) : null)
+
   return (
     <div>
       <div className={`flex items-center justify-between gap-4 flex-wrap ${embedded ? 'mb-4' : 'mb-6'}`}>
@@ -329,6 +337,25 @@ export function ResourcePanel({
           {kpiValues.map((k, i) => (
             <div key={i} className="glass rounded-2xl p-5"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">{k.label}</p><p className="text-admin-champ text-2xl font-medium">{k.value}</p></div>
           ))}
+        </div>
+      )}
+
+      {/* Faixa de alerta por linha (ex.: estoque baixo) */}
+      {alerts.length > 0 && (
+        <div className="glass rounded-2xl p-4 mb-6 border border-admin-rose/25">
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="box" className="w-4 h-4 text-admin-rose" />
+            <p className="text-admin-rose text-sm font-medium">{alerts[0].title || 'Atenção'}</p>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-admin-rose/15 text-admin-rose">{alerts.length}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {alerts.slice(0, 12).map(({ row, label }) => (
+              <button key={row.id} onClick={() => openEdit(row)} className="text-[11px] px-2.5 py-1 rounded-lg bg-admin-rose/10 text-admin-rose/90 hover:bg-admin-rose/20 transition-colors" title="Repor estoque / editar">
+                {row[primary.key]}{label ? ` · ${label}` : ''}
+              </button>
+            ))}
+            {alerts.length > 12 && <span className="text-admin-muted/50 text-[11px] self-center">+{alerts.length - 12}</span>}
+          </div>
         </div>
       )}
 
@@ -361,6 +388,7 @@ export function ResourcePanel({
                     <span key={f.key} className="text-admin-muted/50 text-xs">{f.type === 'bool' ? (r[f.key] ? f.label : null) : f.type === 'ref' ? dynLabel(f, r[f.key]) : labelOf(f, r[f.key])}</span>
                   ))}
                   {statusField && <StatusPill value={r[statusField.key]} label={statusField.options ? labelOf(statusField, r[statusField.key]) : undefined} />}
+                  {(() => { const a = alertKey(r); return a ? <span className="text-[9px] px-2 py-0.5 rounded-lg shrink-0 bg-admin-rose/15 text-admin-rose">{a.label || 'alerta'}</span> : null })()}
                 </div>
                 {descField && r[descField.key] && <p className="text-admin-muted/40 text-xs line-clamp-2 mt-1">{r[descField.key]}</p>}
                 {!readOnly && (
