@@ -8,6 +8,7 @@ import { KanbanBoard } from './Kanban'
 import { logAudit } from '../../lib/audit'
 import { FlowStudio } from './FlowStudio'
 import { PhoneFrame, StorePreview, ProductPreview, OrderReceiptPreview } from './FlowPreview'
+import { FlowImageField } from './FlowImageField'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -123,7 +124,7 @@ function PointsTab({ notify }) {
               <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Tipo</label><GlassSelect value={form.kind} onChange={(v) => setForm((f) => ({ ...f, kind: v }))} options={Object.entries(KINDS).map(([value, label]) => ({ value, label }))} /></div>
               <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Filial (opcional)</label><input value={form.branch || ''} onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))} className={inputCls} /></div>
               <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Descrição</label><textarea value={form.description || ''} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className={`${inputCls} resize-none`} /></div>
-              <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Imagem de capa (URL)</label><input value={form.cover_url || ''} onChange={(e) => setForm((f) => ({ ...f, cover_url: e.target.value }))} className={inputCls} /></div>
+              <div className="col-span-2"><FlowImageField label="Imagem de capa" value={form.cover_url || ''} onChange={(url) => setForm((f) => ({ ...f, cover_url: url }))} /></div>
               <label className="col-span-2 flex items-center gap-2 text-sm text-admin-muted/70"><input type="checkbox" checked={form.active !== false} onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))} className="accent-admin-champ" />Ponto ativo (QR funcionando)</label>
             </div>
             <div className="flex gap-3 mt-6"><button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm">{editing ? 'Salvar' : 'Criar ponto'}</button><button onClick={() => setModal(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
@@ -192,7 +193,7 @@ function CatalogTab({ notify }) {
         { key: 'promo_price', label: 'Preço promocional', type: 'currency' },
         { key: 'stock', label: 'Estoque (vazio = ilimitado)', type: 'int' },
         { key: 'min_stock', label: 'Estoque mínimo', type: 'int' },
-        { key: 'image_url', label: 'Imagem (URL)', type: 'text', full: true },
+        { key: 'image_url', label: 'Imagem', type: 'image', full: true },
         { key: 'video_url', label: 'Vídeo (URL)', type: 'text', full: true },
         { key: 'sort_order', label: 'Ordem', type: 'int' },
         { key: 'active', label: 'Ativo', type: 'bool', default: true },

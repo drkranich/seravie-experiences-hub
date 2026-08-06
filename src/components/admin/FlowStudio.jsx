@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 import { PhoneFrame, FormPreview } from './FlowPreview'
+import { FlowImageField } from './FlowImageField'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5'
@@ -22,6 +23,7 @@ const BLOCK_TYPES = [
   { type: 'choice', label: 'Múltipla escolha', icon: 'check' },
   { type: 'nps', label: 'NPS (0–10)', icon: 'star' },
   { type: 'rating', label: 'Estrelas', icon: 'star' },
+  { type: 'upload', label: 'Upload (foto/arquivo)', icon: 'upload' },
 ]
 const TYPE_LABEL = Object.fromEntries(BLOCK_TYPES.map((b) => [b.type, b.label]))
 const isStatic = (t) => ['title', 'text', 'image', 'button'].includes(t)
@@ -214,7 +216,7 @@ function FormBuilder({ form, notify, onBack }) {
                   {responses.map((r) => (
                     <tr key={r.id} className="border-b border-white/[0.03]">
                       <td className="px-4 py-2.5 text-admin-muted/60 whitespace-nowrap text-xs">{new Date(r.created_at).toLocaleString('pt-BR')}</td>
-                      {blocks.filter((b) => !isStatic(b.type)).map((b) => { const v = r.answers?.[b.id]; return <td key={b.id} className="px-4 py-2.5 text-admin-text/90">{Array.isArray(v) ? v.join(', ') : (v ?? '—')}</td> })}
+                      {blocks.filter((b) => !isStatic(b.type)).map((b) => { const v = r.answers?.[b.id]; const isUrl = typeof v === 'string' && /^https?:\/\//.test(v); return <td key={b.id} className="px-4 py-2.5 text-admin-text/90">{isUrl ? <a href={v} target="_blank" rel="noreferrer" className="text-admin-champ hover:underline">{b.type === 'upload' ? 'Ver arquivo ↗' : v}</a> : Array.isArray(v) ? v.join(', ') : (v ?? '—')}</td> })}
                     </tr>
                   ))}
                 </tbody>
@@ -228,7 +230,7 @@ function FormBuilder({ form, notify, onBack }) {
       {/* cabeçalho do form */}
       <div className="glass rounded-2xl p-5 mb-4 grid sm:grid-cols-2 gap-3">
         <div><label className={lbl}>Título da experiência</label><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} onBlur={(e) => saveForm({ title: e.target.value })} className={inputCls} /></div>
-        <div><label className={lbl}>Imagem de capa (URL)</label><input value={f.cover_url || ''} onChange={(e) => setF({ ...f, cover_url: e.target.value })} onBlur={(e) => saveForm({ cover_url: e.target.value || null })} className={inputCls} /></div>
+        <div><FlowImageField label="Imagem de capa" value={f.cover_url || ''} onChange={(url) => { setF({ ...f, cover_url: url }); saveForm({ cover_url: url || null }) }} /></div>
         <div className="sm:col-span-2"><label className={lbl}>Mensagem final</label><input value={f.submit_message || ''} onChange={(e) => setF({ ...f, submit_message: e.target.value })} onBlur={(e) => saveForm({ submit_message: e.target.value })} className={inputCls} /></div>
         {/* Spine: geração automática de lead no pipeline */}
         <label className="flex items-center gap-2 text-sm text-admin-muted/70 sm:col-span-2 pt-1 border-t border-white/[0.05] mt-1"><input type="checkbox" checked={f.creates_lead !== false} onChange={(e) => { setF({ ...f, creates_lead: e.target.checked }); saveForm({ creates_lead: e.target.checked }) }} className="accent-admin-champ" />Gerar negócio no CRM automaticamente a cada resposta</label>
@@ -274,7 +276,15 @@ function FormBuilder({ form, notify, onBack }) {
               {!isStatic(sel.type) && <div><label className={lbl}>Texto de ajuda (acima da pergunta)</label><input value={sel.help || ''} onChange={(e) => setSel({ ...sel, help: e.target.value })} onBlur={(e) => saveBlock({ help: e.target.value })} className={inputCls} /></div>}
               {['short_text', 'long_text', 'email', 'phone', 'number'].includes(sel.type) && <div><label className={lbl}>Placeholder</label><input value={sel.placeholder || ''} onChange={(e) => setSel({ ...sel, placeholder: e.target.value })} onBlur={(e) => saveBlock({ placeholder: e.target.value })} className={inputCls} /></div>}
               {sel.type === 'text' && <div><label className={lbl}>Corpo do texto</label><textarea value={sel.config?.body || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, body: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, body: e.target.value } })} rows={3} className={`${inputCls} resize-none`} /></div>}
-              {(sel.type === 'image') && <div><label className={lbl}>URL da imagem</label><input value={sel.config?.media_url || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, media_url: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, media_url: e.target.value } })} className={inputCls} /></div>}
+              {(sel.type === 'image') && <FlowImageField label="Imagem" value={sel.config?.media_url || ''} onChange={(url) => { const cfg = { ...sel.config, media_url: url }; setSel({ ...sel, config: cfg }); saveBlock({ config: cfg }) }} />}
+              {sel.type === 'upload' && (
+                <div className="space-y-2">
+                  <label className={lbl}>O que o cliente deve enviar</label>
+                  <GlassSelect value={sel.config?.accept || 'image'} onChange={(v) => { const cfg = { ...sel.config, accept: v }; setSel({ ...sel, config: cfg }); saveBlock({ config: cfg }) }}
+                    options={[{ value: 'image', label: 'Apenas imagens (fotos)' }, { value: 'any', label: 'Qualquer arquivo (documentos, PDF…)' }]} />
+                  <p className="text-admin-muted/30 text-[10px]">O cliente verá um botão para enviar {sel.config?.accept === 'any' ? 'um arquivo' : 'uma foto'} ao responder. O link do arquivo fica salvo na resposta.</p>
+                </div>
+              )}
               {sel.type === 'button' && <><div><label className={lbl}>Texto do botão</label><input value={sel.config?.button_label || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, button_label: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, button_label: e.target.value } })} className={inputCls} /></div><div><label className={lbl}>Link (URL)</label><input value={sel.config?.url || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, url: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, url: e.target.value } })} className={inputCls} /></div></>}
               {sel.type === 'rating' && <div><label className={lbl}>Máximo de estrelas</label><input type="number" value={sel.config?.max || 5} onChange={(e) => setSel({ ...sel, config: { ...sel.config, max: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, max: Number(e.target.value) || 5 } })} className={inputCls} /></div>}
               {sel.type === 'choice' && (

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadTo } from '../lib/storage'
 
 // Seravie Flow Studio — experiência pública cinematográfica (#form/<slug>).
 // Um bloco por vez, tela cheia, transições suaves, glassmorphism premium.
@@ -193,6 +194,57 @@ function BlockView({ block, theme, glass, value, onChange, onEnter }) {
     )
   }
 
+  if (t === 'upload') return <UploadField block={block} theme={theme} glass={glass} value={value} onChange={onChange} />
+
   // fallback
   return <div><Header /><input value={value || ''} onChange={(e) => onChange(e.target.value)} className={inputBase} style={inputStyle} placeholder="Sua resposta…" /></div>
+}
+
+// ---------- Upload do cliente (foto/arquivo) no formulário público ----------
+function UploadField({ block, theme, glass, value, onChange }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const ref = useRef(null)
+  const acceptAny = block.config?.accept === 'any'
+  const isImg = value && /\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(value)
+
+  const handle = async (file) => {
+    if (!file) return
+    setBusy(true); setErr('')
+    const r = await uploadTo(file, { bucket: 'flow', folder: 'submissions', accept: acceptAny ? 'any' : 'image', maxMB: 15 })
+    setBusy(false)
+    if (r.error) setErr(r.error); else onChange(r.url)
+  }
+
+  return (
+    <div>
+      <div className="mb-6">
+        {block.help && <p className="text-[11px] tracking-widerx uppercase mb-2" style={{ color: theme.accent, opacity: 0.85 }}>{block.help}</p>}
+        <h2 className="font-serif leading-tight" style={{ fontSize: '2rem' }}>{block.label}{block.required ? <span style={{ color: theme.accent }}> *</span> : null}</h2>
+      </div>
+      <input ref={ref} type="file" accept={acceptAny ? undefined : 'image/*'} capture={acceptAny ? undefined : 'environment'} className="hidden" onChange={(e) => handle(e.target.files[0])} />
+      <div onClick={() => !busy && ref.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); handle(e.dataTransfer.files[0]) }}
+        className="cursor-pointer text-center px-6 py-10 transition-all" style={{ ...glass, borderStyle: value ? 'solid' : 'dashed' }}>
+        {value ? (
+          <div className="flex flex-col items-center gap-3">
+            {isImg ? <img src={value} alt="" className="max-h-52 rounded-2xl object-cover" /> : (
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(214,196,154,0.15)', color: theme.accent }}>
+                <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M14 3v5h5M8 3h7l5 5v13H4V3z" strokeLinejoin="round" /></svg>
+              </div>
+            )}
+            <span className="text-sm opacity-70">{busy ? 'Enviando…' : 'Enviado ✓ — toque para trocar'}</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 opacity-80">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ border: `1.5px solid ${theme.accent}`, color: theme.accent }}>
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </div>
+            <span className="text-lg">{busy ? 'Enviando…' : acceptAny ? 'Enviar arquivo' : 'Enviar foto'}</span>
+            <span className="text-xs opacity-40">toque para escolher{acceptAny ? '' : ' ou tirar uma foto'}</span>
+          </div>
+        )}
+      </div>
+      {err && <p className="text-rose-300 text-sm mt-3 text-center">{err}</p>}
+    </div>
+  )
 }

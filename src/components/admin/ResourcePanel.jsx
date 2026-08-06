@@ -4,6 +4,7 @@ import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
+import { FlowImageField } from './FlowImageField'
 
 /**
  * ResourcePanel — painel CRUD completo e config-driven do design system Seravie.
@@ -72,6 +73,8 @@ function FieldInput({ field, value, onChange, dynOptions }) {
       )
     case 'date':
       return <GlassDate value={v} onChange={onChange} />
+    case 'image':
+      return <FlowImageField label="" value={v} onChange={onChange} folder={field.folder || 'admin'} />
     default:
       return <input value={v} onChange={(e) => onChange(e.target.value)} className={inputCls} placeholder={field.placeholder} />
   }

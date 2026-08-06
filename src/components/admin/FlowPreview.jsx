@@ -50,6 +50,7 @@ export function FormPreview({ form, blocks }) {
             {b.type === 'choice' && <div className="space-y-2">{(b.options || []).map((o, i) => <div key={i} className="px-4 py-2.5 text-sm" style={glass}>{o.label ?? o}</div>)}</div>}
             {b.type === 'nps' && <div className="grid grid-cols-11 gap-1">{Array.from({ length: 11 }, (_, n) => <div key={n} className="aspect-square flex items-center justify-center text-[10px]" style={{ ...glass, borderRadius: 8 }}>{n}</div>)}</div>}
             {b.type === 'rating' && <div className="flex gap-1.5 justify-center text-3xl" style={{ color: theme.accent }}>{Array.from({ length: Number(b.config?.max) || 5 }, (_, i) => <span key={i}>★</span>)}</div>}
+            {b.type === 'upload' && <div className="px-4 py-8 text-center text-sm opacity-50" style={{ ...glass, borderStyle: 'dashed' }}>⬆ {b.config?.accept === 'any' ? 'Enviar arquivo' : 'Enviar foto'}</div>}
           </div>
         )}
       </div>

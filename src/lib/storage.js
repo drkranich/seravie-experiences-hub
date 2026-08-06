@@ -28,6 +28,27 @@ export async function uploadFile(file) {
   return { path, url: publicUrl(path) }
 }
 
+// Upload flexível: escolhe bucket, pasta e tipos aceitos.
+// Usado pelo Seravie Flow (bucket 'flow') tanto no admin quanto no formulário público.
+export async function uploadTo(file, { bucket = MEDIA_BUCKET, folder = '', accept = 'image', maxMB = 8 } = {}) {
+  if (!file) return { error: 'Nenhum arquivo selecionado.' }
+  if (accept === 'image' && !file.type.startsWith('image/')) return { error: 'Selecione um arquivo de imagem.' }
+  if (file.size > maxMB * 1024 * 1024) return { error: `Arquivo muito grande (máx. ${maxMB}MB).` }
+
+  const safe = (file.name || 'arquivo')
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9.]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+  const rand = Math.random().toString(36).slice(2, 8)
+  const path = `${folder ? folder.replace(/\/+$/, '') + '/' : ''}${Date.now()}-${rand}-${safe}`
+
+  const { error } = await supabase.storage.from(bucket).upload(path, file, { cacheControl: '3600', upsert: false })
+  if (error) return { error: error.message }
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+  return { path, url: data.publicUrl }
+}
+
 export async function listFiles() {
   const { data, error } = await supabase.storage
     .from(MEDIA_BUCKET)
