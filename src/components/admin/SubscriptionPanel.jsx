@@ -19,14 +19,18 @@ export function SubscriptionPanel({ notify }) {
   const [plan, setPlan] = useState(null)
   const [plans, setPlans] = useState([])
   const [usage, setUsage] = useState({})
+  const [modules, setModules] = useState([])
+  const [comboSel, setComboSel] = useState([])
+  const [comboCycle, setComboCycle] = useState('monthly')
 
   useEffect(() => {
     (async () => {
       setLoading(true)
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
-      const [{ data: s }, { data: allPlans }, pdv, online, units, users, products] = await Promise.all([
+      const [{ data: s }, { data: allPlans }, { data: mods }, pdv, online, units, users, products] = await Promise.all([
         supabase.from('subscriptions').select('*').maybeSingle(),
         supabase.from('plans').select('*').eq('is_active', true).order('sort_order').order('price_monthly'),
+        supabase.from('modules').select('slug,name,category,price_monthly,price_yearly,sellable').eq('sellable', true).order('name'),
         supabase.from('orders').select('*', { count: 'exact', head: true }).eq('channel', 'pdv').gte('created_at', monthStart.toISOString()),
         supabase.from('store_orders').select('*', { count: 'exact', head: true }).gte('created_at', monthStart.toISOString()),
         supabase.from('units').select('*', { count: 'exact', head: true }),
@@ -35,11 +39,26 @@ export function SubscriptionPanel({ notify }) {
       ])
       setSub(s || null)
       setPlans(allPlans || [])
+      setModules((mods || []).filter((m) => (m.price_monthly || 0) > 0))
       setUsage({ pdv_sales: pdv.count || 0, online_orders: online.count || 0, units: units.count || 0, users: users.count || 0, products: products.count || 0 })
       if (s?.plan_id) setPlan((allPlans || []).find((p) => p.id === s.plan_id) || null)
       setLoading(false)
     })()
   }, [])
+
+  const toggleCombo = (slug) => setComboSel((c) => c.includes(slug) ? c.filter((s) => s !== slug) : [...c, slug])
+  const comboTotal = comboSel.reduce((s, sl) => { const m = modules.find((x) => x.slug === sl); return s + (Number(m?.[comboCycle === 'yearly' ? 'price_yearly' : 'price_monthly']) || 0) }, 0)
+  const subscribeCombo = async () => {
+    if (!comboSel.length) return notify('Escolha ao menos um módulo', 'error')
+    const { data, error } = await supabase.functions.invoke('combo-subscribe', { body: { module_slugs: comboSel, cycle: comboCycle, origin: window.location.origin } })
+    if (error || data?.error) {
+      const code = data?.error
+      if (code === 'stripe_not_configured') return notify('A cobrança online ainda não foi ativada. Seu combo foi registrado; assim que o Stripe for configurado, o pagamento é liberado.', 'info')
+      return notify('Não foi possível iniciar: ' + (code || 'erro'), 'error')
+    }
+    if (data?.checkout_url) { window.location.href = data.checkout_url; return }
+    notify('Combo registrado!', 'success')
+  }
 
   const [checkout, setCheckout] = useState(null)
   const subscribe = async (p, cycle = 'monthly') => {
@@ -136,6 +155,39 @@ export function SubscriptionPanel({ notify }) {
           )
         })}
       </div>
+
+      {/* Montar meu combo (self-service) */}
+      {modules.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-1">Montar meu combo</h2>
+          <p className="text-admin-muted/50 text-sm mb-4">Escolha só os módulos que você quer e pague apenas por eles.</p>
+          <div className="glass rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <button onClick={() => setComboCycle('monthly')} className={`text-xs px-3 py-1.5 rounded-lg ${comboCycle === 'monthly' ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/60'}`}>Mensal</button>
+              <button onClick={() => setComboCycle('yearly')} className={`text-xs px-3 py-1.5 rounded-lg ${comboCycle === 'yearly' ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/60'}`}>Anual</button>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
+              {modules.map((m) => {
+                const on = comboSel.includes(m.slug)
+                const price = comboCycle === 'yearly' ? m.price_yearly : m.price_monthly
+                return (
+                  <button key={m.slug} onClick={() => toggleCombo(m.slug)} className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${on ? 'border-admin-champ bg-admin-champ/10' : 'border-white/[0.06] hover:bg-white/[0.03]'}`}>
+                    <span className="min-w-0"><span className={`text-sm truncate block ${on ? 'text-admin-champ' : 'text-admin-text/90'}`}>{m.name}</span><span className="text-admin-muted/40 text-[10px]">{m.category || ''}</span></span>
+                    <span className="text-admin-muted/60 text-xs whitespace-nowrap">{brl(price)}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-between border-t border-white/[0.06] pt-4">
+              <div>
+                <p className="text-admin-muted/50 text-xs">{comboSel.length} módulo(s) selecionado(s)</p>
+                <p className="text-admin-champ text-2xl font-medium">{brl(comboTotal)}<span className="text-admin-muted/40 text-xs font-normal">{comboCycle === 'yearly' ? ' /ano' : ' /mês'}</span></p>
+              </div>
+              <button onClick={subscribeCombo} disabled={!comboSel.length} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-6 py-2.5 rounded-xl text-sm disabled:opacity-40">Assinar meu combo</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
