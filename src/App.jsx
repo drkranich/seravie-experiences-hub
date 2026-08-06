@@ -9,6 +9,7 @@ import { Storefront } from './pages/Storefront'
 import { FlowStore } from './pages/FlowStore'
 import { ClientExperience } from './pages/ClientExperience'
 import { FlowExperience } from './pages/FlowExperience'
+import { DocumentView } from './pages/DocumentView'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { RecoverPassword } from './pages/RecoverPassword'
 
@@ -49,6 +50,9 @@ export default function App() {
 
   // Seravie Flow Studio — experiência pública de formulário (#form/<slug>)
   if (window.location.hash.startsWith('#form/')) return <FlowExperience />
+
+  // Seravie Document Studio — proposta "viva" pública (#p/<slug>)
+  if (window.location.hash.startsWith('#p/')) return <DocumentView />
 
   // Aceite de convite de equipe (precedência: funciona logado ou não)
   if (window.location.hash.startsWith('#convite')) return <AcceptInvite />
