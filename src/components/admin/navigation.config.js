@@ -193,6 +193,12 @@ export const VERTICAL_CORES = {
   events: { label: 'Eventos', icon: 'star', pages: [
     'Casamentos','Buffets','Cerimônias','Convidados','Cronograma','Fornecedores','Checklist','Financeiro','Decoração','Montagem','Desmontagem',
   ]},
+  saboaria: { label: 'Saboaria', icon: 'leaf', pages: [
+    'Sabonetes','Linhas & Coleções','Aromas & Essências','Produção & Cura','Insumos','Embalagens','Kits & Presentes','Estoque','Encomendas','Clube de Assinatura','Feiras & Eventos','Precificação','Fornecedores',
+  ]},
+  perfumaria: { label: 'Perfumaria', icon: 'heart', pages: [
+    'Perfumes','Fragrâncias & Famílias Olfativas','Decants','Notas & Ingredientes','Frascos & Embalagens','Kits & Presentes','Estoque','Encomendas','Clube de Assinatura','Curadoria','Precificação','Fornecedores',
+  ]},
 }
 
 const slug = (s) => s.toLowerCase()

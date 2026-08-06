@@ -127,6 +127,8 @@ export function AdminDashboard({ onExit }) {
     bakery: <VerticalCatalogPanel vertical="bakery" notify={notify} />,
     floriculture: <VerticalCatalogPanel vertical="floriculture" notify={notify} />,
     beauty: <VerticalCatalogPanel vertical="beauty" notify={notify} />,
+    saboaria: <VerticalCatalogPanel vertical="saboaria" notify={notify} />,
+    perfumaria: <VerticalCatalogPanel vertical="perfumaria" notify={notify} />,
     spa: <SpaPanel notify={notify} />,
     tourism: <TourismPanel notify={notify} />,
     architecture: <ArchitecturePanel notify={notify} />,
@@ -189,7 +191,7 @@ export function AdminDashboard({ onExit }) {
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).
   const sections = useMemo(() => {
-    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate', gourmet: 'gourmet', coffee: 'coffee', wine: 'wine', events: 'events', gift: 'gift', brewery: 'brewery', bakery: 'bakery', floriculture: 'floriculture', beauty: 'beauty', spa: 'spa', tourism: 'tourism', architecture: 'architecture', artesanato: 'artesanato' } // frentes com painel real
+    const VERTICAL_ROUTES = { franchise: 'franchise', chocolate: 'chocolate', gourmet: 'gourmet', coffee: 'coffee', wine: 'wine', events: 'events', gift: 'gift', brewery: 'brewery', bakery: 'bakery', floriculture: 'floriculture', beauty: 'beauty', spa: 'spa', tourism: 'tourism', architecture: 'architecture', artesanato: 'artesanato', saboaria: 'saboaria', perfumaria: 'perfumaria' } // frentes com painel real
     const frentes = verticals.map((v) => {
       const nav = verticalToNav(v)
       if (nav && VERTICAL_ROUTES[v]) nav.route = VERTICAL_ROUTES[v]

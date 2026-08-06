@@ -10,6 +10,8 @@ const META = {
   bakery: { title: 'Padaria & Confeitaria', icon: 'cup', item: 'Cardápio', itemSing: 'item', subtitle: 'cardápio, encomendas sob demanda e produção' },
   floriculture: { title: 'Floricultura', icon: 'leaf', item: 'Arranjos', itemSing: 'arranjo', subtitle: 'arranjos, entregas com data e assinaturas florais' },
   beauty: { title: 'Beauty', icon: 'heart', item: 'Produtos', itemSing: 'produto', subtitle: 'produtos, rotinas e assinaturas de reposição' },
+  saboaria: { title: 'Saboaria', icon: 'leaf', item: 'Sabonetes', itemSing: 'sabonete', subtitle: 'sabonetes artesanais, encomendas, kits e clube de assinatura' },
+  perfumaria: { title: 'Perfumaria', icon: 'heart', item: 'Perfumes', itemSing: 'perfume', subtitle: 'fragrâncias, decants, encomendas e clube de assinatura' },
 }
 
 const catalogTab = (vertical, cfg) => ({
@@ -130,6 +132,8 @@ const TABS_BY_VERTICAL = {
   bakery: (n) => [customOrdersTab('bakery', n), suppliersTab(n)],
   floriculture: (n) => [customOrdersTab('floriculture', n), clubTab('floriculture', n), suppliersTab(n)],
   beauty: (n) => [clubTab('beauty', n), suppliersTab(n)],
+  saboaria: (n) => [customOrdersTab('saboaria', n), clubTab('saboaria', n), suppliersTab(n)],
+  perfumaria: (n) => [customOrdersTab('perfumaria', n), clubTab('perfumaria', n), suppliersTab(n)],
 }
 
 export function VerticalCatalogPanel({ vertical, notify }) {
