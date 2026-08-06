@@ -103,6 +103,9 @@ export function ResourcePanel({
   orderBy = { column: 'created_at', ascending: false }, select = '*',
   noTenant = false, exportName, embedded = false, inject = {}, baseFilter, newLabel = 'Novo', module,
 }) {
+  // Rótulo seguro para títulos: no modo embedded, `title` pode não ser passado.
+  // Deriva de newLabel ("Novo produto" -> "produto") ou cai em "registro".
+  const entityLabel = title || (newLabel && newLabel.replace(/^novo\s+/i, '').trim()) || 'registro'
   const { profile, canEdit, canManage } = useTenant()
   const tenantId = profile?.tenant_id
   const allowEdit = module && canEdit ? canEdit(module) : true      // criar/editar/duplicar
@@ -376,7 +379,7 @@ export function ResourcePanel({
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="glass-pop rounded-2xl p-7 w-full max-w-2xl overflow-visible max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">{editing ? `Editar ${title.toLowerCase()}` : `Novo · ${title}`}</h2><button onClick={() => setModal(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            <div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">{editing ? `Editar ${entityLabel.toLowerCase()}` : `Novo · ${entityLabel}`}</h2><button onClick={() => setModal(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-4">
               {fields.map((f) => (
                 <div key={f.key} className={f.full || f.type === 'textarea' || f.type === 'bool' ? 'col-span-2' : ''}>
