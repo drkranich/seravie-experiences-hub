@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, SUPABASE_URL } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 
@@ -160,6 +160,22 @@ export function MessagingChannels({ notify, context = 'conversations' }) {
               <button onClick={() => setEditing(null)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
             </div>
             <p className="text-admin-muted/50 text-xs mb-5">{editing.help}</p>
+
+            {/* URL do webhook para colar no provedor (Meta/Telegram) */}
+            {['whatsapp', 'instagram', 'messenger', 'telegram'].includes(editing.key) && (() => {
+              const hook = `${SUPABASE_URL}/functions/v1/channel-webhook/${editing.key}`
+              return (
+                <div className="glass-soft rounded-xl px-3 py-2.5 mb-4">
+                  <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-1">URL do Webhook (cole no {editing.key === 'telegram' ? 'setWebhook do bot' : 'painel da Meta'})</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[11px] text-admin-text/80 break-all flex-1">{hook}{editing.key === 'telegram' ? '?t=SEU_TENANT' : ''}</code>
+                    <button onClick={() => { navigator.clipboard?.writeText(hook); notify('URL copiada', 'success') }} className="shrink-0 text-[10px] px-2 py-1 rounded-lg bg-admin-champ/15 text-admin-champ">copiar</button>
+                  </div>
+                  {editing.key !== 'telegram' && <p className="text-admin-muted/30 text-[10px] mt-1.5">Use o mesmo "Verify Token" abaixo na configuração do webhook da Meta.</p>}
+                </div>
+              )
+            })()}
+
             <div className="space-y-3">
               {editing.fields.map((f) => (
                 <div key={f.key}>
