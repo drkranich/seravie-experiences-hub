@@ -25,12 +25,9 @@ export const CORE_SECTIONS = [
         { key: 'crm.companies', label: 'Empresas', route: 'crm_companies' },
         { key: 'crm.vip', label: 'VIP', route: 'crm_vip' },
       ]},
-      { key: 'conversations', label: 'Central de Conversas', icon: 'mail', route: 'conversations', pages: [
-        { key: 'conv.all', label: 'Caixa Geral', route: 'conversations' },
-        { key: 'conv.channels', label: 'Canais de Atendimento', route: 'msgchannels' },
-      ]},
       { key: 'helpdesk', label: 'Help Desk', icon: 'check', route: 'helpdesk', pages: [
         { key: 'hd.tickets', label: 'Chamados', route: 'helpdesk' },
+        { key: 'hd.inbox', label: 'Central de Conversas', route: 'conversations' },
         { key: 'hd.channels', label: 'Canais de Atendimento', route: 'hd_channels' },
         { key: 'hd.sla', label: 'SLA', route: 'sla' },
         { key: 'hd.nps', label: 'Pesquisas NPS', route: 'nps' },

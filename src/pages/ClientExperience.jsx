@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { GlassDate } from '../components/admin/ui'
 
 // Experiências públicas do CLIENTE final por vertical:
 //   #agenda/<slug>   → agendamento (spa/beauty)
@@ -115,7 +116,7 @@ export function ClientExperience() {
             {(mode === 'agenda' || mode === 'reserva') && (
               <div>
                 <label className="text-[10px] uppercase tracking-widerx text-gold/70 block mb-1.5">Data</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full bg-white/[0.04] border border-gold/20 rounded-xl px-3 py-2.5 text-ivory text-sm outline-none" />
+                <GlassDate value={date} onChange={setDate} />
               </div>
             )}
             {mode === 'agenda' && (

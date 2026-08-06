@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassDate } from './ui'
 import { exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
 
@@ -180,7 +180,7 @@ export function QuoteStudio({ notify }) {
             <input value={editing.title} onChange={(e) => setEditing((q) => ({ ...q, title: e.target.value }))} onBlur={(e) => setField({ title: e.target.value })} className="w-full bg-transparent text-admin-text font-serif text-xl outline-none border-b border-white/[0.06] pb-2" />
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Cliente</label><p className="text-admin-text text-sm">{editing.contact?.name || '—'}</p></div>
-              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Validade</label><input type="date" defaultValue={editing.valid_until || ''} onBlur={(e) => setField({ valid_until: e.target.value || null })} className="glass-input rounded-lg px-3 py-1.5 text-sm text-admin-text outline-none" /></div>
+              <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Validade</label><GlassDate value={editing.valid_until || ''} onChange={(v) => setField({ valid_until: v || null })} /></div>
             </div>
           </div>
 
