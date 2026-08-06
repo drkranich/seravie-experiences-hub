@@ -187,7 +187,10 @@ export function AdminDashboard({ onExit }) {
     const permsArr = Array.isArray(profile?.permissions) ? profile.permissions : []
     const full = ['super_admin', 'admin'].includes(profile?.role_slug) || permsArr.includes('*')
     const anyLevel = (key) => permsArr.includes('view:' + key) || permsArr.includes('edit:' + key) || permsArr.includes('manage:' + key)
+    const isSuper = profile?.role_slug === 'super_admin'
     const gateItem = (item) => {
+      // 'superadmin' é exclusivo de Super Admin — nunca aparece para admin de tenant.
+      if (item.key === 'superadmin') return isSuper ? item : null
       if (full || item.key === 'overview' || String(item.key).startsWith('vertical.')) return item
       const modOK = anyLevel(item.key)
       if (modOK) return item // acesso ao módulo implica todas as páginas
