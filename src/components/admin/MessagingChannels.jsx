@@ -50,16 +50,34 @@ const CHANNELS = [
     ],
   },
   {
-    key: 'email', name: 'E-mail', color: '#b08d57', tint: '#b08d5718', letter: '@',
-    blurb: 'Central de e-mail (SMTP/IMAP) no inbox unificado.',
-    help: 'Informe os dados do servidor de e-mail e credenciais.',
+    key: 'email', name: 'E-mail (atendimento)', color: '#b08d57', tint: '#b08d5718', letter: '@',
+    blurb: 'Receba e-mails de clientes no inbox unificado (IMAP).',
+    help: 'Conta de e-mail que RECEBE mensagens (Google Workspace, Zoho, domínio próprio). Ex.: Gmail → imap.gmail.com (993). Use uma senha de app. O sistema verifica a caixa a cada 5 min e transforma novos e-mails em conversas/chamados.',
     primary: 'imap_host',
     fields: [
-      { key: 'address', label: 'Endereço de e-mail' },
-      { key: 'imap_host', label: 'Servidor IMAP' },
-      { key: 'smtp_host', label: 'Servidor SMTP' },
-      { key: 'username', label: 'Usuário' },
-      { key: 'password', label: 'Senha', secret: true },
+      { key: 'address', label: 'Endereço de e-mail', placeholder: 'atendimento@seudominio.com' },
+      { key: 'imap_host', label: 'Servidor IMAP', placeholder: 'imap.gmail.com' },
+      { key: 'imap_port', label: 'Porta IMAP', placeholder: '993' },
+      { key: 'smtp_host', label: 'Servidor SMTP', placeholder: 'smtp.gmail.com' },
+      { key: 'smtp_port', label: 'Porta SMTP', placeholder: '587' },
+      { key: 'username', label: 'Usuário', placeholder: 'atendimento@seudominio.com' },
+      { key: 'password', label: 'Senha (ou senha de app)', secret: true },
+    ],
+  },
+  {
+    key: 'email_send', name: 'E-mail (disparo)', color: '#8a7a4a', tint: '#8a7a4a18', letter: '↗',
+    blurb: 'Envie e-mails do sistema pela sua marca (Resend ou SMTP).',
+    help: 'Provedor que ENVIA os e-mails automáticos (convites, recuperação de senha, notificações) saindo do SEU domínio. Resend: host smtp.resend.com, usuário "resend", senha = sua API key, porta 465/587. Verifique o domínio no provedor (SPF/DKIM).',
+    primary: 'api_key',
+    fields: [
+      { key: 'from_email', label: 'Remetente (De:)', placeholder: 'no-reply@seudominio.com' },
+      { key: 'from_name', label: 'Nome do remetente', placeholder: 'Sua Marca' },
+      { key: 'provider', label: 'Provedor', placeholder: 'resend' },
+      { key: 'api_key', label: 'API key (Resend)', secret: true },
+      { key: 'smtp_host', label: 'SMTP host (opcional)', placeholder: 'smtp.resend.com' },
+      { key: 'smtp_port', label: 'SMTP porta (opcional)', placeholder: '465' },
+      { key: 'smtp_user', label: 'SMTP usuário (opcional)', placeholder: 'resend' },
+      { key: 'smtp_pass', label: 'SMTP senha (opcional)', secret: true },
     ],
   },
   {
@@ -127,7 +145,7 @@ export function MessagingChannels({ notify, context = 'conversations' }) {
 
       <div className="glass-soft rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
         <Icon name="mail" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
-        <p className="text-admin-muted/60 text-xs leading-relaxed">Cada loja conecta as próprias contas (isoladas por tenant). Ao conectar, defina em <strong>Regras de atendimento</strong> se as mensagens recebidas devem abrir um chamado automaticamente no Help Desk, com qual prioridade e equipe. O recebimento em tempo real de cada canal é ativado com o app aprovado na plataforma (WhatsApp Cloud API, Meta, etc.), na etapa de webhooks.</p>
+        <p className="text-admin-muted/60 text-xs leading-relaxed">Cada loja conecta as próprias contas (isoladas por tenant). Canais de conversa (WhatsApp, Instagram, e-mail de atendimento…) trazem mensagens ao Help Desk — defina em <strong>Regras de atendimento</strong> se cada mensagem abre um chamado. O <strong>E-mail (disparo)</strong> é separado: é o provedor que envia os e-mails automáticos do sistema (convites, senha, notificações) saindo da sua marca.</p>
       </div>
 
       {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p> : (
@@ -190,7 +208,7 @@ export function MessagingChannels({ notify, context = 'conversations' }) {
             <label className="flex items-center gap-3 mt-4 cursor-pointer"><input type="checkbox" checked={!!form.is_enabled} onChange={(e) => setForm((f) => ({ ...f, is_enabled: e.target.checked }))} className="w-4 h-4 rounded" /><span className="text-sm text-admin-muted">Ativar canal</span></label>
 
             {/* Regras de atendimento — mensagem recebida vira chamado no Help Desk */}
-            {editing.key !== 'webchat' && (
+            {!['webchat', 'email_send'].includes(editing.key) && (
               <div className="mt-5 pt-4 border-t border-white/[0.06] space-y-3">
                 <p className="text-[11px] tracking-wider uppercase text-admin-champ/70">Regras de atendimento</p>
                 <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={form.settings?.create_ticket !== false} onChange={(e) => setSetting('create_ticket', e.target.checked)} className="w-4 h-4 rounded" /><span className="text-sm text-admin-muted">Abrir chamado no Help Desk a cada nova mensagem</span></label>
