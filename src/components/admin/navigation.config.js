@@ -36,6 +36,11 @@ export const CORE_SECTIONS = [
         { key: 'hd.audit', label: 'Auditoria', route: 'audit' },
       ]},
       { key: 'pos', label: 'PDV', icon: 'tag', route: 'pos' },
+      { key: 'kds', label: 'KDS — Cozinha', icon: 'grid', route: 'kds' },
+      { key: 'tables', label: 'Mesas & Comandas', icon: 'layout', route: 'tables' },
+      { key: 'delivery_hub', label: 'Hub Delivery', icon: 'cart', route: 'delivery_hub' },
+      { key: 'fiscal', label: 'Emissão Fiscal', icon: 'check', route: 'fiscal' },
+      { key: 'loyalty', label: 'Fidelidade', icon: 'star', route: 'loyalty' },
       { key: 'receivables', label: 'Recebíveis', icon: 'chart', route: 'receivables' },
       { key: 'ecommerce', label: 'E-commerce', icon: 'cart', route: 'ecommerce', pages: [
         { key: 'ec.storefront', label: 'Vitrine', route: 'ecommerce' },

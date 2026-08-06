@@ -8,6 +8,7 @@ const KIND_LABEL = { quarto: 'Quarto', mesa: 'Mesa', chale: 'Chalé', suite: 'Su
 export function FlowStore() {
   const code = (window.location.hash.match(/#flow\/([^?]+)/) || [])[1] || ''
   const params = new URLSearchParams((window.location.hash.split('?')[1] || ''))
+  const totem = params.get('totem') === '1' // modo autoatendimento (quiosque, tela cheia)
   const [point, setPoint] = useState(null)
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -75,21 +76,26 @@ export function FlowStore() {
   )
 
   return (
-    <div className="min-h-screen pb-28" style={bg}>
+    <div className={`min-h-screen pb-28 ${totem ? 'text-[1.15rem]' : ''}`} style={bg}>
+      {totem && (
+        <div className="bg-gold/10 border-b border-gold/20 text-center py-2">
+          <p className="text-[11px] tracking-widerx uppercase text-gold/90">Autoatendimento · toque para montar seu pedido</p>
+        </div>
+      )}
       {/* header */}
       <div className="relative">
-        <div className="h-40 bg-gradient-to-br from-gold/20 to-olive/20">{point.cover_url && <img src={point.cover_url} alt="" className="w-full h-full object-cover" />}</div>
-        <div className="max-w-lg mx-auto px-5 -mt-10 relative">
+        <div className={`${totem ? 'h-56' : 'h-40'} bg-gradient-to-br from-gold/20 to-olive/20`}>{point.cover_url && <img src={point.cover_url} alt="" className="w-full h-full object-cover" />}</div>
+        <div className={`${totem ? 'max-w-3xl' : 'max-w-lg'} mx-auto px-5 -mt-10 relative`}>
           <div className="glass rounded-2xl p-5">
             <p className="text-[10px] tracking-widerx uppercase text-gold/80">{KIND_LABEL[point.kind] || point.kind}{point.branch ? ` · ${point.branch}` : ''}</p>
-            <h1 className="font-serif text-3xl text-ivory mt-1">{point.name}</h1>
+            <h1 className={`font-serif ${totem ? 'text-4xl' : 'text-3xl'} text-ivory mt-1`}>{point.name}</h1>
             {point.description && <p className="text-ivory/55 text-sm mt-2">{point.description}</p>}
           </div>
         </div>
       </div>
 
       {/* catálogo */}
-      <div className="max-w-lg mx-auto px-5 mt-6 space-y-7">
+      <div className={`${totem ? 'max-w-3xl' : 'max-w-lg'} mx-auto px-5 mt-6 space-y-7`}>
         {products.length === 0 ? (
           <p className="text-ivory/40 text-center text-sm py-16">Nenhum produto disponível neste ponto ainda.</p>
         ) : categories.map(([cat, list]) => (

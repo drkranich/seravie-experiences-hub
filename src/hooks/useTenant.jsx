@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react'
 import { supabase } from '../lib/supabase'
 
-const TenantContext = createContext(null)
+export const TenantContext = createContext(null)
 
 export function TenantProvider({ children }) {
   const [profile, setProfile] = useState(null)

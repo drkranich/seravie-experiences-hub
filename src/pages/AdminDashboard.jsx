@@ -58,6 +58,11 @@ import { SuppliersPanel } from '../components/admin/SuppliersPanel'
 import { NetworkHubPanel } from '../components/admin/NetworkHubPanel'
 import { LegalPanel } from '../components/admin/LegalPanel'
 import { FlowPanel } from '../components/admin/FlowPanel'
+import { KDSPanel } from '../components/admin/KDSPanel'
+import { TablesPanel } from '../components/admin/TablesPanel'
+import { DeliveryHubPanel } from '../components/admin/DeliveryHubPanel'
+import { FiscalPanel } from '../components/admin/FiscalPanel'
+import { LoyaltyPanel } from '../components/admin/LoyaltyPanel'
 import { SubscriptionPanel } from '../components/admin/SubscriptionPanel'
 import { ReceivablesPanel } from '../components/admin/ReceivablesPanel'
 import { Onboarding } from '../components/admin/Onboarding'
@@ -171,6 +176,11 @@ export function AdminDashboard({ onExit }) {
     network_hub: <NetworkHubPanel notify={notify} />,
     legal: <LegalPanel notify={notify} />,
     flow: <FlowPanel notify={notify} />,
+    kds: <KDSPanel notify={notify} />,
+    tables: <TablesPanel notify={notify} />,
+    delivery_hub: <DeliveryHubPanel notify={notify} />,
+    fiscal: <FiscalPanel notify={notify} />,
+    loyalty: <LoyaltyPanel notify={notify} />,
   }
 
   // Frentes especializadas ativas para o tenant (por vertical_configs).
