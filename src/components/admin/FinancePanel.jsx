@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
-import { Icon, GlassSelect, GlassDate, GlassMonth } from './ui'
+import { Icon, GlassSelect, GlassDate, GlassMonth, matchPeriod } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -68,7 +68,7 @@ export function FinancePanel({ notify }) {
     return [...set].sort().reverse()
   }, [entries])
 
-  const monthEntries = entries.filter((e) => (e.date || '').slice(0, 7) === month && (e.status || 'paid') === 'paid')
+  const monthEntries = entries.filter((e) => matchPeriod(e.date, month) && (e.status || 'paid') === 'paid')
   const revenue = monthEntries.filter((e) => e.type === 'revenue').reduce((s, e) => s + Number(e.amount), 0)
   const expense = monthEntries.filter((e) => e.type === 'expense').reduce((s, e) => s + Number(e.amount), 0)
   const balance = revenue - expense

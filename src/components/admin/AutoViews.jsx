@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Icon, GlassMonth, GlassSelect } from './ui'
+import { Icon, GlassMonth, GlassSelect, matchPeriod } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -28,7 +28,7 @@ export function SalesView({ notify }) {
     })()
   }, [])
 
-  const monthRows = rows.filter((r) => (r.date || '').slice(0, 7) === month && (!chan || r.source === chan))
+  const monthRows = rows.filter((r) => matchPeriod(r.date, month) && (!chan || r.source === chan))
   const total = monthRows.reduce((s, r) => s + r.total, 0)
   const ticket = monthRows.length ? total / monthRows.length : 0
   const channels = useMemo(() => [...new Set(rows.map((r) => r.source))], [rows])

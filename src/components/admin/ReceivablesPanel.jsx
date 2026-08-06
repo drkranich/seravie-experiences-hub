@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Icon, GlassMonth } from './ui'
+import { Icon, GlassMonth, matchPeriod } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -42,7 +42,7 @@ export function ReceivablesPanel({ notify }) {
     return [...set].sort().reverse()
   }, [rows])
 
-  const monthRows = rows.filter((r) => (r.date || '').slice(0, 7) === month)
+  const monthRows = rows.filter((r) => matchPeriod(r.date, month))
   const total = monthRows.reduce((s, r) => s + r.total, 0)
   const byChannel = () => {
     const m = {}

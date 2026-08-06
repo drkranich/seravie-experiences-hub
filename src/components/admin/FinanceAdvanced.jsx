@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect, GlassMonth } from './ui'
+import { Icon, GlassSelect, GlassMonth, matchPeriod } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
 
@@ -105,7 +105,7 @@ export function DrePanel({ notify }) {
     return [...set].sort().reverse()
   }, [entries])
 
-  const mEntries = entries.filter((e) => (e.date || '').slice(0, 7) === month)
+  const mEntries = entries.filter((e) => matchPeriod(e.date, month))
   const catAgg = (type) => {
     const m = {}
     mEntries.filter((e) => e.type === type).forEach((e) => { m[e.category || 'outro'] = (m[e.category || 'outro'] || 0) + Number(e.amount || 0) })

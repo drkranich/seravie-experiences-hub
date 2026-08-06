@@ -476,51 +476,103 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
   )
 }
 
+// Compara a data de um registro (YYYY-MM-DD...) com o filtro selecionado do
+// GlassMonth. Se o filtro é por dia (10 chars) compara o dia exato; se por mês
+// (7 chars) compara o mês. Retrocompatível com filtros de mês existentes.
+export function matchPeriod(recordDate, filter) {
+  const d = String(recordDate || '')
+  const f = String(filter || '')
+  if (!d || !f) return false
+  return f.length >= 10 ? d.slice(0, 10) === f : d.slice(0, 7) === f
+}
+
 /**
- * GlassMonth — seletor de mês (formato 'YYYY-MM'). Setas para navegar e um
- * popover glass com os 12 meses por ano — permite escolher qualquer mês.
+ * GlassMonth — seletor com DUAS opções (glassmorphism): por MÊS (YYYY-MM) e por
+ * DIA (YYYY-MM-DD). Um toggle no popover alterna entre os modos.
+ * onChange(value, mode): mode é 'month' (value 'YYYY-MM') ou 'day' (value 'YYYY-MM-DD').
+ * Painéis que ignoram o 2º argumento seguem funcionando por mês (retrocompatível).
  */
 export function GlassMonth({ value, onChange, className = '' }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const labelRef = useRef(null)
   const popRef = useRef(null)
-  const style = useAnchoredPopover(labelRef, open, setOpen, { width: 256, ideal: 300, popRef })
-  const [y, m] = String(value || '').split('-').map(Number)
-  const cy = y || new Date().getFullYear()
-  const cm = m || (new Date().getMonth() + 1)
+  const style = useAnchoredPopover(labelRef, open, setOpen, { width: 256, ideal: 360, popRef })
+  const isDay = String(value || '').length === 10 // 'YYYY-MM-DD'
+  const [mode, setMode] = useState(isDay ? 'day' : 'month')
+  const parts = String(value || '').split('-').map(Number)
+  const cy = parts[0] || new Date().getFullYear()
+  const cm = parts[1] || (new Date().getMonth() + 1)
+  const cd = parts[2] || null
   const [viewYear, setViewYear] = useState(cy)
+  const [viewMonth, setViewMonth] = useState(cm) // para o calendário de dias
   const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-  const shift = (delta) => { const d = new Date(cy, cm - 1 + delta, 1); onChange(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`) }
-  const label = new Date(cy, cm - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-  const pick = (mi) => { onChange(`${viewYear}-${pad2(mi + 1)}`); setOpen(false) }
+
+  const shift = (delta) => {
+    if (isDay && cd) { const d = new Date(cy, cm - 1, cd + delta); onChange(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, 'day') }
+    else { const d = new Date(cy, cm - 1 + delta, 1); onChange(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`, 'month') }
+  }
+  const label = isDay && cd
+    ? new Date(cy, cm - 1, cd).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+    : new Date(cy, cm - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const pickMonth = (mi) => { onChange(`${viewYear}-${pad2(mi + 1)}`, 'month'); setOpen(false) }
+  const pickDay = (d) => { onChange(`${viewYear}-${pad2(viewMonth)}-${pad2(d)}`, 'day'); setOpen(false) }
 
   useEffect(() => {
     if (!open) return
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target) && popRef.current && !popRef.current.contains(e.target)) setOpen(false) }
     const onEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', onDoc); document.addEventListener('keydown', onEsc)
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onEsc) }
   }, [open])
 
+  // grade de dias do mês em visualização
+  const daysInView = new Date(viewYear, viewMonth, 0).getDate()
+  const firstDow = new Date(viewYear, viewMonth - 1, 1).getDay()
+  const dayCells = [...Array(firstDow).fill(null), ...Array.from({ length: daysInView }, (_, i) => i + 1)]
+
   return (
     <div ref={ref} className={`relative flex items-center gap-1 ${className}`}>
       <button type="button" onClick={() => shift(-1)} className="w-8 h-8 rounded-lg glass-input hover:bg-white/[0.06] flex items-center justify-center text-admin-muted shrink-0"><Icon name="up" className="w-4 h-4 -rotate-90" /></button>
-      <button ref={labelRef} type="button" onClick={() => { setViewYear(cy); setOpen((o) => !o) }} className="glass-input rounded-xl px-3 py-2 text-sm text-admin-text capitalize min-w-[9rem] text-center">{label}</button>
+      <button ref={labelRef} type="button" onClick={() => { setViewYear(cy); setViewMonth(cm); setOpen((o) => !o) }} className="glass-input rounded-xl px-3 py-2 text-sm text-admin-text capitalize min-w-[9rem] text-center">{label}</button>
       <button type="button" onClick={() => shift(1)} className="w-8 h-8 rounded-lg glass-input hover:bg-white/[0.06] flex items-center justify-center text-admin-muted shrink-0"><Icon name="down" className="w-4 h-4 -rotate-90" /></button>
       {open && style && createPortal(
         <div ref={popRef} style={style} className="glass-pop rounded-xl p-2.5 shadow-2xl overflow-auto">
-          <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={() => setViewYear((v) => v - 1)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
-            <p className="text-admin-champ text-sm font-medium">{viewYear}</p>
-            <button type="button" onClick={() => setViewYear((v) => v + 1)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
+          {/* toggle Mês | Dia */}
+          <div className="flex gap-1 mb-2.5 bg-white/[0.04] rounded-lg p-0.5">
+            <button type="button" onClick={() => setMode('month')} className={`flex-1 py-1.5 rounded-md text-[11px] transition-colors ${mode === 'month' ? 'bg-admin-champ/20 text-admin-champ' : 'text-admin-muted/60 hover:text-admin-text'}`}>Por mês</button>
+            <button type="button" onClick={() => setMode('day')} className={`flex-1 py-1.5 rounded-md text-[11px] transition-colors ${mode === 'day' ? 'bg-admin-champ/20 text-admin-champ' : 'text-admin-muted/60 hover:text-admin-text'}`}>Por data</button>
           </div>
-          <div className="grid grid-cols-3 gap-1">
-            {MONTHS.map((mm, i) => {
-              const sel = viewYear === cy && i + 1 === cm
-              return <button key={i} type="button" onClick={() => pick(i)} className={`py-2 rounded-lg text-xs transition-colors ${sel ? 'bg-admin-champ text-admin-bg font-medium' : 'text-admin-text hover:bg-white/[0.06]'}`}>{mm}</button>
-            })}
-          </div>
+
+          {mode === 'month' ? (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <button type="button" onClick={() => setViewYear((v) => v - 1)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
+                <p className="text-admin-champ text-sm font-medium">{viewYear}</p>
+                <button type="button" onClick={() => setViewYear((v) => v + 1)} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {MONTHS.map((mm, i) => {
+                  const sel = !isDay && viewYear === cy && i + 1 === cm
+                  return <button key={i} type="button" onClick={() => pickMonth(i)} className={`py-2 rounded-lg text-xs transition-colors ${sel ? 'bg-admin-champ text-admin-bg font-medium' : 'text-admin-text hover:bg-white/[0.06]'}`}>{mm}</button>
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <button type="button" onClick={() => { const d = new Date(viewYear, viewMonth - 2, 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth() + 1) }} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
+                <p className="text-admin-champ text-sm font-medium capitalize">{new Date(viewYear, viewMonth - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                <button type="button" onClick={() => { const d = new Date(viewYear, viewMonth, 1); setViewYear(d.getFullYear()); setViewMonth(d.getMonth() + 1) }} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
+              </div>
+              <div className="grid grid-cols-7 gap-0.5 mb-0.5">{['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="text-center text-[9px] text-admin-muted/40 py-0.5">{d}</div>)}</div>
+              <div className="grid grid-cols-7 gap-0.5">
+                {dayCells.map((d, i) => d ? (
+                  <button key={i} type="button" onClick={() => pickDay(d)} className={`h-6 rounded-md text-[11px] transition-colors ${isDay && d === cd && viewMonth === cm && viewYear === cy ? 'bg-admin-champ text-admin-bg font-medium' : 'text-admin-text hover:bg-white/[0.06]'}`}>{d}</button>
+                ) : <div key={i} />)}
+              </div>
+            </>
+          )}
         </div>, document.body
       )}
     </div>
