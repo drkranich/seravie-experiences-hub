@@ -204,9 +204,13 @@ export function AdminDashboard({ onExit }) {
     const full = ['super_admin', 'admin'].includes(profile?.role_slug) || permsArr.includes('*')
     const anyLevel = (key) => permsArr.includes('view:' + key) || permsArr.includes('edit:' + key) || permsArr.includes('manage:' + key)
     const isSuper = profile?.role_slug === 'super_admin'
+    // Grupos e itens EXCLUSIVOS do dono da plataforma (super admin):
+    // - "Site & Conteúdo" = CMS do site público institucional da Seravie.
+    // - itens de plataforma no grupo Sistema (planos, super admin).
+    const SUPER_ONLY_GROUPS = new Set(['Site & Conteúdo'])
+    const SUPER_ONLY_ITEMS = new Set(['superadmin', 'plans'])
     const gateItem = (item) => {
-      // 'superadmin' é exclusivo de Super Admin — nunca aparece para admin de tenant.
-      if (item.key === 'superadmin') return isSuper ? item : null
+      if (SUPER_ONLY_ITEMS.has(item.key)) return isSuper ? item : null
       if (full || item.key === 'overview' || String(item.key).startsWith('vertical.')) return item
       const modOK = anyLevel(item.key)
       if (modOK) return item // acesso ao módulo implica todas as páginas
@@ -215,6 +219,7 @@ export function AdminDashboard({ onExit }) {
       return { ...item, pages, route: pages[0].route || pages[0].key } // parcial: abre na 1ª página permitida
     }
     return base
+      .filter((sec) => !SUPER_ONLY_GROUPS.has(sec.group) || isSuper) // grupo de plataforma só p/ super admin
       .map((sec) => ({ ...sec, items: sec.items.map(gateItem).filter(Boolean) }))
       .filter((sec) => sec.items.length)
   }, [verticals, profile])
@@ -242,12 +247,22 @@ export function AdminDashboard({ onExit }) {
   const activeLabel =
     navIndex[active]?.item?.label || ROUTE_LABELS[active] || 'Backstage'
 
+  // Rotas do site institucional da Seravie (CMS público) — só super admin.
+  // Defesa em profundidade: bloqueia mesmo acesso direto por rota.
+  // Obs: 'faqs' fica de fora — é rota compartilhada com o FAQ do módulo
+  // Conhecimento (do tenant). O item de menu "FAQ" do site já é escondido pelo
+  // filtro de grupo "Site & Conteúdo".
+  const PLATFORM_ROUTES = new Set(['content', 'services', 'portfolio', 'process', 'segments', 'jornal', 'testimonials', 'pages', 'menus', 'newsletter', 'plans', 'superadmin'])
+  const isSuperUser = profile?.role_slug === 'super_admin'
+
   // Conteúdo: painel real ou ScaffoldPage
-  const content = COMPONENTS[active] || (
-    navIndex[active]
-      ? <ScaffoldPage item={navIndex[active].item} parentLabel={navIndex[active].parentLabel} onNavigate={go} />
-      : COMPONENTS.overview
-  )
+  const content = (PLATFORM_ROUTES.has(active) && !isSuperUser)
+    ? <div className="glass rounded-2xl p-12 text-center"><Icon name="gear" className="w-10 h-10 text-admin-champ/25 mx-auto mb-3" /><p className="text-admin-muted/50 text-sm">Área restrita ao administrador da plataforma.</p></div>
+    : (COMPONENTS[active] || (
+        navIndex[active]
+          ? <ScaffoldPage item={navIndex[active].item} parentLabel={navIndex[active].parentLabel} onNavigate={go} />
+          : COMPONENTS.overview
+      ))
 
   const isItemActive = (item) =>
     active === (item.route || item.key) || (item.pages || []).some((p) => active === (p.route || p.key))
