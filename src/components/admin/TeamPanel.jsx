@@ -3,12 +3,20 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
 import { FlowImageField } from './FlowImageField'
+import { AttachButton, PendingAttachments, AttachmentList } from './AttachmentField'
 import { exportCsv } from '../../lib/export'
 
 const STATUS = { active: ['Ativo', 'text-admin-sage bg-admin-sage/10'], inactive: ['Inativo', 'text-admin-muted/40 bg-white/[0.04]'], vacation: ['Férias', 'text-admin-gold bg-admin-gold/10'], terminated: ['Desligado', 'text-admin-rose bg-admin-rose/10'] }
 // Setores/categorias padrão (o usuário pode digitar outro livremente)
 const DEPARTMENTS = ['Atendimento', 'Vendas', 'Financeiro', 'Marketing', 'Operações', 'Produção', 'Logística', 'Suporte', 'Administrativo', 'Gerência', 'RH', 'TI']
-const emptyForm = () => ({ name: '', role: '', department: '', email: '', phone: '', birth_date: '', hire_date: '', status: 'active', registration_file: '', notes: '' })
+const CONTRACT = { clt: 'CLT', pj: 'PJ', estagio: 'Estágio', temporario: 'Temporário', freelancer: 'Freelancer', socio: 'Sócio' }
+const GENDER = { '': '— não informar —', female: 'Feminino', male: 'Masculino', other: 'Outro' }
+const emptyForm = () => ({
+  name: '', role: '', department: '', email: '', phone: '', birth_date: '', hire_date: '', status: 'active',
+  avatar_url: '', document: '', rg: '', gender: '', address: '', city: '', state: '', postal_code: '',
+  emergency_name: '', emergency_phone: '', contract_type: '', salary: '', pix_key: '', bank_info: '',
+  registration_file: '', documents: [], has_system_access: false, notes: '',
+})
 
 // Colunas da planilha-modelo Seravie (ordem fixa)
 const TEMPLATE_COLS = ['nome', 'setor', 'cargo', 'email', 'telefone', 'aniversario', 'admissao', 'status']
@@ -38,6 +46,11 @@ function parseCsv(text) {
   if (!rows.length) return []
   const header = rows[0].map((h) => h.trim().toLowerCase())
   return rows.slice(1).filter((r) => r.some((c) => c.trim())).map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] || '').trim()])))
+}
+
+// Cabeçalho de seção do formulário
+function Section({ title }) {
+  return <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2 mt-1 pb-1 border-b border-white/[0.06]">{title}</p>
 }
 
 export function TeamPanel({ notify }) {
@@ -71,7 +84,17 @@ export function TeamPanel({ notify }) {
   const save = async () => {
     const f = modal.form
     if (!f.name?.trim()) return notify('Nome obrigatório', 'error')
-    const payload = { name: f.name, role: f.role || null, department: f.department || null, email: f.email || null, phone: f.phone || null, birth_date: f.birth_date || null, hire_date: f.hire_date || null, status: f.status || 'active', registration_file: f.registration_file || null, notes: f.notes || null }
+    const payload = {
+      name: f.name, role: f.role || null, department: f.department || null, email: f.email || null, phone: f.phone || null,
+      birth_date: f.birth_date || null, hire_date: f.hire_date || null, status: f.status || 'active',
+      avatar_url: f.avatar_url || null, document: f.document || null, rg: f.rg || null, gender: f.gender || null,
+      address: f.address || null, city: f.city || null, state: f.state || null, postal_code: f.postal_code || null,
+      emergency_name: f.emergency_name || null, emergency_phone: f.emergency_phone || null,
+      contract_type: f.contract_type || null, salary: f.salary !== '' && f.salary != null ? Number(f.salary) : null,
+      pix_key: f.pix_key || null, bank_info: f.bank_info || null,
+      registration_file: f.registration_file || null, documents: Array.isArray(f.documents) ? f.documents : [],
+      has_system_access: !!f.has_system_access, notes: f.notes || null,
+    }
     const { error } = modal.editingId
       ? await supabase.from('employees').update(payload).eq('id', modal.editingId)
       : await supabase.from('employees').insert({ ...payload, tenant_id: tenantId })
@@ -83,7 +106,7 @@ export function TeamPanel({ notify }) {
   // --- Planilha-modelo ---
   const downloadTemplate = () => {
     exportCsv('modelo-equipe-seravie.csv', [
-      { nome: 'Ex: Maria Silva', setor: 'Atendimento', cargo: 'Atendente', email: 'maria@empresa.com', telefone: '(11) 90000-0000', aniversario: '1990-05-20', admissao: '2024-01-10', status: 'active' },
+      { nome: 'Ex: Maria Silva', setor: 'Atendimento', cargo: 'Atendente', email: 'maria@empresa.com', telefone: '(11) 90000-0000', cpf: '000.000.000-00', aniversario: '1990-05-20', admissao: '2024-01-10', contrato: 'clt', status: 'active' },
     ])
     notify('Modelo baixado — preencha e importe', 'success')
   }
@@ -99,8 +122,9 @@ export function TeamPanel({ notify }) {
     setImporting(true)
     const toInsert = preview.filter((r) => (r.nome || '').trim()).map((r) => ({
       tenant_id: tenantId, name: r.nome, department: r.setor || null, role: r.cargo || null,
-      email: r.email || null, phone: r.telefone || null,
+      email: r.email || null, phone: r.telefone || null, document: r.cpf || r.documento || null,
       birth_date: r.aniversario || null, hire_date: r.admissao || null,
+      contract_type: ['clt', 'pj', 'estagio', 'temporario', 'freelancer', 'socio'].includes((r.contrato || '').toLowerCase()) ? r.contrato.toLowerCase() : null,
       status: ['active', 'inactive', 'vacation', 'terminated'].includes((r.status || '').toLowerCase()) ? r.status.toLowerCase() : 'active',
     }))
     if (!toInsert.length) { setImporting(false); return notify('Nenhuma linha válida', 'error') }
@@ -162,11 +186,16 @@ export function TeamPanel({ notify }) {
                 <div className="flex items-center gap-2 flex-wrap text-[10px]">
                   {e.department && <span className="px-2 py-0.5 rounded-lg bg-admin-champ/10 text-admin-champ/80">{e.department}</span>}
                   <span className={`px-2 py-0.5 rounded-lg ${st[1]}`}>{st[0]}</span>
+                  {e.contract_type && <span className="px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/60">{CONTRACT[e.contract_type] || e.contract_type}</span>}
                   {bday != null && <span className="px-2 py-0.5 rounded-lg bg-admin-gold/10 text-admin-gold">🎂 {bday === 0 ? 'hoje!' : `em ${bday}d`}</span>}
+                  {e.has_system_access && <span className="px-2 py-0.5 rounded-lg bg-admin-sage/10 text-admin-sage" title="Tem acesso ao sistema">🔑 acesso</span>}
                 </div>
                 <div className="mt-2 space-y-0.5">
                   {e.email && <p className="text-admin-muted/50 text-[11px] truncate">{e.email}</p>}
-                  {e.registration_file && <a href={e.registration_file} target="_blank" rel="noreferrer" className="text-admin-champ text-[11px] hover:underline inline-flex items-center gap-1">Ficha cadastral ↗</a>}
+                  <div className="flex gap-3 flex-wrap">
+                    {e.registration_file && <a href={e.registration_file} target="_blank" rel="noreferrer" className="text-admin-champ text-[11px] hover:underline">Ficha ↗</a>}
+                    {Array.isArray(e.documents) && e.documents.length > 0 && <span className="text-admin-muted/40 text-[11px]">{e.documents.length} doc(s)</span>}
+                  </div>
                 </div>
               </div>
             )
@@ -177,20 +206,70 @@ export function TeamPanel({ notify }) {
       {/* Modal cadastro/edição */}
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setModal(null)}>
-          <div className="glass-pop rounded-2xl p-7 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="glass-pop rounded-2xl p-7 w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">{modal.editingId ? 'Editar colaborador' : 'Novo colaborador'}</h2><button onClick={() => setModal(null)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><label className={lbl}>Nome *</label><input value={modal.form.name} onChange={(e) => setF('name', e.target.value)} className={inputCls} /></div>
-              <div><label className={lbl}>Setor / Categoria</label><GlassSelect value={modal.form.department} onChange={(v) => setF('department', v)} options={[{ value: '', label: '— selecione —' }, ...DEPARTMENTS.map((d) => ({ value: d, label: d }))]} /></div>
-              <div><label className={lbl}>Cargo</label><input value={modal.form.role} onChange={(e) => setF('role', e.target.value)} className={inputCls} placeholder="Ex: Atendente" /></div>
+
+            {/* foto + nome */}
+            <div className="flex gap-4 items-start mb-4">
+              <div className="w-24 shrink-0"><FlowImageField label="Foto" value={modal.form.avatar_url} onChange={(url) => setF('avatar_url', url)} folder="equipe/fotos" accept="image" /></div>
+              <div className="flex-1 grid grid-cols-2 gap-3">
+                <div className="col-span-2"><label className={lbl}>Nome completo *</label><input value={modal.form.name} onChange={(e) => setF('name', e.target.value)} className={inputCls} /></div>
+                <div><label className={lbl}>Setor / Categoria</label><GlassSelect value={modal.form.department} onChange={(v) => setF('department', v)} options={[{ value: '', label: '— selecione —' }, ...DEPARTMENTS.map((d) => ({ value: d, label: d }))]} /></div>
+                <div><label className={lbl}>Cargo</label><input value={modal.form.role} onChange={(e) => setF('role', e.target.value)} className={inputCls} placeholder="Ex: Atendente" /></div>
+              </div>
+            </div>
+
+            <Section title="Dados pessoais" />
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div><label className={lbl}>CPF / CNPJ</label><input value={modal.form.document} onChange={(e) => setF('document', e.target.value)} className={inputCls} /></div>
+              <div><label className={lbl}>RG / Identidade</label><input value={modal.form.rg} onChange={(e) => setF('rg', e.target.value)} className={inputCls} /></div>
+              <div><label className={lbl}>Data de aniversário</label><GlassDate value={modal.form.birth_date} onChange={(v) => setF('birth_date', v)} /></div>
+              <div><label className={lbl}>Gênero</label><GlassSelect value={modal.form.gender} onChange={(v) => setF('gender', v)} options={Object.entries(GENDER).map(([value, label]) => ({ value, label }))} /></div>
+            </div>
+
+            <Section title="Contato & Endereço" />
+            <div className="grid grid-cols-2 gap-3 mb-4">
               <div><label className={lbl}>E-mail</label><input type="email" value={modal.form.email} onChange={(e) => setF('email', e.target.value)} className={inputCls} /></div>
               <div><label className={lbl}>Telefone</label><input value={modal.form.phone} onChange={(e) => setF('phone', e.target.value)} className={inputCls} /></div>
-              <div><label className={lbl}>Data de aniversário</label><GlassDate value={modal.form.birth_date} onChange={(v) => setF('birth_date', v)} /></div>
-              <div><label className={lbl}>Data de admissão</label><GlassDate value={modal.form.hire_date} onChange={(v) => setF('hire_date', v)} /></div>
-              <div><label className={lbl}>Status</label><GlassSelect value={modal.form.status} onChange={(v) => setF('status', v)} options={Object.entries(STATUS).map(([value, x]) => ({ value, label: x[0] }))} /></div>
-              <div className="col-span-2"><FlowImageField label="Ficha cadastral (arquivo)" value={modal.form.registration_file} onChange={(url) => setF('registration_file', url)} folder="equipe/fichas" accept="any" hint="PDF, imagem ou documento do colaborador" /></div>
-              <div className="col-span-2"><label className={lbl}>Observações</label><textarea value={modal.form.notes} onChange={(e) => setF('notes', e.target.value)} rows={2} className={`${inputCls} resize-none`} /></div>
+              <div className="col-span-2"><label className={lbl}>Endereço</label><input value={modal.form.address} onChange={(e) => setF('address', e.target.value)} className={inputCls} placeholder="Rua, número, complemento, bairro" /></div>
+              <div><label className={lbl}>Cidade</label><input value={modal.form.city} onChange={(e) => setF('city', e.target.value)} className={inputCls} /></div>
+              <div className="grid grid-cols-2 gap-3"><div><label className={lbl}>UF</label><input value={modal.form.state} onChange={(e) => setF('state', e.target.value)} className={inputCls} maxLength={2} /></div><div><label className={lbl}>CEP</label><input value={modal.form.postal_code} onChange={(e) => setF('postal_code', e.target.value)} className={inputCls} /></div></div>
             </div>
+
+            <Section title="Contato de emergência" />
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div><label className={lbl}>Nome</label><input value={modal.form.emergency_name} onChange={(e) => setF('emergency_name', e.target.value)} className={inputCls} /></div>
+              <div><label className={lbl}>Telefone</label><input value={modal.form.emergency_phone} onChange={(e) => setF('emergency_phone', e.target.value)} className={inputCls} /></div>
+            </div>
+
+            <Section title="Contrato & Pagamento" />
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div><label className={lbl}>Tipo de contrato</label><GlassSelect value={modal.form.contract_type} onChange={(v) => setF('contract_type', v)} options={[{ value: '', label: '— selecione —' }, ...Object.entries(CONTRACT).map(([value, label]) => ({ value, label }))]} /></div>
+              <div><label className={lbl}>Data de admissão</label><GlassDate value={modal.form.hire_date} onChange={(v) => setF('hire_date', v)} /></div>
+              <div><label className={lbl}>Remuneração (R$)</label><input type="number" value={modal.form.salary} onChange={(e) => setF('salary', e.target.value)} className={inputCls} placeholder="opcional" /></div>
+              <div><label className={lbl}>Status</label><GlassSelect value={modal.form.status} onChange={(v) => setF('status', v)} options={Object.entries(STATUS).map(([value, x]) => ({ value, label: x[0] }))} /></div>
+              <div><label className={lbl}>Chave PIX</label><input value={modal.form.pix_key} onChange={(e) => setF('pix_key', e.target.value)} className={inputCls} /></div>
+              <div><label className={lbl}>Dados bancários</label><input value={modal.form.bank_info} onChange={(e) => setF('bank_info', e.target.value)} className={inputCls} placeholder="Banco · Ag · Conta" /></div>
+            </div>
+
+            <Section title="Documentos & Ficha" />
+            <div className="space-y-3 mb-4">
+              <FlowImageField label="Ficha cadastral (principal)" value={modal.form.registration_file} onChange={(url) => setF('registration_file', url)} folder="equipe/fichas" accept="any" hint="PDF, imagem ou documento" />
+              <div>
+                <label className={lbl}>Documentos adicionais (RG, CPF, contrato…)</label>
+                <PendingAttachments items={modal.form.documents} onRemove={(i) => setF('documents', modal.form.documents.filter((_, j) => j !== i))} />
+                <AttachButton onAdd={(a) => setF('documents', [...(modal.form.documents || []), a])} folder="equipe/docs" notify={notify} />
+              </div>
+            </div>
+
+            <Section title="Acesso ao sistema" />
+            <label className="flex items-center gap-3 mb-4 cursor-pointer">
+              <input type="checkbox" checked={!!modal.form.has_system_access} onChange={(e) => setF('has_system_access', e.target.checked)} className="w-4 h-4 accent-admin-champ" />
+              <span className="text-sm text-admin-muted/80">Este colaborador terá acesso ao sistema<span className="block text-[10px] text-admin-muted/40">O convite de login é enviado em Usuários & Acessos, pelo e-mail informado.</span></span>
+            </label>
+
+            <div><label className={lbl}>Observações</label><textarea value={modal.form.notes} onChange={(e) => setF('notes', e.target.value)} rows={2} className={`${inputCls} resize-none`} /></div>
+
             <div className="flex gap-3 mt-6"><button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm">{modal.editingId ? 'Salvar' : 'Cadastrar'}</button><button onClick={() => setModal(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
           </div>
         </div>
