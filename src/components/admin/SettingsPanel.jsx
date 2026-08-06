@@ -1,16 +1,37 @@
 import { useState, useEffect } from 'react'
 import { useSettings } from '../../hooks/useSettings'
+import { useTenant } from '../../hooks/useTenant'
+import { supabase } from '../../lib/supabase'
 import { Card, Field, TextInput, TextArea, AdminBtn, Spinner } from './ui'
 import { ImageUpload } from './ImageUpload'
 
 export function SettingsPanel({ notify }) {
   const { settings, loading, save } = useSettings()
+  const { profile, reload } = useTenant()
   const [d, setD] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [franchiseName, setFranchiseName] = useState('')
+  const [savingName, setSavingName] = useState(false)
 
   useEffect(() => {
     if (settings) setD(JSON.parse(JSON.stringify(settings)))
   }, [settings])
+
+  useEffect(() => {
+    if (profile?.tenant_name) setFranchiseName(profile.tenant_name)
+  }, [profile?.tenant_name])
+
+  // Salva o nome da franquia (tenants.name) — o que aparece na sidebar sob "Seravie Experiences".
+  const saveFranchiseName = async () => {
+    const name = franchiseName.trim()
+    if (!name) return notify('Informe o nome da franquia', 'error')
+    setSavingName(true)
+    const { error } = await supabase.from('tenants').update({ name }).eq('id', profile?.tenant_id)
+    setSavingName(false)
+    if (error) return notify('Erro ao salvar o nome: ' + error.message, 'error')
+    notify('Nome da franquia atualizado. Recarregue para ver na barra lateral.', 'success')
+    if (reload) reload()
+  }
 
   if (loading || !d) {
     return (
@@ -61,6 +82,22 @@ export function SettingsPanel({ notify }) {
           {saving ? 'Salvando' : 'Salvar'}
         </AdminBtn>
       </div>
+
+      {/* Nome da franquia — aparece na barra lateral, sob "Seravie Experiences" */}
+      <Card className="p-6 mb-5">
+        <h2 className="text-[11px] tracking-widerx uppercase text-gold mb-2">Sua franquia</h2>
+        <p className="text-ivory/40 text-xs mb-4">Este é o nome que aparece na barra lateral, abaixo de “Seravie Experiences”.</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <Field label="Nome da franquia">
+              <TextInput value={franchiseName} onChange={(e) => setFranchiseName(e.target.value)} placeholder="Ex: Manos de Soleil" />
+            </Field>
+          </div>
+          <AdminBtn icon={savingName ? undefined : 'check'} onClick={saveFranchiseName} disabled={savingName}>
+            {savingName ? 'Salvando' : 'Salvar nome'}
+          </AdminBtn>
+        </div>
+      </Card>
 
       <div className="grid lg:grid-cols-2 gap-5">
         <Card className="p-6">
