@@ -213,6 +213,71 @@ export function Icon({ name, className = 'w-5 h-5' }) {
         <path d="M3 4h2l2.2 11.2a1 1 0 001 .8h8.5a1 1 0 001-.8L20.5 8H6.2" />
       </>
     ),
+    flame: <path d="M12 3c1 3 4 4.5 4 8a4 4 0 01-8 0c0-1.2.4-2 1-2.8C9 10 12 9 12 3zM12 21a3 3 0 003-3c0-1.5-1.2-2.3-3-4-1.8 1.7-3 2.5-3 4a3 3 0 003 3z" />,
+    layers: (
+      <>
+        <path d="M12 3l9 5-9 5-9-5z" />
+        <path d="M3 13l9 5 9-5M3 17l9 5 9-5" />
+      </>
+    ),
+    cake: (
+      <>
+        <path d="M4 21h16v-7a2 2 0 00-2-2H6a2 2 0 00-2 2z" />
+        <path d="M4 16c1.5 1.2 2.5 1.2 4 0s2.5-1.2 4 0 2.5 1.2 4 0 2.5-1.2 4 0" />
+        <path d="M12 5v3M9 5.5v2.5M15 5.5v2.5" />
+      </>
+    ),
+    tv: (
+      <>
+        <rect x="3" y="5" width="18" height="12" rx="2" />
+        <path d="M8 21h8M12 17v4" />
+      </>
+    ),
+    bolt: <path d="M13 2L4 14h6l-1 8 9-12h-6z" />,
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    bell: (
+      <>
+        <path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6z" />
+        <path d="M10 20a2 2 0 004 0" />
+      </>
+    ),
+    pause: <path d="M9 5v14M15 5v14" />,
+    play: <path d="M7 4l13 8-13 8z" />,
+    truck: (
+      <>
+        <path d="M3 6h11v9H3zM14 9h4l3 3v3h-7z" />
+        <circle cx="7" cy="18" r="1.6" />
+        <circle cx="17" cy="18" r="1.6" />
+      </>
+    ),
+    warning: (
+      <>
+        <path d="M12 3l10 18H2z" />
+        <path d="M12 10v5M12 18h.01" />
+      </>
+    ),
+    expand: <path d="M8 3H4v4M16 3h4v4M8 21H4v-4M16 21h4v-4" />,
+    sparkles: <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6zM18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z" />,
+    users: (
+      <>
+        <circle cx="9" cy="8" r="3.2" />
+        <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+        <path d="M16 5.2a3.2 3.2 0 010 5.6M21 20c0-2.6-1.6-4.8-4-5.6" />
+      </>
+    ),
+    refresh: <path d="M20 11a8 8 0 10-1 5M20 5v6h-6" />,
+    grip: (
+      <>
+        <circle cx="9" cy="6" r="1.3" /><circle cx="15" cy="6" r="1.3" />
+        <circle cx="9" cy="12" r="1.3" /><circle cx="15" cy="12" r="1.3" />
+        <circle cx="9" cy="18" r="1.3" /><circle cx="15" cy="18" r="1.3" />
+      </>
+    ),
   }
   return (
     <svg viewBox="0 0 24 24" className={className} {...p}>
