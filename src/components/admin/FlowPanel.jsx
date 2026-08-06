@@ -7,6 +7,7 @@ import { ResourcePanel, ResourceTabs } from './ResourcePanel'
 import { KanbanBoard } from './Kanban'
 import { logAudit } from '../../lib/audit'
 import { FlowStudio } from './FlowStudio'
+import { PhoneFrame, StorePreview } from './FlowPreview'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -32,6 +33,11 @@ function PointsTab({ notify }) {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({})
   const [qrView, setQrView] = useState(null)
+  const [qrProducts, setQrProducts] = useState([])
+  useEffect(() => {
+    if (!qrView) { setQrProducts([]); return }
+    supabase.from('flow_products').select('*').eq('active', true).or(`point_id.eq.${qrView.id},point_id.is.null`).order('sort_order').limit(8).then(({ data }) => setQrProducts(data || []))
+  }, [qrView])
 
   const load = async () => { setLoading(true); const { data } = await supabase.from('flow_points').select('*').order('created_at', { ascending: false }); setRows(data || []); setLoading(false) }
   useEffect(() => { load() }, [])
@@ -91,12 +97,19 @@ function PointsTab({ notify }) {
       )}
 
       {qrView && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setQrView(null)}>
-          <div className="glass-pop rounded-2xl p-7 text-center" onClick={(e) => e.stopPropagation()}>
-            <QRThumb code={qrView.code} size={240} />
-            <p className="text-admin-text font-medium mt-4">{qrView.name}</p>
-            <p className="text-admin-muted/40 text-xs break-all mt-1 max-w-xs">{flowUrl(qrView.code)}</p>
-            <div className="flex gap-2 mt-5 justify-center"><button onClick={() => downloadQR(qrView)} className="bg-admin-champ/15 text-admin-champ px-4 py-2 rounded-xl text-sm">Baixar PNG</button><button onClick={() => copyLink(qrView.code)} className="bg-white/[0.05] text-admin-muted/70 px-4 py-2 rounded-xl text-sm">Copiar link</button></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto" onClick={() => setQrView(null)}>
+          <div className="glass-pop rounded-2xl p-7" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col sm:flex-row gap-8 items-center">
+              {/* QR + ações */}
+              <div className="text-center">
+                <QRThumb code={qrView.code} size={220} />
+                <p className="text-admin-text font-medium mt-4">{qrView.name}</p>
+                <p className="text-admin-muted/40 text-xs break-all mt-1 max-w-[220px] mx-auto">{flowUrl(qrView.code)}</p>
+                <div className="flex gap-2 mt-5 justify-center"><button onClick={() => downloadQR(qrView)} className="bg-admin-champ/15 text-admin-champ px-4 py-2 rounded-xl text-sm">Baixar PNG</button><button onClick={() => copyLink(qrView.code)} className="bg-white/[0.05] text-admin-muted/70 px-4 py-2 rounded-xl text-sm">Copiar link</button></div>
+              </div>
+              {/* preview da loja pública */}
+              <PhoneFrame label="Como o cliente vê"><StorePreview point={qrView} products={qrProducts} /></PhoneFrame>
+            </div>
           </div>
         </div>
       )}

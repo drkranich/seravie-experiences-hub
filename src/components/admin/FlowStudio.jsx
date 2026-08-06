@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
+import { PhoneFrame, FormPreview } from './FlowPreview'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5'
@@ -118,6 +119,7 @@ function FormBuilder({ form, notify, onBack }) {
   const [sel, setSel] = useState(null) // bloco selecionado para editar
   const [addOpen, setAddOpen] = useState(false)
   const [tab, setTab] = useState('build') // build | responses
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [responses, setResponses] = useState([])
   const loadResponses = async () => { const { data } = await supabase.from('flow_responses').select('*').eq('form_id', form.id).order('created_at', { ascending: false }).limit(1000); setResponses(data || []) }
   useEffect(() => { if (tab === 'responses') loadResponses() }, [tab])
@@ -186,6 +188,7 @@ function FormBuilder({ form, notify, onBack }) {
           <button onClick={() => setTab('responses')} className={`text-xs px-3 py-1.5 rounded-lg ${tab === 'responses' ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted/60'}`}>Respostas ({f.response_count})</button>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setPreviewOpen(true)} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Pré-visualizar</button>
           {f.status === 'published' && <a href={formUrl(f.slug)} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Ver ao vivo</a>}
           <button onClick={() => { navigator.clipboard?.writeText(formUrl(f.slug)); notify('Link copiado', 'success') }} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Copiar link</button>
           <button onClick={publish} className={`text-xs px-4 py-2 rounded-xl ${f.status === 'published' ? 'bg-admin-gold/15 text-admin-gold' : 'bg-admin-sage/15 text-admin-sage'}`}>{f.status === 'published' ? 'Despublicar' : 'Publicar'}</button>
@@ -229,7 +232,7 @@ function FormBuilder({ form, notify, onBack }) {
         <div className="sm:col-span-2"><label className={lbl}>Mensagem final</label><input value={f.submit_message || ''} onChange={(e) => setF({ ...f, submit_message: e.target.value })} onBlur={(e) => saveForm({ submit_message: e.target.value })} className={inputCls} /></div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid lg:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] gap-4">
         {/* lista de blocos */}
         <div className="glass rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3"><p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Cenas ({blocks.length})</p><button onClick={() => setAddOpen(true)} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">+ Bloco</button></div>
@@ -289,8 +292,25 @@ function FormBuilder({ form, notify, onBack }) {
             </div>
           )}
         </div>
+
+        {/* preview lateral ao vivo (telas grandes) */}
+        <div className="hidden xl:block">
+          <PhoneFrame label="Preview ao vivo">
+            <FormPreview key={blocks.map((b) => b.id + (b.label || '')).join('|')} form={f} blocks={blocks} />
+          </PhoneFrame>
+        </div>
       </div>
       </>}
+
+      {/* preview tela cheia */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setPreviewOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="flex flex-col items-center">
+            <PhoneFrame><FormPreview key={'full' + blocks.length} form={f} blocks={blocks} /></PhoneFrame>
+            <button onClick={() => setPreviewOpen(false)} className="mt-4 text-xs px-5 py-2 rounded-xl bg-white/[0.08] text-admin-muted/80 hover:text-admin-champ">Fechar</button>
+          </div>
+        </div>
+      )}
 
       {/* modal adicionar bloco */}
       {addOpen && (
