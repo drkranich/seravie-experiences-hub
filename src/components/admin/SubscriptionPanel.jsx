@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
 import { VERTICAL_CORES } from './navigation.config'
+import { ConnectCard } from './ConnectCard'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const STATUS = { active: 'Ativa', trialing: 'Em teste', past_due: 'Pagamento pendente', canceled: 'Cancelada', cancelled: 'Cancelada', none: 'Sem assinatura' }
@@ -115,6 +116,9 @@ export function SubscriptionPanel({ notify }) {
   return (
     <div>
       <div className="mb-6"><h1 className="font-serif text-4xl text-admin-text">Minha Assinatura</h1><p className="text-admin-muted/60 text-sm mt-1">Seu plano na Seravie Experiences e o uso da plataforma</p></div>
+
+      {/* Recebimentos do tenant via Stripe Connect */}
+      <ConnectCard notify={notify} />
 
       {/* Cartão do plano atual */}
       <div className="glass rounded-2xl p-6 mb-6">

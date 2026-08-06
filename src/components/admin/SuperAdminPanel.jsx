@@ -65,7 +65,13 @@ export function SuperAdminPanel({ notify }) {
                 <div className="w-8 h-8 rounded-lg bg-admin-champ/10 flex items-center justify-center shrink-0"><span className="text-admin-champ text-sm font-serif">{t.name[0]}</span></div>
                 <div className="flex-1 min-w-0">
                   <p className="text-admin-text text-sm font-medium">{t.name}</p>
-                  <p className="text-admin-muted/40 text-xs">{t.slug} · {t.domain || 'sem domínio'}</p>
+                  <p className="text-admin-muted/40 text-xs">{t.slug} · {t.domain || 'sem domínio'}{t.stripe_charges_enabled ? ' · Stripe ✓' : t.stripe_account_id ? ' · Stripe pendente' : ''}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0" title="Comissão da plataforma sobre as vendas deste tenant">
+                  <input type="number" min="0" max="100" step="0.5" defaultValue={t.platform_fee_percent ?? 0}
+                    onBlur={async (e) => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)); await supabase.from('tenants').update({ platform_fee_percent: v }).eq('id', t.id); notify('Comissão atualizada', 'success') }}
+                    className="w-14 glass-input rounded-lg px-2 py-1 text-xs text-admin-text outline-none text-right" />
+                  <span className="text-admin-muted/40 text-xs">%</span>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-lg ${t.status === 'active' ? 'bg-admin-sage/10 text-admin-sage' : 'bg-white/[0.04] text-admin-muted/40'}`}>{t.status}</span>
                 <p className="text-admin-muted/30 text-[10px] shrink-0">{new Date(t.created_at).toLocaleDateString('pt-BR')}</p>
