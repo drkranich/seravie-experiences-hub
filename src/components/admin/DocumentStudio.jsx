@@ -15,7 +15,7 @@ const BLOCK_LIB = [
   { type: 'quote_table', label: 'Tabela de valores (do orçamento)' },
   { type: 'terms', label: 'Termos & condições' },
 ]
-const publicUrl = (slug) => `${window.location.origin}/#p/${slug}`
+const publicUrl = (slug) => `${window.location.origin}/p/${slug}`
 const slugify = (s) => (s || 'proposta').toLowerCase().normalize('NFD').replace(/[^\w]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40) + '-' + Math.random().toString(36).slice(2, 7)
 
 // blocos padrão de uma proposta comercial

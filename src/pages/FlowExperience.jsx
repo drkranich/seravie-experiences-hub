@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadTo } from '../lib/storage'
+import { routeParam } from '../lib/publicRoute'
 
 // Seravie Flow Studio — experiência pública cinematográfica (#form/<slug>).
 // Um bloco por vez, tela cheia, transições suaves, glassmorphism premium.
@@ -10,7 +11,7 @@ const DEFAULT_THEME = {
 }
 
 export function FlowExperience() {
-  const slug = (window.location.hash.match(/#form\/([^?]+)/) || [])[1] || ''
+  const slug = routeParam('form')
   const [form, setForm] = useState(null)
   const [blocks, setBlocks] = useState([])
   const [loading, setLoading] = useState(true)

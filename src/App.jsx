@@ -38,27 +38,33 @@ export default function App() {
     )
   }
 
+  // Rotas públicas: aceitam URL LIMPA (/form/x) e o formato antigo com hash (#form/x).
+  // Assim links já divulgados continuam funcionando após a migração.
+  const hash = window.location.hash
+  const path = window.location.pathname
+  const pub = (name) => hash.startsWith(`#${name}`) || path === `/${name}` || path.startsWith(`/${name}/`)
+
   // Rota da loja pública (tem precedência: funciona logado ou não)
-  const isStoreRoute = window.location.hash.startsWith('#loja') || /[?&](store|loja)=/.test(window.location.search)
+  const isStoreRoute = pub('loja') || /[?&](store|loja)=/.test(window.location.search)
   if (isStoreRoute) return <Storefront />
 
-  // Seravie Flow — página pública de venda por QR Code (#flow/<code>)
-  if (window.location.hash.startsWith('#flow')) return <FlowStore />
+  // Seravie Flow — página pública de venda por QR Code (/flow/<code>)
+  if (pub('flow')) return <FlowStore />
 
   // Experiências do cliente por vertical: agendamento, reserva e clube
-  if (/^#(agenda|reserva|clube)\//.test(window.location.hash)) return <ClientExperience />
+  if (/^#(agenda|reserva|clube)\//.test(hash) || /^\/(agenda|reserva|clube)\//.test(path)) return <ClientExperience />
 
-  // Seravie Flow Studio — experiência pública de formulário (#form/<slug>)
-  if (window.location.hash.startsWith('#form/')) return <FlowExperience />
+  // Seravie Flow Studio — experiência pública de formulário (/form/<slug>)
+  if (pub('form')) return <FlowExperience />
 
-  // Seravie Document Studio — proposta "viva" pública (#p/<slug>)
-  if (window.location.hash.startsWith('#p/')) return <DocumentView />
+  // Seravie Document Studio — proposta "viva" pública (/p/<slug>)
+  if (pub('p')) return <DocumentView />
 
   // Aceite de convite de equipe (precedência: funciona logado ou não)
-  if (window.location.hash.startsWith('#convite')) return <AcceptInvite />
+  if (pub('convite')) return <AcceptInvite />
 
   // Redefinição de senha (chega pelo link do e-mail de recuperação)
-  if (window.location.hash.startsWith('#recuperar')) return <RecoverPassword />
+  if (pub('recuperar')) return <RecoverPassword />
 
   // Rota do site público (precedência sobre o admin, mesmo logado — "Ver site").
   // #topo é reconhecido pela Home como 'home' (página completa).

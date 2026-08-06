@@ -96,7 +96,7 @@ export function ClientExperiencesPanel({ notify }) {
     loadAll()
   }, [tenantId])
 
-  const linkFor = (key) => `${window.location.origin}/#${key}/${slug || ''}`
+  const linkFor = (key) => `${window.location.origin}/${key}/${slug || ''}`
   const copy = (key) => { navigator.clipboard?.writeText(linkFor(key)); notify('Link copiado', 'success') }
 
   const openNew = (exp) => setModal({ exp, form: exp.empty(), editingId: null })

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { GlassDate } from '../components/admin/ui'
+import { experienceMode, routeParam } from '../lib/publicRoute'
 
 // Experiências públicas do CLIENTE final por vertical:
 //   #agenda/<slug>   → agendamento (spa/beauty)
@@ -11,9 +12,8 @@ const bg = { backgroundImage: 'radial-gradient(70% 50% at 80% 0%, rgba(214,196,1
 const SLOTS = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00', '16:00', '17:00']
 
 export function ClientExperience() {
-  const hash = window.location.hash
-  const mode = hash.startsWith('#agenda') ? 'agenda' : hash.startsWith('#reserva') ? 'reserva' : 'clube'
-  const slug = (hash.match(/#(?:agenda|reserva|clube)\/([^?]+)/) || [])[1] || ''
+  const mode = experienceMode()
+  const slug = routeParam(mode)
 
   const [tenant, setTenant] = useState(null)
   const [items, setItems] = useState([])

@@ -1,0 +1,4 @@
+# SPA fallback — devolve index.html para rotas limpas (/form/x, /p/x, /flow/x, …)
+# Assets e o próprio index são servidos normalmente; qualquer outra rota cai no app.
+/assets/*  /assets/:splat  200
+/*  /index.html  200

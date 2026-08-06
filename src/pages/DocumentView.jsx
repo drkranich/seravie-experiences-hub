@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { routeParam } from '../lib/publicRoute'
 
 // Proposta "viva" — página pública (#p/<slug>). Renderiza os blocos do documento,
 // permite aceite + assinatura digital. Glassmorphism editorial premium.
@@ -7,7 +8,7 @@ const DEFAULT_THEME = { bg1: '#14160f', bg2: '#0b0a08', accent: '#D6C49A', text:
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export function DocumentView() {
-  const slug = (window.location.hash.match(/#p\/([^?]+)/) || [])[1] || ''
+  const slug = routeParam('p')
   const [doc, setDoc] = useState(null)
   const [loading, setLoading] = useState(true)
   const [signer, setSigner] = useState('')

@@ -13,7 +13,7 @@ import { FlowImageField } from './FlowImageField'
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const KINDS = { quarto: 'Quarto', mesa: 'Mesa', chale: 'Chalé', suite: 'Suíte', loja: 'Loja', setor: 'Setor', geladeira: 'Frigobar', adega: 'Adega', prateleira: 'Prateleira', expositor: 'Expositor', evento: 'Evento', piscina: 'Piscina', spa: 'Spa', mercado: 'Mercado autônomo' }
-const flowUrl = (code) => `${window.location.origin}/#flow/${code}`
+const flowUrl = (code) => `${window.location.origin}/flow/${code}`
 
 function QRThumb({ code, size = 120 }) {
   const [url, setUrl] = useState('')

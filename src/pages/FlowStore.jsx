@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
+import { routeParam, routeQuery } from '../lib/publicRoute'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const priceOf = (p) => (p.promo_price != null && p.promo_price > 0 ? p.promo_price : p.price)
 const KIND_LABEL = { quarto: 'Quarto', mesa: 'Mesa', chale: 'Chalé', suite: 'Suíte', loja: 'Loja', setor: 'Setor', geladeira: 'Frigobar', adega: 'Adega', prateleira: 'Prateleira', expositor: 'Expositor', evento: 'Evento', piscina: 'Piscina', spa: 'Spa', mercado: 'Mercado autônomo' }
 
 export function FlowStore() {
-  const code = (window.location.hash.match(/#flow\/([^?]+)/) || [])[1] || ''
-  const params = new URLSearchParams((window.location.hash.split('?')[1] || ''))
+  const code = routeParam('flow')
+  const params = routeQuery()
   const totem = params.get('totem') === '1' // modo autoatendimento (quiosque, tela cheia)
   const [point, setPoint] = useState(null)
   const [products, setProducts] = useState([])

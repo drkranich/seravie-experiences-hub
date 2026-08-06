@@ -7,7 +7,7 @@ import { FlowImageField } from './FlowImageField'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5'
-const formUrl = (slug) => `${window.location.origin}/#form/${slug}`
+const formUrl = (slug) => `${window.location.origin}/form/${slug}`
 
 // Catálogo de blocos essenciais (Onda 1)
 const BLOCK_TYPES = [
