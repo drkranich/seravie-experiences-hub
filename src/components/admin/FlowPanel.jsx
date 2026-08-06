@@ -6,6 +6,7 @@ import { Icon, GlassSelect } from './ui'
 import { ResourcePanel, ResourceTabs } from './ResourcePanel'
 import { KanbanBoard } from './Kanban'
 import { logAudit } from '../../lib/audit'
+import { FlowStudio } from './FlowStudio'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -246,8 +247,9 @@ function DashboardTab() {
 
 export function FlowPanel({ notify }) {
   return (
-    <ResourceTabs title="Seravie Flow" subtitle="vendas autônomas por QR Code — transforme qualquer espaço em ponto de venda"
+    <ResourceTabs title="Seravie Flow" subtitle="vendas por QR Code e experiências/formulários cinematográficos"
       tabs={[
+        { key: 'studio', label: 'Flow Studio', render: () => <FlowStudio notify={notify} /> },
         { key: 'points', label: 'Pontos & QR', render: () => <PointsTab notify={notify} /> },
         { key: 'catalog', label: 'Catálogo', render: () => <CatalogTab notify={notify} /> },
         { key: 'orders', label: 'Pedidos', render: () => <OrdersTab notify={notify} /> },

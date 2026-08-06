@@ -1,0 +1,213 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../lib/supabase'
+import { useTenant } from '../../hooks/useTenant'
+import { Icon, GlassSelect } from './ui'
+
+const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5'
+const formUrl = (slug) => `${window.location.origin}/#form/${slug}`
+
+// Catálogo de blocos essenciais (Onda 1)
+const BLOCK_TYPES = [
+  { type: 'title', label: 'Título', icon: 'layout', static: true },
+  { type: 'text', label: 'Texto', icon: 'book', static: true },
+  { type: 'image', label: 'Imagem', icon: 'image', static: true },
+  { type: 'button', label: 'Botão / Link', icon: 'link', static: true },
+  { type: 'short_text', label: 'Texto curto', icon: 'pen' },
+  { type: 'long_text', label: 'Texto longo', icon: 'pen' },
+  { type: 'email', label: 'E-mail', icon: 'mail' },
+  { type: 'phone', label: 'Telefone', icon: 'user' },
+  { type: 'number', label: 'Número', icon: 'chart' },
+  { type: 'choice', label: 'Múltipla escolha', icon: 'check' },
+  { type: 'nps', label: 'NPS (0–10)', icon: 'star' },
+  { type: 'rating', label: 'Estrelas', icon: 'star' },
+]
+const TYPE_LABEL = Object.fromEntries(BLOCK_TYPES.map((b) => [b.type, b.label]))
+const isStatic = (t) => ['title', 'text', 'image', 'button'].includes(t)
+
+export function FlowStudio({ notify }) {
+  const { profile } = useTenant()
+  const tenantId = profile?.tenant_id
+  const [forms, setForms] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null) // form aberto no construtor
+
+  const load = async () => { setLoading(true); const { data } = await supabase.from('flow_forms').select('*').order('created_at', { ascending: false }); setForms(data || []); setLoading(false) }
+  useEffect(() => { load() }, [])
+
+  const createForm = async () => {
+    const { data, error } = await supabase.from('flow_forms').insert({ tenant_id: tenantId, title: 'Nova experiência', created_by: profile?.user_id }).select('*').single()
+    if (error) return notify('Erro ao criar: ' + error.message, 'error')
+    load(); setEditing(data)
+  }
+  const removeForm = async (f) => { if (!confirm(`Excluir "${f.title}"?`)) return; await supabase.from('flow_forms').delete().eq('id', f.id); load() }
+
+  if (editing) return <FormBuilder form={editing} notify={notify} onBack={() => { setEditing(null); load() }} />
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <p className="text-admin-muted/50 text-sm">{forms.length} experiências · formulários cinematográficos</p>
+        <button onClick={createForm} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm"><Icon name="plus" className="w-4 h-4" />Nova experiência</button>
+      </div>
+      {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p> : forms.length === 0 ? (
+        <div className="glass rounded-2xl p-12 text-center"><p className="text-admin-muted/50 text-sm">Nenhuma experiência ainda.</p><p className="text-admin-muted/30 text-xs mt-1">Crie um formulário cinematográfico — o cliente responde numa jornada tela cheia, estilo Reels.</p></div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {forms.map((f) => (
+            <div key={f.id} className="glass rounded-2xl p-5 flex flex-col">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0"><p className="text-admin-text font-medium truncate">{f.title}</p><p className="text-admin-muted/40 text-[11px]">{f.response_count} resposta(s)</p></div>
+                <span className={`text-[9px] px-2 py-0.5 rounded-lg ${f.status === 'published' ? 'bg-admin-sage/10 text-admin-sage' : 'bg-white/[0.05] text-admin-muted/50'}`}>{f.status === 'published' ? 'publicado' : 'rascunho'}</span>
+              </div>
+              <div className="mt-auto flex flex-wrap gap-1.5 pt-4">
+                <button onClick={() => setEditing(f)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">Editar</button>
+                {f.status === 'published' && <a href={formUrl(f.slug)} target="_blank" rel="noreferrer" className="text-[10px] px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Abrir</a>}
+                <button onClick={() => removeForm(f)} className="text-[10px] px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-admin-muted/60 hover:text-admin-rose ml-auto">Excluir</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------- Construtor de um formulário ----------
+function FormBuilder({ form, notify, onBack }) {
+  const { profile } = useTenant()
+  const [f, setF] = useState(form)
+  const [blocks, setBlocks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [sel, setSel] = useState(null) // bloco selecionado para editar
+  const [addOpen, setAddOpen] = useState(false)
+
+  const loadBlocks = async () => { setLoading(true); const { data } = await supabase.from('flow_form_blocks').select('*').eq('form_id', form.id).order('sort_order'); setBlocks(data || []); setLoading(false) }
+  useEffect(() => { loadBlocks() }, [form.id])
+
+  const saveForm = async (patch) => {
+    const next = { ...f, ...patch }; setF(next)
+    await supabase.from('flow_forms').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', form.id)
+  }
+  const publish = async () => {
+    if (!blocks.length) return notify('Adicione ao menos um bloco antes de publicar', 'error')
+    await saveForm({ status: f.status === 'published' ? 'draft' : 'published' })
+    notify(f.status === 'published' ? 'Despublicado' : 'Publicado! Link pronto para compartilhar.', 'success')
+  }
+  const addBlock = async (type) => {
+    const { data, error } = await supabase.from('flow_form_blocks').insert({
+      tenant_id: profile?.tenant_id, form_id: form.id, type,
+      label: isStatic(type) ? (type === 'title' ? 'Título da cena' : type === 'text' ? 'Texto' : type === 'image' ? 'Imagem' : 'Botão') : 'Nova pergunta',
+      sort_order: blocks.length, options: type === 'choice' ? [{ label: 'Opção 1' }, { label: 'Opção 2' }] : [],
+    }).select('*').single()
+    setAddOpen(false)
+    if (error) return notify('Erro ao adicionar', 'error')
+    loadBlocks(); setSel(data)
+  }
+  const saveBlock = async (patch) => {
+    const next = { ...sel, ...patch }; setSel(next)
+    await supabase.from('flow_form_blocks').update(patch).eq('id', sel.id)
+    setBlocks((bs) => bs.map((b) => b.id === sel.id ? next : b))
+  }
+  const removeBlock = async (b) => { await supabase.from('flow_form_blocks').delete().eq('id', b.id); if (sel?.id === b.id) setSel(null); loadBlocks() }
+  const move = async (b, delta) => {
+    const i = blocks.findIndex((x) => x.id === b.id); const j = i + delta
+    if (j < 0 || j >= blocks.length) return
+    const reordered = [...blocks]; const [item] = reordered.splice(i, 1); reordered.splice(j, 0, item)
+    setBlocks(reordered)
+    await Promise.all(reordered.map((x, k) => supabase.from('flow_form_blocks').update({ sort_order: k }).eq('id', x.id)))
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <button onClick={onBack} className="text-[11px] tracking-wider uppercase text-admin-muted/60 hover:text-admin-champ">← Experiências</button>
+        <div className="flex items-center gap-2">
+          {f.status === 'published' && <a href={formUrl(f.slug)} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Ver ao vivo</a>}
+          <button onClick={() => { navigator.clipboard?.writeText(formUrl(f.slug)); notify('Link copiado', 'success') }} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Copiar link</button>
+          <button onClick={publish} className={`text-xs px-4 py-2 rounded-xl ${f.status === 'published' ? 'bg-admin-gold/15 text-admin-gold' : 'bg-admin-sage/15 text-admin-sage'}`}>{f.status === 'published' ? 'Despublicar' : 'Publicar'}</button>
+        </div>
+      </div>
+
+      {/* cabeçalho do form */}
+      <div className="glass rounded-2xl p-5 mb-4 grid sm:grid-cols-2 gap-3">
+        <div><label className={lbl}>Título da experiência</label><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} onBlur={(e) => saveForm({ title: e.target.value })} className={inputCls} /></div>
+        <div><label className={lbl}>Imagem de capa (URL)</label><input value={f.cover_url || ''} onChange={(e) => setF({ ...f, cover_url: e.target.value })} onBlur={(e) => saveForm({ cover_url: e.target.value || null })} className={inputCls} /></div>
+        <div className="sm:col-span-2"><label className={lbl}>Mensagem final</label><input value={f.submit_message || ''} onChange={(e) => setF({ ...f, submit_message: e.target.value })} onBlur={(e) => saveForm({ submit_message: e.target.value })} className={inputCls} /></div>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        {/* lista de blocos */}
+        <div className="glass rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3"><p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Cenas ({blocks.length})</p><button onClick={() => setAddOpen(true)} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">+ Bloco</button></div>
+          {loading ? <p className="text-admin-muted/30 text-sm py-8 text-center">Carregando…</p> : blocks.length === 0 ? (
+            <p className="text-admin-muted/30 text-xs text-center py-8">Nenhuma cena. Adicione o primeiro bloco.</p>
+          ) : (
+            <div className="space-y-2">
+              {blocks.map((b, i) => (
+                <div key={b.id} onClick={() => setSel(b)} className={`rounded-xl border p-3 cursor-pointer transition-colors ${sel?.id === b.id ? 'border-admin-champ/50 bg-admin-champ/[0.06]' : 'border-white/[0.06] hover:bg-white/[0.03]'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-admin-muted/30 text-[10px] w-4">{i + 1}</span>
+                    <span className="text-admin-text text-sm truncate flex-1">{b.label || TYPE_LABEL[b.type]}</span>
+                    <span className="text-[9px] text-admin-muted/40 px-1.5 py-0.5 rounded bg-white/[0.05]">{TYPE_LABEL[b.type] || b.type}</span>
+                    <button onClick={(e) => { e.stopPropagation(); move(b, -1) }} className="text-admin-muted/40 hover:text-admin-champ text-xs">▲</button>
+                    <button onClick={(e) => { e.stopPropagation(); move(b, 1) }} className="text-admin-muted/40 hover:text-admin-champ text-xs">▼</button>
+                    <button onClick={(e) => { e.stopPropagation(); removeBlock(b) }} className="text-admin-muted/40 hover:text-admin-rose text-xs">✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* editor do bloco selecionado */}
+        <div className="glass rounded-2xl p-4">
+          {!sel ? <p className="text-admin-muted/30 text-sm text-center py-16">Selecione uma cena para editar.</p> : (
+            <div className="space-y-3">
+              <p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Editar cena · {TYPE_LABEL[sel.type]}</p>
+              <div><label className={lbl}>{sel.type === 'title' ? 'Título' : 'Pergunta / rótulo'}</label><input value={sel.label || ''} onChange={(e) => setSel({ ...sel, label: e.target.value })} onBlur={(e) => saveBlock({ label: e.target.value })} className={inputCls} /></div>
+              {!isStatic(sel.type) && <div><label className={lbl}>Texto de ajuda (acima da pergunta)</label><input value={sel.help || ''} onChange={(e) => setSel({ ...sel, help: e.target.value })} onBlur={(e) => saveBlock({ help: e.target.value })} className={inputCls} /></div>}
+              {['short_text', 'long_text', 'email', 'phone', 'number'].includes(sel.type) && <div><label className={lbl}>Placeholder</label><input value={sel.placeholder || ''} onChange={(e) => setSel({ ...sel, placeholder: e.target.value })} onBlur={(e) => saveBlock({ placeholder: e.target.value })} className={inputCls} /></div>}
+              {sel.type === 'text' && <div><label className={lbl}>Corpo do texto</label><textarea value={sel.config?.body || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, body: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, body: e.target.value } })} rows={3} className={`${inputCls} resize-none`} /></div>}
+              {(sel.type === 'image') && <div><label className={lbl}>URL da imagem</label><input value={sel.config?.media_url || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, media_url: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, media_url: e.target.value } })} className={inputCls} /></div>}
+              {sel.type === 'button' && <><div><label className={lbl}>Texto do botão</label><input value={sel.config?.button_label || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, button_label: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, button_label: e.target.value } })} className={inputCls} /></div><div><label className={lbl}>Link (URL)</label><input value={sel.config?.url || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, url: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, url: e.target.value } })} className={inputCls} /></div></>}
+              {sel.type === 'rating' && <div><label className={lbl}>Máximo de estrelas</label><input type="number" value={sel.config?.max || 5} onChange={(e) => setSel({ ...sel, config: { ...sel.config, max: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, max: Number(e.target.value) || 5 } })} className={inputCls} /></div>}
+              {sel.type === 'choice' && (
+                <div>
+                  <label className={lbl}>Opções</label>
+                  <div className="space-y-2">
+                    {(sel.options || []).map((o, i) => (
+                      <div key={i} className="flex gap-2">
+                        <input value={o.label ?? o} onChange={(e) => { const opts = [...sel.options]; opts[i] = { label: e.target.value }; setSel({ ...sel, options: opts }) }} onBlur={() => saveBlock({ options: sel.options })} className={inputCls} />
+                        <button onClick={() => { const opts = sel.options.filter((_, j) => j !== i); saveBlock({ options: opts }) }} className="text-admin-muted/40 hover:text-admin-rose px-2">✕</button>
+                      </div>
+                    ))}
+                    <button onClick={() => saveBlock({ options: [...(sel.options || []), { label: `Opção ${(sel.options || []).length + 1}` }] })} className="text-xs text-admin-champ hover:underline">+ opção</button>
+                  </div>
+                </div>
+              )}
+              {!isStatic(sel.type) && <label className="flex items-center gap-2 text-sm text-admin-muted/70 pt-1"><input type="checkbox" checked={!!sel.required} onChange={(e) => saveBlock({ required: e.target.checked })} className="accent-admin-champ" />Resposta obrigatória</label>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* modal adicionar bloco */}
+      {addOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setAddOpen(false)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-serif text-2xl text-admin-text mb-4">Adicionar bloco</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {BLOCK_TYPES.map((bt) => (
+                <button key={bt.type} onClick={() => addBlock(bt.type)} className="flex flex-col items-center gap-2 p-4 rounded-xl border border-white/[0.06] hover:bg-white/[0.04] hover:border-admin-champ/30 transition-colors">
+                  <Icon name={bt.icon} className="w-5 h-5 text-admin-champ" />
+                  <span className="text-admin-text text-xs">{bt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
