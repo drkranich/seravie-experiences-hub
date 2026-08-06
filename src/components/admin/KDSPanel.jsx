@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Icon, GlassSelect } from './ui'
 import { getPreset } from '../../lib/flowEngine'
 import { KdsDashboard } from './kds/KdsDashboard'
@@ -18,8 +18,10 @@ function TvClock() {
 }
 
 // Modo TV / Produção — tela cheia sem sidebar/menus. Só filas, timers e relógio.
-function TvMode({ kind, soundOn, onExit }) {
+// Mantém um atalho discreto para criar pedido (útil em balcão/quiosque touch).
+function TvMode({ kind, soundOn, onExit, notify }) {
   const [counts, setCounts] = useState({ active: 0, late: 0, total: 0 })
+  const newRef = useRef(null)
   const preset = getPreset(kind)
   return (
     <div className="fixed inset-0 z-[100] bg-admin-bg overflow-hidden flex flex-col p-4"
@@ -30,13 +32,14 @@ function TvMode({ kind, soundOn, onExit }) {
           <h1 className="font-serif text-2xl text-admin-text">{preset.label} · Produção</h1>
           <span className="text-admin-muted/50 text-sm">{counts.active} ativos{counts.late > 0 ? ` · ${counts.late} atrasados` : ''}</span>
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4">
+          <button onClick={() => newRef.current && newRef.current()} className="flex items-center gap-2 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ text-sm rounded-xl px-3 py-2"><Icon name="plus" className="w-4 h-4" />Novo pedido</button>
           <TvClock />
           <button onClick={onExit} className="flex items-center gap-2 text-admin-muted/70 hover:text-admin-text text-sm border border-white/10 rounded-xl px-3 py-2"><Icon name="x" className="w-4 h-4" />Sair</button>
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
-        <KdsBoard kind={kind} tv soundOn={soundOn} onCounts={setCounts} />
+        <KdsBoard kind={kind} tv soundOn={soundOn} onCounts={setCounts} notify={notify} registerNew={(fn) => { newRef.current = fn }} />
       </div>
     </div>
   )
@@ -47,6 +50,7 @@ export function KDSPanel({ notify }) {
   const [tv, setTv] = useState(false)
   const [soundOn, setSoundOn] = useState(true)
   const [counts, setCounts] = useState({ active: 0, late: 0, total: 0 })
+  const newTicketRef = useRef(null) // função que abre o editor de novo pedido no board
   const kind = 'kitchen'
   const preset = getPreset(kind)
 
@@ -61,7 +65,7 @@ export function KDSPanel({ notify }) {
     { key: 'history', label: 'Histórico', icon: 'clock' },
   ]
 
-  if (tv) return <TvMode kind={kind} soundOn={soundOn} onExit={() => setTv(false)} />
+  if (tv) return <TvMode kind={kind} soundOn={soundOn} onExit={() => setTv(false)} notify={notify} />
 
   return (
     <div>
@@ -95,9 +99,12 @@ export function KDSPanel({ notify }) {
         <div>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <p className="text-admin-muted/50 text-sm">{counts.active} {preset.unitPlural} ativos{counts.late > 0 ? ` · ${counts.late} atrasados` : ''}</p>
-            <p className="text-admin-muted/40 text-xs">arraste os cartões entre as colunas</p>
+            <div className="flex items-center gap-3">
+              <p className="text-admin-muted/40 text-xs hidden sm:block">arraste os cartões entre as colunas</p>
+              <button onClick={() => newTicketRef.current && newTicketRef.current()} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Novo pedido</button>
+            </div>
           </div>
-          <KdsBoard kind={kind} soundOn={soundOn} onCounts={setCounts} />
+          <KdsBoard kind={kind} soundOn={soundOn} onCounts={setCounts} notify={notify} registerNew={(fn) => { newTicketRef.current = fn }} />
         </div>
       )}
       {tab === 'map' && <KdsKitchenMap kind={kind} />}

@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { Icon } from '../ui'
 import { getPreset, stageByStatus, elapsedSeconds } from '../../../lib/flowEngine'
 import { TicketCard } from './KdsTicketCard'
+import { KdsTicketEditor } from './KdsTicketEditor'
 
 // Hook: relógio compartilhado de 1s para todos os cronômetros da tela.
 function useClock() {
@@ -32,12 +33,13 @@ function useChime(enabled) {
 
 // Tela de Produção (Kanban 7 colunas, drag&drop, timers).
 // tv=true entra no modo TV (sem ações, layout de tela cheia).
-export function KdsBoard({ kind = 'kitchen', tv = false, soundOn = true, stationFilter = '', onCounts }) {
+export function KdsBoard({ kind = 'kitchen', tv = false, soundOn = true, stationFilter = '', onCounts, notify, registerNew }) {
   const preset = getPreset(kind)
   const now = useClock()
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [dragOver, setDragOver] = useState(null)
+  const [editor, setEditor] = useState(null) // { } novo | ticket editar
   const prevCount = useRef(0)
   const chime = useChime(soundOn)
 
@@ -64,6 +66,9 @@ export function KdsBoard({ kind = 'kitchen', tv = false, soundOn = true, station
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [kind])
+
+  // Permite o componente-pai abrir o "novo pedido" a partir de um botão externo.
+  useEffect(() => { if (registerNew) registerNew(() => setEditor({})) }, [registerNew])
 
   const shown = useMemo(() => stationFilter ? tickets.filter((t) => t.station_id === stationFilter) : tickets, [tickets, stationFilter])
 
@@ -131,12 +136,13 @@ export function KdsBoard({ kind = 'kitchen', tv = false, soundOn = true, station
             <div className={`space-y-2.5 flex-1 ${tv ? 'overflow-y-auto' : ''}`}>
               {list.length === 0 && <div className="text-admin-muted/20 text-xs text-center py-6 border border-dashed border-white/[0.05] rounded-xl">solte aqui</div>}
               {list.map((t) => (
-                <TicketCard key={t.id} t={t} now={now} stage={stage} onAdvance={advance} onCancel={cancel} onDragStart={tv ? null : onDragStart} tv={tv} />
+                <TicketCard key={t.id} t={t} now={now} stage={stage} onAdvance={advance} onCancel={cancel} onEdit={tv ? null : setEditor} onDragStart={tv ? null : onDragStart} tv={tv} />
               ))}
             </div>
           </div>
         )
       })}
+      {editor && <KdsTicketEditor ticket={editor.id ? editor : null} kind={kind} notify={notify} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); load() }} />}
     </div>
   )
 }

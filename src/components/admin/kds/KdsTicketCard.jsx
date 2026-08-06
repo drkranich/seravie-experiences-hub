@@ -17,7 +17,7 @@ export function KdsTimer({ since, slaSec, now, big = false }) {
 }
 
 // Cartão premium de um pedido/ticket na tela de produção.
-export function TicketCard({ t, now, stage, onAdvance, onCancel, onDragStart, tv = false }) {
+export function TicketCard({ t, now, stage, onAdvance, onCancel, onEdit, onDragStart, tv = false }) {
   const ch = channelMeta(t.channel)
   const items = Array.isArray(t.items) ? t.items : []
   const obs = items.filter((i) => i.notes).map((i) => i.notes)
@@ -78,6 +78,7 @@ export function TicketCard({ t, now, stage, onAdvance, onCancel, onDragStart, tv
               {stage.key === 'queued' ? 'Iniciar' : stage.key === 'ready' ? 'Entregar' : 'Avançar'}
             </button>
           )}
+          {onEdit && <button onClick={() => onEdit(t)} title="Editar pedido" className="px-2.5 py-2 rounded-xl bg-white/[0.05] text-admin-muted/60 hover:text-admin-champ transition-colors"><Icon name="pen" className="w-3.5 h-3.5" /></button>}
           <button onClick={() => onCancel(t)} title="Cancelar" className="px-2.5 py-2 rounded-xl bg-white/[0.05] text-admin-muted/60 hover:text-admin-rose transition-colors"><Icon name="x" className="w-3.5 h-3.5" /></button>
         </div>
       )}
