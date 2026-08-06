@@ -34,6 +34,20 @@ Deno.serve(async (req) => {
     if (existing && existing.length) await admin.from('subscriptions').update(patch).eq('id', existing[0].id)
     else await admin.from('subscriptions').insert({ tenant_id: tenantId, payment_provider: 'stripe', ...patch })
   }
+
+  // Resolve o plan_id (e o ciclo) a partir do Price ID da assinatura do Stripe,
+  // cruzando com plans.stripe_price_monthly/yearly. Cobre renovações onde o
+  // metadata pode não trazer o plano.
+  const resolvePlanFromPrice = async (subObj) => {
+    const priceId = subObj?.items?.data?.[0]?.price?.id
+    if (!priceId) return {}
+    const { data: plans } = await admin.from('plans').select('id, stripe_price_monthly, stripe_price_yearly')
+    for (const pl of plans || []) {
+      if (pl.stripe_price_monthly === priceId) return { plan_id: pl.id, billing_cycle: 'monthly' }
+      if (pl.stripe_price_yearly === priceId) return { plan_id: pl.id, billing_cycle: 'yearly' }
+    }
+    return {}
+  }
   try {
     const obj = event.data?.object || {}
     switch (event.type) {
@@ -41,9 +55,11 @@ Deno.serve(async (req) => {
         await upsertSub(obj.metadata?.tenant_id, { plan_id: obj.metadata?.plan_id || null, billing_cycle: obj.metadata?.cycle || 'monthly', status: 'active', provider_subscription_id: obj.subscription || null, payment_provider: 'stripe' })
         break
       case 'customer.subscription.updated':
-      case 'customer.subscription.created':
-        await upsertSub(obj.metadata?.tenant_id, { status: obj.status === 'trialing' ? 'trialing' : (obj.status === 'active' ? 'active' : (obj.status || 'active')), provider_subscription_id: obj.id, current_period_start: obj.current_period_start ? new Date(obj.current_period_start * 1000).toISOString() : null, current_period_end: obj.current_period_end ? new Date(obj.current_period_end * 1000).toISOString() : null, trial_end: obj.trial_end ? new Date(obj.trial_end * 1000).toISOString() : null })
+      case 'customer.subscription.created': {
+        const planInfo = await resolvePlanFromPrice(obj)
+        await upsertSub(obj.metadata?.tenant_id, { status: obj.status === 'trialing' ? 'trialing' : (obj.status === 'active' ? 'active' : (obj.status || 'active')), provider_subscription_id: obj.id, ...planInfo, current_period_start: obj.current_period_start ? new Date(obj.current_period_start * 1000).toISOString() : null, current_period_end: obj.current_period_end ? new Date(obj.current_period_end * 1000).toISOString() : null, trial_end: obj.trial_end ? new Date(obj.trial_end * 1000).toISOString() : null })
         break
+      }
       case 'customer.subscription.deleted':
         await upsertSub(obj.metadata?.tenant_id, { status: 'cancelled', cancelled_at: new Date().toISOString() })
         break
