@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 
-const TRIGGERS = { new_order: 'Nova venda', new_appointment: 'Novo agendamento', new_reservation: 'Nova reserva', new_subscription: 'Nova assinatura (clube)', new_customer: 'Novo cliente', low_stock: 'Estoque baixo', birthday: 'Aniversário do cliente', ticket_created: 'Novo chamado', checklist_done: 'Checklist concluído', nps_low: 'NPS baixo', daily: 'Diariamente' }
+const TRIGGERS = { new_order: 'Nova venda', new_appointment: 'Novo agendamento', new_reservation: 'Nova reserva', new_subscription: 'Nova assinatura (clube)', new_form_response: 'Nova resposta de formulário', new_customer: 'Novo cliente', low_stock: 'Estoque baixo', birthday: 'Aniversário do cliente', ticket_created: 'Novo chamado', checklist_done: 'Checklist concluído', nps_low: 'NPS baixo', daily: 'Diariamente' }
 const ACTIONS = { send_message: 'Enviar mensagem', create_task: 'Criar tarefa', notify_team: 'Notificar equipe', apply_tag: 'Aplicar etiqueta', send_coupon: 'Enviar cupom', webhook: 'Chamar webhook' }
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 

@@ -42,14 +42,50 @@ export function FlowStudio({ notify }) {
   }
   const removeForm = async (f) => { if (!confirm(`Excluir "${f.title}"?`)) return; await supabase.from('flow_forms').delete().eq('id', f.id); load() }
 
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiGoal, setAiGoal] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const createWithAI = async () => {
+    if (!aiGoal.trim()) return
+    setAiBusy(true)
+    const { data, error } = await supabase.functions.invoke('flow-ai', { body: { action: 'generate_form', goal: aiGoal } })
+    if (error || data?.error || !data?.form) { setAiBusy(false); return notify(data?.error === 'ai_not_configured' ? 'Configure a chave de IA nas Edge Functions para gerar com IA.' : 'Não consegui gerar. Tente descrever de outra forma.', 'info') }
+    const spec = data.form
+    const { data: nf, error: fe } = await supabase.from('flow_forms').insert({ tenant_id: tenantId, title: spec.title || 'Experiência (IA)', submit_message: spec.submit_message || undefined, created_by: profile?.user_id }).select('*').single()
+    if (fe || !nf) { setAiBusy(false); return notify('Erro ao criar o formulário', 'error') }
+    const blocks = (spec.blocks || []).slice(0, 12).map((b, i) => ({
+      tenant_id: tenantId, form_id: nf.id, type: b.type || 'short_text', label: b.label || 'Pergunta',
+      help: b.help || null, required: !!b.required, options: Array.isArray(b.options) ? b.options : [], sort_order: i,
+    }))
+    if (blocks.length) await supabase.from('flow_form_blocks').insert(blocks)
+    setAiBusy(false); setAiOpen(false); setAiGoal(''); notify('Formulário gerado pela IA!', 'success'); setEditing(nf)
+  }
+
   if (editing) return <FormBuilder form={editing} notify={notify} onBack={() => { setEditing(null); load() }} />
 
   return (
     <div>
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <p className="text-admin-muted/50 text-sm">{forms.length} experiências · formulários cinematográficos</p>
-        <button onClick={createForm} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm"><Icon name="plus" className="w-4 h-4" />Nova experiência</button>
+        <div className="flex gap-2">
+          <button onClick={() => setAiOpen(true)} className="flex items-center gap-2 bg-admin-gold/10 hover:bg-admin-gold/20 text-admin-gold px-4 py-2 rounded-xl text-sm"><Icon name="spark" className="w-4 h-4" />Criar com IA</button>
+          <button onClick={createForm} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm"><Icon name="plus" className="w-4 h-4" />Nova experiência</button>
+        </div>
       </div>
+
+      {aiOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setAiOpen(false)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-serif text-2xl text-admin-text mb-2">Criar experiência com IA</h2>
+            <p className="text-admin-muted/50 text-sm mb-4">Descreva o objetivo e a IA monta o formulário inteiro.</p>
+            <textarea value={aiGoal} onChange={(e) => setAiGoal(e.target.value)} rows={3} placeholder="Ex: diagnóstico para captar clientes de arquitetura de interiores" className={`${inputCls} resize-none`} />
+            <div className="flex gap-3 mt-4">
+              <button onClick={createWithAI} disabled={aiBusy || !aiGoal.trim()} className="flex-1 bg-admin-gold/15 text-admin-gold py-2.5 rounded-xl text-sm hover:bg-admin-gold/25 disabled:opacity-40">{aiBusy ? 'Gerando…' : 'Gerar formulário'}</button>
+              <button onClick={() => setAiOpen(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
       {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p> : forms.length === 0 ? (
         <div className="glass rounded-2xl p-12 text-center"><p className="text-admin-muted/50 text-sm">Nenhuma experiência ainda.</p><p className="text-admin-muted/30 text-xs mt-1">Crie um formulário cinematográfico — o cliente responde numa jornada tela cheia, estilo Reels.</p></div>
       ) : (
@@ -81,6 +117,20 @@ function FormBuilder({ form, notify, onBack }) {
   const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState(null) // bloco selecionado para editar
   const [addOpen, setAddOpen] = useState(false)
+  const [tab, setTab] = useState('build') // build | responses
+  const [responses, setResponses] = useState([])
+  const loadResponses = async () => { const { data } = await supabase.from('flow_responses').select('*').eq('form_id', form.id).order('created_at', { ascending: false }).limit(1000); setResponses(data || []) }
+  useEffect(() => { if (tab === 'responses') loadResponses() }, [tab])
+
+  const exportCSV = () => {
+    const qBlocks = blocks.filter((b) => !isStatic(b.type))
+    const header = ['Data', ...qBlocks.map((b) => (b.label || TYPE_LABEL[b.type] || b.type))]
+    const rows = responses.map((r) => [new Date(r.created_at).toLocaleString('pt-BR'), ...qBlocks.map((b) => { const v = r.answers?.[b.id]; return Array.isArray(v) ? v.join('; ') : (v ?? '') })])
+    const esc = (s) => `"${String(s).replace(/"/g, '""')}"`
+    const csv = [header, ...rows].map((row) => row.map(esc).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${f.title.replace(/\s+/g, '-').toLowerCase()}-respostas.csv`; a.click()
+  }
 
   const loadBlocks = async () => { setLoading(true); const { data } = await supabase.from('flow_form_blocks').select('*').eq('form_id', form.id).order('sort_order'); setBlocks(data || []); setLoading(false) }
   useEffect(() => { loadBlocks() }, [form.id])
@@ -109,6 +159,15 @@ function FormBuilder({ form, notify, onBack }) {
     await supabase.from('flow_form_blocks').update(patch).eq('id', sel.id)
     setBlocks((bs) => bs.map((b) => b.id === sel.id ? next : b))
   }
+  const [aiBusy, setAiBusy] = useState(false)
+  const runAI = async (action) => {
+    if (!sel?.label) return
+    setAiBusy(true)
+    const { data, error } = await supabase.functions.invoke('flow-ai', { body: { action, text: sel.label } })
+    setAiBusy(false)
+    if (error || data?.error) return notify(data?.error === 'ai_not_configured' ? 'Configure a chave de IA nas Edge Functions para usar este recurso.' : 'Falha na IA. Tente novamente.', 'info')
+    if (data?.text) saveBlock({ label: data.text })
+  }
   const removeBlock = async (b) => { await supabase.from('flow_form_blocks').delete().eq('id', b.id); if (sel?.id === b.id) setSel(null); loadBlocks() }
   const move = async (b, delta) => {
     const i = blocks.findIndex((x) => x.id === b.id); const j = i + delta
@@ -122,6 +181,10 @@ function FormBuilder({ form, notify, onBack }) {
     <div>
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <button onClick={onBack} className="text-[11px] tracking-wider uppercase text-admin-muted/60 hover:text-admin-champ">← Experiências</button>
+        <div className="flex items-center gap-1 mr-auto ml-4">
+          <button onClick={() => setTab('build')} className={`text-xs px-3 py-1.5 rounded-lg ${tab === 'build' ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted/60'}`}>Construtor</button>
+          <button onClick={() => setTab('responses')} className={`text-xs px-3 py-1.5 rounded-lg ${tab === 'responses' ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted/60'}`}>Respostas ({f.response_count})</button>
+        </div>
         <div className="flex items-center gap-2">
           {f.status === 'published' && <a href={formUrl(f.slug)} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Ver ao vivo</a>}
           <button onClick={() => { navigator.clipboard?.writeText(formUrl(f.slug)); notify('Link copiado', 'success') }} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Copiar link</button>
@@ -129,6 +192,36 @@ function FormBuilder({ form, notify, onBack }) {
         </div>
       </div>
 
+      {tab === 'responses' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-admin-muted/50 text-sm">{responses.length} resposta(s)</p>
+            {responses.length > 0 && <button onClick={exportCSV} className="text-xs px-4 py-2 rounded-xl bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">Exportar CSV</button>}
+          </div>
+          {responses.length === 0 ? (
+            <div className="glass rounded-2xl p-12 text-center"><p className="text-admin-muted/50 text-sm">Ainda sem respostas.</p><p className="text-admin-muted/30 text-xs mt-1">Publique e compartilhe o link para começar a receber.</p></div>
+          ) : (
+            <div className="glass rounded-2xl overflow-hidden overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-admin-muted/50 text-[11px] uppercase tracking-wider border-b border-white/[0.06]">
+                  <th className="text-left px-4 py-3 whitespace-nowrap">Data</th>
+                  {blocks.filter((b) => !isStatic(b.type)).map((b) => <th key={b.id} className="text-left px-4 py-3 whitespace-nowrap">{b.label || TYPE_LABEL[b.type]}</th>)}
+                </tr></thead>
+                <tbody>
+                  {responses.map((r) => (
+                    <tr key={r.id} className="border-b border-white/[0.03]">
+                      <td className="px-4 py-2.5 text-admin-muted/60 whitespace-nowrap text-xs">{new Date(r.created_at).toLocaleString('pt-BR')}</td>
+                      {blocks.filter((b) => !isStatic(b.type)).map((b) => { const v = r.answers?.[b.id]; return <td key={b.id} className="px-4 py-2.5 text-admin-text/90">{Array.isArray(v) ? v.join(', ') : (v ?? '—')}</td> })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'build' && <>
       {/* cabeçalho do form */}
       <div className="glass rounded-2xl p-5 mb-4 grid sm:grid-cols-2 gap-3">
         <div><label className={lbl}>Título da experiência</label><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} onBlur={(e) => saveForm({ title: e.target.value })} className={inputCls} /></div>
@@ -166,6 +259,12 @@ function FormBuilder({ form, notify, onBack }) {
             <div className="space-y-3">
               <p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Editar cena · {TYPE_LABEL[sel.type]}</p>
               <div><label className={lbl}>{sel.type === 'title' ? 'Título' : 'Pergunta / rótulo'}</label><input value={sel.label || ''} onChange={(e) => setSel({ ...sel, label: e.target.value })} onBlur={(e) => saveBlock({ label: e.target.value })} className={inputCls} /></div>
+              {/* IA — refinar o texto da pergunta */}
+              <div className="flex flex-wrap gap-1.5">
+                {[['improve', '✨ Melhorar'], ['persuasive', 'Persuasivo'], ['friendly', 'Amigável'], ['formal', 'Formal'], ['shorter', 'Encurtar'], ['fix', 'Corrigir']].map(([a, l]) => (
+                  <button key={a} onClick={() => runAI(a)} disabled={aiBusy || !sel.label} className="text-[10px] px-2.5 py-1 rounded-lg bg-admin-champ/10 text-admin-champ/80 hover:bg-admin-champ/20 disabled:opacity-40">{aiBusy ? '…' : l}</button>
+                ))}
+              </div>
               {!isStatic(sel.type) && <div><label className={lbl}>Texto de ajuda (acima da pergunta)</label><input value={sel.help || ''} onChange={(e) => setSel({ ...sel, help: e.target.value })} onBlur={(e) => saveBlock({ help: e.target.value })} className={inputCls} /></div>}
               {['short_text', 'long_text', 'email', 'phone', 'number'].includes(sel.type) && <div><label className={lbl}>Placeholder</label><input value={sel.placeholder || ''} onChange={(e) => setSel({ ...sel, placeholder: e.target.value })} onBlur={(e) => saveBlock({ placeholder: e.target.value })} className={inputCls} /></div>}
               {sel.type === 'text' && <div><label className={lbl}>Corpo do texto</label><textarea value={sel.config?.body || ''} onChange={(e) => setSel({ ...sel, config: { ...sel.config, body: e.target.value } })} onBlur={(e) => saveBlock({ config: { ...sel.config, body: e.target.value } })} rows={3} className={`${inputCls} resize-none`} /></div>}
@@ -191,6 +290,7 @@ function FormBuilder({ form, notify, onBack }) {
           )}
         </div>
       </div>
+      </>}
 
       {/* modal adicionar bloco */}
       {addOpen && (
