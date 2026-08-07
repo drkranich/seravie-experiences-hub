@@ -1,7 +1,74 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { Icon } from '../ui'
 import { elapsedSeconds, fmtMin } from '../../../lib/flowEngine'
+
+// Chat conversacional com a IA de produção (edge function cuisine-ai).
+function AssistantChat({ kind }) {
+  const [msgs, setMsgs] = useState([])       // { role, content }
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [warn, setWarn] = useState('')
+  const endRef = useRef(null)
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs, busy])
+
+  const SUGGESTIONS = [
+    'Analise a produção agora e dê 3 recomendações',
+    'Onde está o gargalo?',
+    'Como reduzir o tempo médio?',
+    'Que produtos estão atrasando a cozinha?',
+  ]
+
+  const ask = async (text) => {
+    const q = (text ?? input).trim()
+    if (!q || busy) return
+    const history = msgs.slice(-6)
+    setMsgs((m) => [...m, { role: 'user', content: q }]); setInput(''); setBusy(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('cuisine-ai', { body: { message: q, kind, history } })
+      if (error) throw error
+      if (data?.configured === false) setWarn(data.reply)
+      setMsgs((m) => [...m, { role: 'assistant', content: data?.reply || 'Não consegui responder agora.' }])
+    } catch (e) {
+      setMsgs((m) => [...m, { role: 'assistant', content: 'Erro ao consultar a IA. Tente novamente.' }])
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className="glass rounded-2xl p-4 flex flex-col" style={{ minHeight: 340 }}>
+      <div className="flex items-center gap-2 mb-3">
+        <Icon name="sparkles" className="w-4 h-4 text-admin-champ" />
+        <p className="text-admin-text text-sm font-medium">Converse com a IA</p>
+        <span className="text-[10px] text-admin-muted/40">contexto da produção em tempo real</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto space-y-2.5 mb-3 max-h-[46vh] pr-1">
+        {msgs.length === 0 && (
+          <div className="text-center py-6">
+            <p className="text-admin-muted/40 text-sm mb-3">Pergunte sobre a operação. Sugestões:</p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {SUGGESTIONS.map((s) => <button key={s} onClick={() => ask(s)} className="text-[11px] px-3 py-1.5 rounded-lg bg-white/[0.05] text-admin-champ/80 hover:bg-admin-champ/15">{s}</button>)}
+            </div>
+          </div>
+        )}
+        {msgs.map((m, i) => (
+          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap ${m.role === 'user' ? 'bg-admin-champ/15 text-admin-text' : 'bg-white/[0.05] text-admin-muted'}`}>{m.content}</div>
+          </div>
+        ))}
+        {busy && <div className="flex justify-start"><div className="bg-white/[0.05] rounded-2xl px-3.5 py-2.5 text-sm text-admin-muted/60">pensando…</div></div>}
+        <div ref={endRef} />
+      </div>
+
+      {warn && <p className="text-[11px] text-admin-gold/80 mb-2">{warn}</p>}
+      <div className="flex gap-2">
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ask()} placeholder="Pergunte à IA da produção…" className="flex-1 glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" />
+        <button onClick={() => ask()} disabled={busy} className="px-4 rounded-xl bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ text-sm disabled:opacity-50"><Icon name="up" className="w-4 h-4 rotate-45" /></button>
+      </div>
+    </div>
+  )
+}
 
 // IA operacional do KDS — RECOMENDA, nunca executa automaticamente.
 // Gera sugestões a partir de heurísticas sobre os dados em tempo real:
@@ -110,8 +177,8 @@ export function KdsAssistant({ kind = 'kitchen' }) {
       <div className="glass rounded-2xl p-5 flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-admin-champ/10 flex items-center justify-center"><Icon name="sparkles" className="w-5 h-5 text-admin-champ" /></div>
         <div>
-          <p className="text-admin-text font-medium">Assistente de produção</p>
-          <p className="text-admin-muted/50 text-sm">Recomendações em tempo real. As decisões são sempre suas — nada é executado automaticamente.</p>
+          <p className="text-admin-text font-medium">Assistente de produção · IA</p>
+          <p className="text-admin-muted/50 text-sm">Recomendações automáticas + converse com a IA (respostas reais com o contexto da sua produção). As decisões são sempre suas.</p>
         </div>
       </div>
 
@@ -134,6 +201,9 @@ export function KdsAssistant({ kind = 'kitchen' }) {
           )
         })}
       </div>
+
+      {/* Chat com a IA (respostas reais com contexto da produção) */}
+      <AssistantChat kind={kind} />
     </div>
   )
 }
