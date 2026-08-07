@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
@@ -551,7 +552,7 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
         {mayEdit && <div className="w-40"><GlassSelect value={editing.status} onChange={setStatus} options={Object.entries(STATUS).map(([value, x]) => ({ value, label: x[0] }))} /></div>}
       </div>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[240px_1fr_300px] gap-3 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_290px] gap-3 overflow-hidden">
         {/* ESQUERDA — Cliente / CRM */}
         <div className="glass rounded-2xl p-4 overflow-y-auto hidden lg:block">
           <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Cliente & negócio</p>
@@ -568,7 +569,7 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
         </div>
 
         {/* CENTRO — itens */}
-        <div className="overflow-y-auto pr-1">
+        <div className="overflow-y-auto pr-1 min-w-0">
           {/* barra de cenários */}
           <div className="glass rounded-2xl p-2 mb-3 flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] uppercase tracking-wider text-admin-muted/40 px-1.5">Cenários</span>
@@ -645,7 +646,7 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
         </div>
 
         {/* DIREITA — Motor financeiro */}
-        <div className="overflow-y-auto">
+        <div className="overflow-y-auto min-w-0">
           <div className="glass rounded-2xl p-5 mb-3">
             <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Motor financeiro</p>
             <Row label="Subtotal" v={brl(calc.sub)} />
@@ -855,17 +856,16 @@ function ConvertMenu({ editing, calc, items, scenarios, tenantId, notify, onStat
   return (
     <>
       <button ref={btnRef} onClick={openMenu} disabled={busy} className={`${tbtn} bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 disabled:opacity-50`}><Icon name="spark" className="w-3.5 h-3.5" />{busy ? '…' : 'Converter'}</button>
-      {open && pos && (
+      {open && pos && createPortal(
         <>
-          <div className="fixed inset-0 z-[59]" onClick={() => setOpen(false)} />
-          <div className="fixed z-[60] glass-pop rounded-xl p-1.5 w-72" style={{ top: pos.top, right: pos.right }}>
+          <div className="fixed inset-0 z-[998]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[999] glass-pop rounded-xl p-1.5 w-72" style={{ top: pos.top, right: pos.right }}>
             <MenuItem icon="book" title="Proposta (Document Studio)" desc="Documento premium para assinar" onClick={toProposal} />
             <MenuItem icon="pen" title="Solicitar assinatura" desc="Crie a proposta e envie para assinar" onClick={() => { toProposal(); notify('Proposta criada — abra em Document Studio › Assinaturas.', 'info') }} />
             <MenuItem icon="chart" title="Fatura / cobrança" desc="Gera a cobrança do cliente" onClick={toInvoice} />
             <MenuItem icon="check" title="Marcar como aprovado" desc="Fecha o negócio no CRM" onClick={() => { onStatus('accepted'); setOpen(false) }} />
           </div>
-        </>
-      )}
+        </>, document.body)}
     </>
   )
 }
@@ -887,14 +887,13 @@ function AddItemMenu({ onAdd }) {
   return (
     <>
       <button ref={ref} onClick={toggle} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 flex items-center gap-1"><Icon name="plus" className="w-3 h-3" />Adicionar</button>
-      {open && pos && (
+      {open && pos && createPortal(
         <>
-          <div className="fixed inset-0 z-[59]" onClick={() => setOpen(false)} />
-          <div className="fixed z-[60] glass-pop rounded-xl p-2 grid grid-cols-2 gap-1 w-72" style={{ top: pos.top, right: pos.right }}>
+          <div className="fixed inset-0 z-[998]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[999] glass-pop rounded-xl p-2 grid grid-cols-2 gap-1 w-72" style={{ top: pos.top, right: pos.right }}>
             {Object.entries(KIND).map(([k, l]) => <button key={k} onClick={() => { onAdd(k); setOpen(false) }} className="text-[11px] px-2 py-1.5 rounded-lg text-admin-muted/80 hover:text-admin-champ hover:bg-admin-champ/10 text-left whitespace-nowrap">{l}</button>)}
           </div>
-        </>
-      )}
+        </>, document.body)}
     </>
   )
 }
