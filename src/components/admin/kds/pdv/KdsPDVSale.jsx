@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../../lib/supabase'
 import { useTenant } from '../../../../hooks/useTenant'
 import { Icon, GlassSelect } from '../../ui'
@@ -34,7 +34,11 @@ export function KdsPDVSale({ session, kind = 'kitchen', notify, onSold }) {
   useEffect(() => { load() }, [kind])
 
   const categories = useMemo(() => [...new Set(menu.map((m) => m.category).filter(Boolean))], [menu])
-  const shown = useMemo(() => menu.filter((m) => (!cat || m.category === cat) && (!search.trim() || m.name.toLowerCase().includes(search.toLowerCase()))), [menu, cat, search])
+  // Busca por nome, categoria OU código de barras.
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return menu.filter((m) => (!cat || m.category === cat) && (!q || `${m.name} ${m.category || ''} ${m.barcode || ''}`.toLowerCase().includes(q)))
+  }, [menu, cat, search])
 
   const lines = useMemo(() => Object.entries(cart).map(([id, qty]) => ({ ...menu.find((m) => m.id === id), qty })).filter((l) => l.id), [cart, menu])
   const subtotal = money(lines.reduce((s, l) => s + (l.price || 0) * l.qty, 0))
@@ -42,6 +46,20 @@ export function KdsPDVSale({ session, kind = 'kitchen', notify, onSold }) {
   const count = lines.reduce((s, l) => s + l.qty, 0)
 
   const add = (m) => setCart((c) => ({ ...c, [m.id]: (c[m.id] || 0) + 1 }))
+
+  // Leitor de código de barras: o scanner "digita" o código e dá Enter.
+  // Casa exato pelo barcode; se não achar, tenta por nome. Bipe de erro se nada.
+  const [scan, setScan] = useState('')
+  const scanRef = useRef(null)
+  const onScan = (e) => {
+    if (e.key !== 'Enter') return
+    const code = scan.trim()
+    if (!code) return
+    const hit = menu.find((m) => (m.barcode || '') === code) || menu.find((m) => m.name.toLowerCase() === code.toLowerCase())
+    if (hit) { if (hit.stock != null && hit.stock <= 0) notify?.(`"${hit.name}" esgotado`, 'error'); else { add(hit); notify?.(`+ ${hit.name}`, 'success') } }
+    else notify?.('Código não encontrado no cardápio', 'error')
+    setScan('')
+  }
   const dec = (id) => setCart((c) => { const n = (c[id] || 0) - 1; const cp = { ...c }; if (n <= 0) delete cp[id]; else cp[id] = n; return cp })
   const clear = () => { setCart({}); setDiscount(''); setTip(''); setCustomer(''); setTableLabel(''); setPayments([]) }
 
@@ -68,10 +86,15 @@ export function KdsPDVSale({ session, kind = 'kitchen', notify, onSold }) {
     <div className="grid lg:grid-cols-[1fr_360px] gap-4">
       {/* Catálogo */}
       <div>
+        {/* Leitor de código de barras — mantenha o foco aqui e escaneie */}
+        <div className="relative mb-2">
+          <Icon name="grid" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-champ/60" />
+          <input ref={scanRef} value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={onScan} placeholder="Leitor de código de barras — escaneie ou digite o código + Enter" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text outline-none ring-1 ring-admin-champ/20 focus:ring-admin-champ/40 font-mono" autoFocus />
+        </div>
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <div className="relative flex-1 min-w-40">
             <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar produto…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text outline-none" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, categoria ou código…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text outline-none" />
           </div>
           <div className="flex gap-1 flex-wrap">
             <button onClick={() => setCat('')} className={`text-xs px-3 py-2 rounded-xl ${!cat ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/60'}`}>Todos</button>
