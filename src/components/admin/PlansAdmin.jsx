@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, Toggle, GlassSelect } from './ui'
@@ -71,7 +71,25 @@ function PlansTab({ notify }) {
     else { const r = await supabase.from('plans').insert(payload).select('id').single(); error = r.error; savedId = r.data?.id }
     if (error) return notify('Erro ao salvar: ' + error.message, 'error')
     logAudit({ action: editing ? 'update' : 'create', resource_type: 'plans', resource_id: savedId, new_data: payload }, tenantId)
-    notify(editing ? 'Plano atualizado' : 'Plano criado', 'success'); setModal(false); load()
+
+    // Sincroniza com o Stripe se o valor mudou (Price do Stripe é imutável → cria novo Price ID)
+    const priceChanged = !editing
+      || Number(editing.price_monthly) !== Number(payload.price_monthly)
+      || Number(editing.price_yearly) !== Number(payload.price_yearly)
+      || !editing.stripe_price_monthly
+    if (savedId && priceChanged) {
+      try {
+        const { data: d, error: fnErr } = await supabase.functions.invoke('sync-plan-price', { body: { kind: 'plan', id: savedId, price_monthly: payload.price_monthly, price_yearly: payload.price_yearly } })
+        if (!fnErr && d?.ok) notify(editing ? 'Plano atualizado e sincronizado com o Stripe' : 'Plano criado e sincronizado com o Stripe', 'success')
+        else if (d?.error === 'stripe_not_configured') notify('Plano salvo. Stripe ainda não configurado — configure STRIPE_SECRET_KEY para gerar o Price.', 'info')
+        else notify('Plano salvo, mas a sincronização com o Stripe falhou: ' + (d?.detail || d?.error || fnErr?.message || 'erro'), 'error')
+      } catch (e) {
+        notify('Plano salvo, mas não consegui sincronizar com o Stripe agora.', 'error')
+      }
+    } else {
+      notify(editing ? 'Plano atualizado' : 'Plano criado', 'success')
+    }
+    setModal(false); load()
   }
   const remove = async (p) => {
     const { error } = await supabase.from('plans').delete().eq('id', p.id); setConfirmDel(null)
@@ -190,13 +208,33 @@ function PlansTab({ notify }) {
 function ModulePricingTab({ notify }) {
   const [modules, setModules] = useState([])
   const [loading, setLoading] = useState(true)
-  const load = async () => { setLoading(true); const { data } = await supabase.from('modules').select('*').order('category').order('name'); setModules(data || []); setLoading(false) }
+  const orig = useRef({})
+  const load = async () => { setLoading(true); const { data } = await supabase.from('modules').select('*').order('category').order('name'); const rows = data || []; orig.current = Object.fromEntries(rows.map((m) => [m.id, { price_monthly: Number(m.price_monthly) || 0, price_yearly: Number(m.price_yearly) || 0 }])); setModules(rows); setLoading(false) }
   useEffect(() => { load() }, [])
+  const [syncing, setSyncing] = useState(null)
   const setField = (id, patch) => setModules((ms) => ms.map((m) => m.id === id ? { ...m, ...patch } : m))
   const saveOne = async (m) => {
+    const before = orig.current[m.id] || {}
     const { error } = await supabase.from('modules').update({ price_monthly: Number(m.price_monthly) || 0, price_yearly: Number(m.price_yearly) || 0, sellable: m.sellable !== false, stripe_price_monthly: m.stripe_price_monthly || null }).eq('id', m.id)
     if (error) return notify('Erro ao salvar', 'error')
-    notify(`${m.name} atualizado`, 'success')
+
+    // Sincroniza com o Stripe se o valor mudou (gera novo Price ID)
+    const priceChanged = Number(before.price_monthly) !== (Number(m.price_monthly) || 0)
+      || Number(before.price_yearly) !== (Number(m.price_yearly) || 0)
+      || (m.sellable !== false && !m.stripe_price_monthly)
+    if (m.sellable !== false && priceChanged) {
+      setSyncing(m.id)
+      try {
+        const { data: d, error: fnErr } = await supabase.functions.invoke('sync-plan-price', { body: { kind: 'module', id: m.id, price_monthly: Number(m.price_monthly) || 0, price_yearly: Number(m.price_yearly) || 0 } })
+        if (!fnErr && d?.ok) { setField(m.id, { stripe_price_monthly: d.stripe_price_monthly || m.stripe_price_monthly, stripe_price_yearly: d.stripe_price_yearly || m.stripe_price_yearly }); notify(`${m.name} atualizado e sincronizado com o Stripe`, 'success') }
+        else if (d?.error === 'stripe_not_configured') notify(`${m.name} salvo. Stripe ainda não configurado.`, 'info')
+        else notify(`${m.name} salvo, mas o Stripe falhou: ${d?.detail || d?.error || fnErr?.message || 'erro'}`, 'error')
+      } catch { notify(`${m.name} salvo, mas não sincronizou com o Stripe.`, 'error') }
+      setSyncing(null)
+    } else {
+      notify(`${m.name} atualizado`, 'success')
+    }
+    orig.current[m.id] = { price_monthly: Number(m.price_monthly) || 0, price_yearly: Number(m.price_yearly) || 0 }
   }
   if (loading) return <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p>
   return (
@@ -214,7 +252,7 @@ function ModulePricingTab({ notify }) {
                 <td className="px-3 py-2.5"><input type="number" value={m.price_monthly ?? ''} onChange={(e) => setField(m.id, { price_monthly: e.target.value })} className="w-24 glass-input rounded-lg px-2 py-1.5 text-sm text-admin-text outline-none text-right" /></td>
                 <td className="px-3 py-2.5"><input type="number" value={m.price_yearly ?? ''} onChange={(e) => setField(m.id, { price_yearly: e.target.value })} className="w-24 glass-input rounded-lg px-2 py-1.5 text-sm text-admin-text outline-none text-right" /></td>
                 <td className="px-3 py-2.5"><input value={m.stripe_price_monthly || ''} onChange={(e) => setField(m.id, { stripe_price_monthly: e.target.value })} className="w-32 glass-input rounded-lg px-2 py-1.5 text-xs text-admin-text outline-none" placeholder="price_..." /></td>
-                <td className="px-3 py-2.5 text-right"><button onClick={() => saveOne(m)} className="text-[11px] px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">Salvar</button></td>
+                <td className="px-3 py-2.5 text-right"><button onClick={() => saveOne(m)} disabled={syncing === m.id} className="text-[11px] px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 disabled:opacity-50">{syncing === m.id ? 'Sincronizando…' : 'Salvar'}</button></td>
               </tr>
             ))}
           </tbody>
