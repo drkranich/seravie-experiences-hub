@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
@@ -307,6 +307,16 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
   const removeItem = (i) => { setItems((xs) => xs.filter((_, j) => j !== i)); setDirty(true) }
   const [addOpen, setAddOpen] = useState(false)
 
+  // IA: adicionar item sugerido e ajustar preços à margem-alvo
+  const addSuggested = (c) => { setItems((xs) => [...xs, { ...emptyItem(), name: c.name, unit_price: Number(c.suggested_price) || 0 }]); setDirty(true); notify?.(`"${c.name}" adicionado`, 'success') }
+  const fixMargin = (suggestedTotal) => {
+    const cur = calc.total
+    if (!cur || !suggestedTotal || suggestedTotal <= cur) return
+    const factor = suggestedTotal / cur
+    setItems((xs) => xs.map((r) => ({ ...r, unit_price: Math.round((Number(r.unit_price) || 0) * factor * 100) / 100 })))
+    setDirty(true); notify?.('Preços ajustados para a margem-alvo', 'success')
+  }
+
   const save = async () => {
     await supabase.from('quote_items').delete().eq('quote_id', editing.id)
     const rows = items.filter((r) => r.name?.trim()).map((r, k) => ({
@@ -481,6 +491,9 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
             {calc.idealPrice > calc.total + 1 && <p className="text-admin-gold/70 text-[11px] mt-2">Para bater a margem-alvo, o total deveria ser {brl(calc.idealPrice)} ({brl(calc.idealPrice - calc.total)} a mais).</p>}
           </div>
 
+          {/* IA comercial */}
+          <AIAssistant editing={editing} items={items} calc={calc} targetMargin={eng.target_margin} onAddItem={addSuggested} onFixMargin={fixMargin} notify={notify} />
+
           {/* parcelamento */}
           <div className="glass rounded-2xl p-5">
             <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Parcelamento</p>
@@ -574,25 +587,42 @@ function ConvertMenu({ editing, calc, items, scenarios, tenantId, notify, onStat
     notify('Para faturar, abra a proposta no Document Studio e use "Emitir fatura" (requer Stripe conectado).', 'info')
   }
 
+  const btnRef = useRef(null)
+  const [pos, setPos] = useState(null)
+  const openMenu = () => {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })
+    setOpen((o) => !o)
+  }
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true); window.addEventListener('resize', close)
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close) }
+  }, [open])
+
   return (
-    <div className="relative">
-      <button onClick={() => setOpen((o) => !o)} disabled={busy} className={`${tbtn} bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 disabled:opacity-50`}><Icon name="spark" className="w-3.5 h-3.5" />{busy ? '…' : 'Converter'}</button>
-      {open && (
-        <div className="absolute right-0 mt-1 z-30 glass-pop rounded-xl p-1.5 w-60" onMouseLeave={() => setOpen(false)}>
-          <MenuItem icon="book" title="Proposta (Document Studio)" desc="Documento premium para assinar" onClick={toProposal} />
-          <MenuItem icon="pen" title="Solicitar assinatura" desc="Crie a proposta e envie para assinar" onClick={() => { toProposal(); notify('Proposta criada — abra em Document Studio › Assinaturas.', 'info') }} />
-          <MenuItem icon="chart" title="Fatura / cobrança" desc="Gera a cobrança do cliente" onClick={toInvoice} />
-          <MenuItem icon="check" title="Marcar como aprovado" desc="Fecha o negócio no CRM" onClick={() => { onStatus('accepted'); setOpen(false) }} />
-        </div>
+    <>
+      <button ref={btnRef} onClick={openMenu} disabled={busy} className={`${tbtn} bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 disabled:opacity-50`}><Icon name="spark" className="w-3.5 h-3.5" />{busy ? '…' : 'Converter'}</button>
+      {open && pos && (
+        <>
+          <div className="fixed inset-0 z-[59]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[60] glass-pop rounded-xl p-1.5 w-72" style={{ top: pos.top, right: pos.right }}>
+            <MenuItem icon="book" title="Proposta (Document Studio)" desc="Documento premium para assinar" onClick={toProposal} />
+            <MenuItem icon="pen" title="Solicitar assinatura" desc="Crie a proposta e envie para assinar" onClick={() => { toProposal(); notify('Proposta criada — abra em Document Studio › Assinaturas.', 'info') }} />
+            <MenuItem icon="chart" title="Fatura / cobrança" desc="Gera a cobrança do cliente" onClick={toInvoice} />
+            <MenuItem icon="check" title="Marcar como aprovado" desc="Fecha o negócio no CRM" onClick={() => { onStatus('accepted'); setOpen(false) }} />
+          </div>
+        </>
       )}
-    </div>
+    </>
   )
 }
 function MenuItem({ icon, title, desc, onClick }) {
   return (
     <button onClick={onClick} className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-lg text-left hover:bg-white/[0.05]">
       <Icon name={icon} className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
-      <div><p className="text-admin-text text-xs font-medium">{title}</p><p className="text-admin-muted/40 text-[10px]">{desc}</p></div>
+      <div className="min-w-0"><p className="text-admin-text text-xs font-medium whitespace-nowrap">{title}</p><p className="text-admin-muted/40 text-[10px] whitespace-nowrap">{desc}</p></div>
     </button>
   )
 }
@@ -613,6 +643,57 @@ function Timeline({ status }) {
         )
       })}
       {status === 'rejected' && <div className="flex items-center gap-2.5"><span className="w-2 h-2 rounded-full bg-admin-rose" /><span className="text-xs text-admin-rose">Perdido</span></div>}
+    </div>
+  )
+}
+
+// painel de IA comercial
+function AIAssistant({ editing, items, calc, targetMargin, onAddItem, onFixMargin, notify }) {
+  const [res, setRes] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const analyze = async () => {
+    setBusy(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('quote-ai', { body: {
+        title: editing.title, items: items.filter((i) => i.name).map((i) => ({ name: i.name, unit_price: i.unit_price })),
+        total: calc.total, margin: calc.margin, target_margin: targetMargin || 25,
+      } })
+      setBusy(false)
+      if (error || !data?.ok) return notify?.('Não consegui analisar agora.', 'error')
+      setRes(data)
+    } catch { setBusy(false); notify?.('Falha ao analisar.', 'error') }
+  }
+  return (
+    <div className="glass rounded-2xl p-5 mb-3">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 flex items-center gap-1.5"><Icon name="spark" className="w-3.5 h-3.5" />IA comercial</p>
+        <button onClick={analyze} disabled={busy} className="text-[11px] px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 disabled:opacity-50">{busy ? 'Analisando…' : (res ? 'Reanalisar' : 'Analisar')}</button>
+      </div>
+      {!res ? <p className="text-admin-muted/40 text-xs">Analise o orçamento para receber sugestões de cross-sell, alertas de margem e comparação com propostas aprovadas.</p> : (
+        <div className="space-y-3">
+          {res.margin && (
+            <div className={`rounded-xl px-3 py-2.5 text-xs ${res.margin.level === 'critical' ? 'bg-admin-rose/10 text-admin-rose' : 'bg-admin-gold/10 text-admin-gold'}`}>
+              <p className="flex items-center gap-1.5"><Icon name="warning" className="w-3.5 h-3.5 shrink-0" />{res.margin.message}</p>
+              {res.margin.suggested_total > 0 && <button onClick={() => onFixMargin(res.margin.suggested_total)} className="mt-1.5 text-[11px] underline hover:no-underline">Ajustar preços proporcionalmente →</button>}
+            </div>
+          )}
+          {res.insight && <div className="rounded-xl px-3 py-2.5 text-xs bg-admin-sage/10 text-admin-sage flex items-start gap-1.5"><Icon name="chart" className="w-3.5 h-3.5 shrink-0 mt-0.5" />{res.insight}</div>}
+          {res.cross_sell?.length > 0 && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-1.5">Adicionar também</p>
+              <div className="space-y-1.5">
+                {res.cross_sell.map((c, i) => (
+                  <div key={i} className="glass-soft rounded-xl px-3 py-2 flex items-center gap-2">
+                    <div className="min-w-0 flex-1"><p className="text-admin-text text-xs font-medium truncate">{c.name}</p><p className="text-admin-muted/40 text-[10px] truncate">{c.reason}</p></div>
+                    {c.suggested_price > 0 && <span className="text-admin-muted/50 text-[10px] shrink-0">{brl0(c.suggested_price)}</span>}
+                    <button onClick={() => onAddItem(c)} className="text-admin-champ hover:text-admin-champ/70 shrink-0"><Icon name="plus" className="w-4 h-4" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
