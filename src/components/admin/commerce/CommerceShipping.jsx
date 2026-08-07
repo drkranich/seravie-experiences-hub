@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect } from '../ui'
 import { brl } from '../../../lib/commerceTypes'
+import { printProductLabels, LABEL_TEMPLATES, LABEL_TEMPLATE_MAP, labelCellHtml } from '../../../lib/labels'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 
@@ -173,9 +174,182 @@ function ShipmentsTab({ notify }) {
   )
 }
 
+// ---------- Central de Logística & Etiquetas (fila + produto/estoque) ----------
+const QF = { queued: { label: 'Na fila', chip: 'bg-admin-gold/15 text-admin-gold' }, printed: { label: 'Impressa', chip: 'bg-admin-sage/15 text-admin-sage' }, failed: { label: 'Falha', chip: 'bg-admin-rose/15 text-admin-rose' } }
+function LabelsCenterTab({ notify }) {
+  const { profile } = useTenant()
+  const tenantId = profile?.tenant_id
+  const brand = profile?.tenant_name || ''
+  const [queue, setQueue] = useState([])
+  const [products, setProducts] = useState([])
+  const [filter, setFilter] = useState('all')
+  const [q, setQ] = useState('')
+  const [picker, setPicker] = useState(null) // { items } para escolher modelo
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    setLoading(true)
+    const [ql, pr] = await Promise.all([
+      supabase.from('label_queue').select('*').order('created_at', { ascending: false }).limit(200),
+      supabase.from('products').select('id, name, sku, barcode, price, stock').eq('status', 'active').order('name').limit(500),
+    ])
+    setQueue(ql.data || []); setProducts(pr.data || []); setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const kpis = useMemo(() => ({
+    awaiting: queue.filter((r) => r.kind === 'shipment' && r.status === 'queued').length,
+    queued: queue.filter((r) => r.status === 'queued').length,
+    printed: queue.filter((r) => r.status === 'printed').length,
+    failed: queue.filter((r) => r.status === 'failed').length,
+    internal: queue.filter((r) => r.kind === 'product').length,
+  }), [queue])
+
+  const filtered = queue.filter((r) => {
+    if (filter === 'queued' && r.status !== 'queued') return false
+    if (filter === 'shipment' && r.kind !== 'shipment') return false
+    if (filter === 'product' && r.kind !== 'product') return false
+    if (filter === 'thermal' && r.format !== 'thermal') return false
+    if (filter === 'a4' && r.format !== 'a4') return false
+    return true
+  })
+
+  // enfileira etiquetas de um produto e imprime
+  const queueAndPrint = async (product, format, copies = 1) => {
+    const templateKey = format === 'thermal' ? 'sku_50x30' : 'bc_a4_2x7'
+    const payload = { name: product.name, price: product.price, sku: product.sku, barcode: product.barcode }
+    const { data } = await supabase.from('label_queue').insert({ tenant_id: tenantId, title: product.name, subtitle: product.sku || product.barcode || '', kind: 'product', format, template_key: templateKey, copies, status: 'queued', payload, created_by: profile?.user_id }).select().single()
+    if (data) setQueue((qs) => [data, ...qs])
+    printProductLabels([{ ...payload, qty: copies }], { templateKey, brand })
+    // marca como impressa
+    if (data) { await supabase.from('label_queue').update({ status: 'printed', printed_at: new Date().toISOString() }).eq('id', data.id); setQueue((qs) => qs.map((x) => x.id === data.id ? { ...x, status: 'printed' } : x)) }
+    notify?.(`Etiqueta de "${product.name}" enviada para impressão`, 'success')
+  }
+  const reprint = async (row) => {
+    const p = row.payload || {}
+    printProductLabels([{ name: p.name, price: p.price, sku: p.sku, barcode: p.barcode, qty: row.copies || 1 }], { templateKey: row.template_key || 'bc_60x40', brand })
+    await supabase.from('label_queue').update({ status: 'printed', printed_at: new Date().toISOString() }).eq('id', row.id)
+    setQueue((qs) => qs.map((x) => x.id === row.id ? { ...x, status: 'printed' } : x))
+  }
+  const prodList = products.filter((p) => !q || `${p.name} ${p.sku || ''}`.toLowerCase().includes(q.toLowerCase()))
+  const FILTERS = [['all', 'Todas'], ['queued', 'Na fila'], ['shipment', 'Envio'], ['product', 'Produto'], ['thermal', 'Térmica'], ['a4', 'A4']]
+
+  if (loading) return <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando central de etiquetas…</p>
+
+  return (
+    <div className="space-y-5">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {[['Aguardando etiqueta', kpis.awaiting, 'gold'], ['Na fila', kpis.queued, 'champ'], ['Impressas', kpis.printed, 'sage'], ['Falhas', kpis.failed, 'rose'], ['Etiquetas internas', kpis.internal, 'copper']].map(([l, v, c]) => (
+          <div key={l} className="glass rounded-2xl p-4"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">{l}</p><p className={`text-2xl font-medium text-admin-${c}`}>{v}</p></div>
+        ))}
+      </div>
+
+      {/* Fila de impressão */}
+      <div className="glass rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div><p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Fila de impressão</p><p className="text-admin-muted/50 text-xs">Etiquetas de envio e internas enfileiradas para impressão individual, lote ou reimpressão.</p></div>
+          <div className="flex gap-1.5 flex-wrap">
+            {FILTERS.map(([k, l]) => <button key={k} onClick={() => setFilter(k)} className={`text-xs px-3 py-1.5 rounded-lg ${filter === k ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/60 hover:text-admin-text'}`}>{l}</button>)}
+          </div>
+        </div>
+        {filtered.length === 0 ? <p className="text-admin-muted/40 text-sm py-8 text-center">Nenhuma etiqueta na fila. Gere etiquetas de produto abaixo.</p> : (
+          <div className="space-y-1.5">
+            {filtered.map((r) => {
+              const st = QF[r.status] || QF.queued
+              return (
+                <div key={r.id} className="glass-soft rounded-xl p-3 flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg bg-admin-champ/10 flex items-center justify-center shrink-0 text-admin-champ"><Icon name={r.kind === 'shipment' ? 'truck' : 'tag'} className="w-4 h-4" /></span>
+                  <div className="flex-1 min-w-0"><p className="text-admin-text text-sm truncate">{r.title}</p><p className="text-admin-muted/40 text-[11px] truncate">{r.subtitle} · {r.kind === 'shipment' ? 'Envio' : 'Produto'} · {r.format === 'thermal' ? 'Térmica' : 'A4'} · {r.copies}×</p></div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-lg shrink-0 ${st.chip}`}>{st.label}</span>
+                  <button onClick={() => reprint(r)} className="text-admin-champ text-xs shrink-0">reimprimir</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Etiquetas de produto e estoque */}
+      <div className="glass rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div><p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Etiquetas de produto e estoque</p><p className="text-admin-muted/50 text-xs">Geração própria do código de barras para produtos, prateleiras, estoque e impressão A4/térmica.</p></div>
+          <div className="relative w-56"><Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto…" className="w-full glass-input rounded-xl pl-9 pr-3 py-2 text-sm text-admin-text outline-none" /></div>
+        </div>
+        {prodList.length === 0 ? <p className="text-admin-muted/40 text-sm py-8 text-center">{products.length === 0 ? 'Cadastre produtos no catálogo para gerar etiquetas.' : 'Nenhum produto encontrado.'}</p> : (
+          <div className="space-y-1.5">
+            {prodList.map((p) => (
+              <ProdLabelRow key={p.id} p={p} onQueue={queueAndPrint} onPick={() => setPicker({ items: [{ name: p.name, price: p.price, sku: p.sku, barcode: p.barcode, qty: 1 }] })} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {picker && <LabelTemplatePicker items={picker.items} brand={brand} onClose={() => setPicker(null)} onPrint={(tk) => { printProductLabels(picker.items, { templateKey: tk, brand }); setPicker(null); notify?.('Etiqueta impressa', 'success') }} />}
+    </div>
+  )
+}
+
+function ProdLabelRow({ p, onQueue, onPick }) {
+  const [copies, setCopies] = useState(1)
+  return (
+    <div className="glass-soft rounded-xl p-3 flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-admin-text text-sm truncate">{p.name}</p>
+        <p className="text-admin-muted/40 text-[11px] truncate font-mono">{p.sku || p.barcode || 'sem código'} · barras:{p.barcode || p.sku || '—'}</p>
+      </div>
+      <span className="text-admin-muted/50 text-xs shrink-0 hidden sm:block">{p.stock != null ? `${p.stock} em estoque` : '—'}</span>
+      <input type="number" value={copies} onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value) || 1))} className="w-12 glass-input rounded-lg px-2 py-1 text-sm text-admin-text outline-none text-center shrink-0" />
+      <button onClick={() => onQueue(p, 'thermal', copies)} className="text-[11px] px-2.5 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ shrink-0">Térmica</button>
+      <button onClick={() => onQueue(p, 'a4', copies)} className="text-[11px] px-2.5 py-1.5 rounded-lg bg-white/[0.05] text-admin-champ shrink-0">A4</button>
+      <button onClick={onPick} className="text-[11px] px-2 py-1.5 rounded-lg text-admin-muted/60 hover:text-admin-champ shrink-0" title="Escolher modelo">Modelo…</button>
+    </div>
+  )
+}
+
+// seletor de modelo com prévia (reaproveitado do POS)
+function LabelTemplatePicker({ items, brand, onClose, onPrint }) {
+  const [tplKey, setTplKey] = useState('bc_60x40')
+  const tpl = LABEL_TEMPLATE_MAP[tplKey]
+  const previewItem = items[0] || { name: 'Produto', price: 0, sku: 'SKU', barcode: '' }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 pb-4 border-b border-white/[0.06] flex items-start justify-between">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Formato de impressão</p><h2 className="font-serif text-2xl text-admin-text">Escolha o modelo da etiqueta</h2><p className="text-admin-muted/50 text-sm mt-1">O modelo define tamanho, densidade e leitura do código.</p></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text">Fechar</button>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_260px] gap-5 overflow-hidden p-6">
+          <div className="overflow-y-auto grid sm:grid-cols-2 gap-2.5 content-start">
+            {LABEL_TEMPLATES.map((t) => {
+              const on = tplKey === t.key
+              return (
+                <button key={t.key} onClick={() => setTplKey(t.key)} className={`text-left rounded-2xl p-3.5 border transition-all ${on ? 'border-admin-champ/50 bg-admin-champ/[0.06]' : 'glass-soft border-transparent hover:border-white/10'}`}>
+                  <p className={`text-[9px] uppercase tracking-wider mb-1 ${t.recommended ? 'text-admin-gold' : 'text-admin-muted/40'}`}>{t.recommended ? 'Recomendado' : t.group}</p>
+                  <p className="text-admin-text text-sm font-medium leading-tight">{t.name}</p>
+                  <p className="text-admin-muted/50 text-[11px] leading-snug mt-1 mb-2 min-h-[3em]">{t.desc}</p>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.05] text-admin-muted/60">{t.dim}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="glass rounded-2xl p-4 flex flex-col">
+            <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-3">Prévia</p>
+            <div className="flex-1 flex items-center justify-center bg-white rounded-xl p-3 overflow-hidden" dangerouslySetInnerHTML={{ __html: `<style>.lbl{font-family:Arial;text-align:center;border:1px solid #ddd;border-radius:4px;padding:4px 6px;transform:scale(${tpl && tpl.w > 70 ? 0.8 : 1});} .brand{font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888} .lname{font-size:11px;font-weight:600;margin:1px 0} .lprice{font-size:15px;font-weight:700} .bc svg{max-width:100%;height:auto} .nocode{font-size:10px;color:#666;font-family:monospace}</style>` + labelCellHtml(tpl, previewItem, brand || '') }} />
+          </div>
+        </div>
+        <div className="px-6 py-3 border-t border-white/[0.06] flex items-center justify-end">
+          <button onClick={() => onPrint(tplKey)} className="btn-gradient rounded-xl px-5 py-2 text-sm font-medium">Imprimir neste modelo</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function CommerceShipping({ notify }) {
-  const [sub, setSub] = useState('shipments')
+  const [sub, setSub] = useState('labels')
   const tabs = [
+    { key: 'labels', label: 'Logística & Etiquetas', icon: 'tag' },
     { key: 'shipments', label: 'Envios & Rastreio', icon: 'truck' },
     { key: 'quote', label: 'Cotação', icon: 'tag' },
     { key: 'config', label: 'Configuração', icon: 'gear' },
@@ -185,6 +359,7 @@ export function CommerceShipping({ notify }) {
       <div className="flex gap-1 mb-5 bg-white/[0.03] p-1 rounded-xl w-fit">
         {tabs.map((t) => <button key={t.key} onClick={() => setSub(t.key)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${sub === t.key ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}><Icon name={t.icon} className="w-4 h-4" />{t.label}</button>)}
       </div>
+      {sub === 'labels' && <LabelsCenterTab notify={notify} />}
       {sub === 'shipments' && <ShipmentsTab notify={notify} />}
       {sub === 'quote' && <QuoteTab notify={notify} />}
       {sub === 'config' && <ConfigTab notify={notify} />}
