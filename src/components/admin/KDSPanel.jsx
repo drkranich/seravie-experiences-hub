@@ -13,8 +13,12 @@ import { KdsTeam } from './kds/KdsTeam'
 import { KdsMenu } from './kds/KdsMenu'
 import { KdsQueues } from './kds/KdsQueues'
 import { KdsPDV } from './kds/KdsPDV'
+import { KdsGestao } from './kds/KdsGestao'
+import { KdsPermissions } from './kds/KdsPermissions'
 import { TablesPanel } from './TablesPanel'
 import { DeliveryHubPanel } from './DeliveryHubPanel'
+import { useTenant } from '../../hooks/useTenant'
+import { supabase } from '../../lib/supabase'
 
 // Painel de configuração de sons por evento (popover).
 function SoundPanel({ sound, setSound, onClose }) {
@@ -80,32 +84,61 @@ function TvMode({ kind, sound, onExit, notify }) {
   )
 }
 
+// Todas as abas do Seravie Cuisine (usadas também pela tela de Permissões).
+const ALL_TABS = [
+  { key: 'dashboard', label: 'Dashboard', icon: 'chart' },
+  { key: 'pdv', label: 'PDV', icon: 'cart' },
+  { key: 'tables', label: 'Mesas & Comandas', icon: 'layout' },
+  { key: 'delivery', label: 'Hub Delivery', icon: 'truck' },
+  { key: 'production', label: 'Produção', icon: 'flame' },
+  { key: 'queues', label: 'Filas', icon: 'layers' },
+  { key: 'map', label: 'Mapa da Cozinha', icon: 'map' },
+  { key: 'stations', label: 'Estações', icon: 'grid' },
+  { key: 'menu', label: 'Cardápios', icon: 'book' },
+  { key: 'gestao', label: 'Gestão', icon: 'building' },
+  { key: 'team', label: 'Equipe', icon: 'users' },
+  { key: 'assistant', label: 'IA', icon: 'sparkles' },
+  { key: 'analytics', label: 'Analytics', icon: 'chart' },
+  { key: 'history', label: 'Histórico', icon: 'clock' },
+  { key: 'permissions', label: 'Permissões', icon: 'ghost' },
+]
+
 export function KDSPanel({ notify }) {
+  const { profile, isAdmin } = useTenant()
   const [tab, setTab] = useState('dashboard')
   const [tv, setTv] = useState(false)
   const [touch, setTouch] = useState(false)
   const [sound, setSound] = useState(DEFAULT_SOUND)
   const [soundPanel, setSoundPanel] = useState(false)
   const [counts, setCounts] = useState({ active: 0, late: 0, total: 0 })
-  const newTicketRef = useRef(null) // função que abre o editor de novo pedido no board
+  const [allowed, setAllowed] = useState(null) // null = ainda carregando / acesso total
+  const newTicketRef = useRef(null)
   const kind = 'kitchen'
   const preset = getPreset(kind)
 
-  const tabs = [
-    { key: 'dashboard', label: 'Dashboard', icon: 'chart' },
-    { key: 'pdv', label: 'PDV', icon: 'cart' },
-    { key: 'tables', label: 'Mesas & Comandas', icon: 'layout' },
-    { key: 'delivery', label: 'Hub Delivery', icon: 'truck' },
-    { key: 'production', label: 'Produção', icon: 'flame' },
-    { key: 'queues', label: 'Filas', icon: 'layers' },
-    { key: 'map', label: 'Mapa da Cozinha', icon: 'map' },
-    { key: 'stations', label: 'Estações', icon: 'grid' },
-    { key: 'menu', label: 'Cardápios', icon: 'book' },
-    { key: 'team', label: 'Equipe', icon: 'users' },
-    { key: 'assistant', label: 'IA', icon: 'sparkles' },
-    { key: 'analytics', label: 'Analytics', icon: 'chart' },
-    { key: 'history', label: 'Histórico', icon: 'clock' },
-  ]
+  // Aplica as permissões: admin/dono vê tudo. Funcionário vê só as abas liberadas
+  // (casadas pelo e-mail do login com kds_operators.allowed_tabs).
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      if (isAdmin && isAdmin()) { if (alive) setAllowed(null); return }
+      const { data: { user } } = await supabase.auth.getUser()
+      const email = user?.email
+      if (!email) { if (alive) setAllowed(null); return }
+      const { data } = await supabase.from('kds_operators').select('allowed_tabs').eq('kind', kind).eq('email', email).maybeSingle()
+      if (alive) setAllowed(data ? data.allowed_tabs : null) // sem registro => acesso total
+    })()
+    return () => { alive = false }
+  }, [profile])
+
+  // Permissões nunca aparecem para não-admin; abas filtradas pela allow-list.
+  const tabs = ALL_TABS.filter((t) => {
+    if (t.key === 'permissions' || t.key === 'gestao') return isAdmin ? isAdmin() : true
+    if (allowed == null) return true
+    return allowed.includes(t.key)
+  })
+  // se a aba atual não é permitida, volta para a primeira disponível
+  useEffect(() => { if (tabs.length && !tabs.some((t) => t.key === tab)) setTab(tabs[0].key) }, [allowed])
 
   if (tv) return <TvMode kind={kind} sound={sound} onExit={() => setTv(false)} notify={notify} />
 
@@ -160,10 +193,12 @@ export function KDSPanel({ notify }) {
       {tab === 'map' && <KdsKitchenMap kind={kind} />}
       {tab === 'stations' && <KdsStations notify={notify} kind={kind} />}
       {tab === 'menu' && <KdsMenu kind={kind} notify={notify} />}
+      {tab === 'gestao' && <KdsGestao notify={notify} />}
       {tab === 'team' && <KdsTeam kind={kind} notify={notify} />}
       {tab === 'assistant' && <KdsAssistant kind={kind} />}
       {tab === 'analytics' && <KdsAnalytics kind={kind} />}
       {tab === 'history' && <KdsHistory kind={kind} />}
+      {tab === 'permissions' && <KdsPermissions kind={kind} notify={notify} allTabs={ALL_TABS} />}
     </div>
   )
 }
