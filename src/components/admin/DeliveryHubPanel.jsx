@@ -11,10 +11,11 @@ const CHANNELS = [
   { key: 'ifood', label: 'iFood', color: '#EA1D2C', fields: ['client_id', 'client_secret', 'merchant_id'] },
   { key: 'rappi', label: 'Rappi', color: '#FF5A00', fields: ['client_id', 'client_secret', 'store_id'] },
   { key: '99food', label: '99Food', color: '#FFD400', fields: ['api_key', 'store_id'] },
+  { key: 'instagram', label: 'Instagram', color: '#E1306C', fields: ['ig_account_id', 'page_id', 'access_token', 'verify_token'], hint: 'Conecta as DMs do Instagram via Meta (Instagram Messaging API). Cada mensagem/pedido cai aqui.' },
+  { key: 'whatsapp', label: 'WhatsApp', color: '#25D366', fields: ['phone_number_id', 'access_token', 'verify_token'] },
   { key: 'app', label: 'App próprio', color: '#DCCBA7', fields: ['api_key'] },
-  { key: 'whatsapp', label: 'WhatsApp', color: '#25D366', fields: ['phone_number_id', 'token'] },
 ]
-const FIELD_LABELS = { client_id: 'Client ID', client_secret: 'Client Secret', merchant_id: 'Merchant ID', store_id: 'Store ID', api_key: 'API Key', phone_number_id: 'Phone Number ID', token: 'Token' }
+const FIELD_LABELS = { client_id: 'Client ID', client_secret: 'Client Secret', merchant_id: 'Merchant ID', store_id: 'Store ID', api_key: 'API Key', phone_number_id: 'Phone Number ID', token: 'Token', ig_account_id: 'Instagram Account ID', page_id: 'Facebook Page ID', access_token: 'Access Token', verify_token: 'Verify Token (webhook)' }
 
 // ---------- Pedidos (kanban unificado dos canais, em tempo real) ----------
 function OrdersTab({ notify }) {
@@ -144,6 +145,7 @@ function ChannelsTab({ notify }) {
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setModal(null)}>
           <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><h2 className="font-serif text-2xl text-admin-text">Conectar {modal.def.label}</h2><button onClick={() => setModal(null)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            {modal.def.hint && <p className="text-[12px] text-admin-muted/70 mb-4 -mt-1">{modal.def.hint}</p>}
 
             {/* Webhook: URL + token para colar no painel do marketplace */}
             <div className="glass-soft rounded-xl p-3 mb-4">
