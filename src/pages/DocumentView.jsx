@@ -136,5 +136,85 @@ function Block({ b, theme, data, glass }) {
       ))}
     </div>
   )
+  if (t === 'gallery') {
+    const imgs = (b.images || []).filter(Boolean)
+    if (!imgs.length) return null
+    return <div className="my-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+      {imgs.map((u, i) => <img key={i} src={u} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 10 }} />)}
+    </div>
+  }
+  if (t === 'kpi') {
+    const stats = b.stats || []
+    if (!stats.length) return null
+    return <div className="my-6" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, Math.min(4, stats.length))},1fr)`, gap: 12 }}>
+      {stats.map((s, i) => (
+        <div key={i} style={{ ...glass, padding: 16, textAlign: 'center' }}>
+          <p className="font-serif" style={{ fontSize: 28, color: theme.accent }}>{s.value}</p>
+          <p style={{ fontSize: 11, opacity: 0.55, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4 }}>{s.label}</p>
+        </div>
+      ))}
+    </div>
+  }
+  if (t === 'pricing_table') {
+    const rows = b.rows || []
+    const subtotal = rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.unit) || 0), 0)
+    const disc = subtotal * ((Number(b.discount_pct) || 0) / 100)
+    const taxable = subtotal - disc
+    const tax = taxable * ((Number(b.tax_pct) || 0) / 100)
+    const total = taxable + tax
+    return (
+      <div className="my-6" style={{ ...glass, padding: 20 }}>
+        {b.title && <p className="text-[11px] tracking-widerx uppercase mb-3" style={{ color: theme.accent }}>{b.title}</p>}
+        {rows.map((r, i) => (
+          <div key={i} className="flex justify-between text-sm py-1.5 border-b border-white/[0.06]">
+            <span className="opacity-80">{Number(r.qty) || 0}× {r.desc || 'Item'}</span>
+            <span className="opacity-90">{brl((Number(r.qty) || 0) * (Number(r.unit) || 0))}</span>
+          </div>
+        ))}
+        <div className="text-sm opacity-70 mt-3 space-y-1">
+          <div className="flex justify-between"><span>Subtotal</span><span>{brl(subtotal)}</span></div>
+          {(Number(b.discount_pct) || 0) > 0 && <div className="flex justify-between"><span>Desconto ({b.discount_pct}%)</span><span>− {brl(disc)}</span></div>}
+          {(Number(b.tax_pct) || 0) > 0 && <div className="flex justify-between"><span>Impostos ({b.tax_pct}%)</span><span>{brl(tax)}</span></div>}
+        </div>
+        <div className="flex justify-between mt-3 pt-3 border-t border-white/[0.1]">
+          <span className="font-serif text-lg">Total</span><span className="font-serif text-2xl" style={{ color: theme.accent }}>{brl(total)}</span>
+        </div>
+      </div>
+    )
+  }
+  if (t === 'timeline') {
+    const items = b.items || []
+    if (!items.length) return null
+    return (
+      <div className="my-6">
+        {b.title && <p className="text-[11px] tracking-widerx uppercase mb-4" style={{ color: theme.accent }}>{b.title}</p>}
+        {items.map((it, i) => (
+          <div key={i} className="flex gap-4 pb-4">
+            <div className="flex flex-col items-center">
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: theme.accent, marginTop: 4 }} />
+              {i < items.length - 1 && <div style={{ width: 1, flex: 1, background: 'rgba(255,255,255,0.15)', marginTop: 4 }} />}
+            </div>
+            <div>
+              {it.when && <p className="text-xs opacity-80" style={{ color: theme.accent }}>{it.when}</p>}
+              <p className="text-[15px]">{it.label}</p>
+              {it.desc && <p className="text-sm opacity-60 mt-0.5">{it.desc}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+  if (t === 'qr') {
+    const src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=0&data=${encodeURIComponent(b.content || 'https://seravieexperiences.com')}`
+    return (
+      <div className="my-6 flex gap-5 items-center" style={{ ...glass, padding: 20 }}>
+        <img src={src} alt="QR" style={{ width: 120, height: 120, borderRadius: 10, background: '#fff', padding: 6 }} />
+        <div>
+          {b.title && <p className="text-[11px] tracking-widerx uppercase mb-1" style={{ color: theme.accent }}>{b.title}</p>}
+          <p className="text-sm opacity-80">{b.caption || 'Aponte a câmera para pagar ou acessar.'}</p>
+        </div>
+      </div>
+    )
+  }
   return null
 }

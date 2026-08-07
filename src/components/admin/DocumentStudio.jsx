@@ -46,6 +46,42 @@ function ProposalsStudio({ notify }) {
   const [creating, setCreating] = useState(false)
   const [quotes, setQuotes] = useState([])
   const [dirty, setDirty] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(null)
+
+  // baixar a proposta como HTML autocontido (abre para imprimir/salvar em PDF)
+  const downloadDoc = (d) => {
+    const t = { bg1: '#14160f', bg2: '#0b0a08', accent: '#D6C49A', text: '#f4f0e6', ...(d.theme || {}) }
+    const dd = d.data || {}
+    const mg = (s) => typeof s === 'string' ? s.replace(/\{\{(\w+)\}\}/g, (_, k) => (k === 'title' ? d.title : dd[k]) ?? '') : s
+    const money = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+    const esc = (s) => String(s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
+    const bl = (b) => {
+      if (b.type === 'cover') return `<div style="text-align:center;padding:40px 0">${b.logo_url ? `<img src="${b.logo_url}" style="height:48px;margin-bottom:24px"/>` : ''}${b.eyebrow ? `<p style="letter-spacing:3px;text-transform:uppercase;font-size:12px;color:${t.accent}">${esc(mg(b.eyebrow))}</p>` : ''}<h1 style="font-family:Georgia,serif;font-size:40px">${esc(mg(b.title)) || 'Proposta'}</h1>${b.subtitle ? `<p style="opacity:.6">${esc(mg(b.subtitle))}</p>` : ''}</div>`
+      if (b.type === 'heading') return `<h2 style="font-family:Georgia,serif;font-size:26px;margin:28px 0 10px">${esc(mg(b.text))}</h2>`
+      if (b.type === 'text') return `<p style="opacity:.78;line-height:1.7;white-space:pre-wrap;margin:0 0 14px">${esc(mg(b.text))}</p>`
+      if (b.type === 'callout') return `<div style="border-left:3px solid ${t.accent};background:rgba(255,255,255,.05);border-radius:12px;padding:16px 20px;margin:16px 0">${b.title ? `<p style="color:${t.accent};text-transform:uppercase;font-size:12px">${esc(mg(b.title))}</p>` : ''}<p style="opacity:.85">${esc(mg(b.text))}</p></div>`
+      if (b.type === 'divider') return `<hr style="border:none;border-top:1px solid rgba(255,255,255,.12);margin:24px 0"/>`
+      if (b.type === 'terms') return `<div style="margin:24px 0;opacity:.75"><h3 style="font-family:Georgia,serif;color:${t.accent};font-size:20px">${esc(b.title || 'Termos')}</h3><p style="white-space:pre-wrap;line-height:1.6">${esc(mg(b.text))}</p></div>`
+      if (b.type === 'signature_line') return `<div style="display:flex;gap:40px;margin:32px 0"><div style="flex:1;text-align:center;border-top:1px solid rgba(255,255,255,.4);margin-top:48px;padding-top:8px;font-size:12px;opacity:.6">${esc(b.left_label || 'Contratante')}</div><div style="flex:1;text-align:center;border-top:1px solid rgba(255,255,255,.4);margin-top:48px;padding-top:8px;font-size:12px;opacity:.6">${esc(b.right_label || 'Contratada')}</div></div>`
+      if (b.type === 'pricing_table') { const rows = b.rows || []; const st = rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.unit) || 0), 0); const di = st * ((Number(b.discount_pct) || 0) / 100); const tx = (st - di) * ((Number(b.tax_pct) || 0) / 100); const tt = st - di + tx; return `<div style="background:rgba(255,255,255,.05);border-radius:16px;padding:20px;margin:24px 0">${b.title ? `<p style="color:${t.accent};text-transform:uppercase;font-size:11px;letter-spacing:2px">${esc(b.title)}</p>` : ''}${rows.map((r) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)"><span style="opacity:.8">${Number(r.qty) || 0}× ${esc(r.desc || 'Item')}</span><span>${money((Number(r.qty) || 0) * (Number(r.unit) || 0))}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)"><span style="font-family:Georgia,serif;font-size:18px">Total</span><span style="font-family:Georgia,serif;font-size:24px;color:${t.accent}">${money(tt)}</span></div></div>` }
+      if (b.type === 'quote_table') { const items = dd.items || []; return `<div style="background:rgba(255,255,255,.05);border-radius:16px;padding:20px;margin:24px 0">${b.title ? `<p style="color:${t.accent};text-transform:uppercase;font-size:11px;letter-spacing:2px">${esc(b.title)}</p>` : ''}${items.map((it) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)"><span style="opacity:.8">${it.qty}× ${esc(it.name)}</span><span>${money(it.total)}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)"><span style="font-family:Georgia,serif;font-size:18px">Total</span><span style="font-family:Georgia,serif;font-size:24px;color:${t.accent}">${money(dd.total)}</span></div></div>` }
+      if (b.type === 'image' && b.url) return `<img src="${b.url}" style="width:100%;border-radius:16px;margin:24px 0"/>`
+      if (b.type === 'kpi') return `<div style="display:flex;gap:12px;margin:24px 0">${(b.stats || []).map((s) => `<div style="flex:1;background:rgba(255,255,255,.05);border-radius:14px;padding:16px;text-align:center"><p style="font-family:Georgia,serif;font-size:28px;color:${t.accent}">${esc(s.value)}</p><p style="font-size:11px;opacity:.55;text-transform:uppercase">${esc(s.label)}</p></div>`).join('')}</div>`
+      if (b.type === 'timeline') return `<div style="margin:24px 0">${b.title ? `<p style="color:${t.accent};text-transform:uppercase;font-size:11px;letter-spacing:2px;margin-bottom:12px">${esc(b.title)}</p>` : ''}${(b.items || []).map((it) => `<div style="padding:6px 0 6px 16px;border-left:2px solid ${t.accent}80;margin-left:4px">${it.when ? `<p style="font-size:11px;color:${t.accent}">${esc(it.when)}</p>` : ''}<p>${esc(it.label)}</p>${it.desc ? `<p style="font-size:13px;opacity:.6">${esc(it.desc)}</p>` : ''}</div>`).join('')}</div>`
+      return ''
+    }
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(d.title || 'Documento')}</title><style>@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body style="margin:0;background:linear-gradient(165deg,${t.bg1},${t.bg2});color:${t.text};font-family:system-ui,Arial"><div style="max-width:720px;margin:0 auto;padding:56px 40px">${(Array.isArray(d.blocks) ? d.blocks : []).map(bl).join('')}<p style="text-align:center;opacity:.2;font-size:10px;margin-top:32px;letter-spacing:2px;text-transform:uppercase">Seravie Document Studio</p></div></body></html>`
+    const w = window.open('', '_blank')
+    if (!w) return notify('Permita pop-ups para baixar/imprimir.', 'error')
+    w.document.write(html); w.document.close()
+    notify('Documento aberto — use Imprimir → Salvar como PDF.', 'success')
+  }
+  const removeDoc = async (d) => {
+    const { error } = await supabase.from('documents').delete().eq('id', d.id); setConfirmDel(null)
+    if (error) return notify('Erro ao excluir', 'error')
+    logAudit({ action: 'delete', resource_type: 'documents', resource_id: d.id, old_data: { title: d.title } }, tenantId)
+    notify('Proposta excluída', 'success'); load()
+  }
 
   const load = async () => { setLoading(true); const { data } = await supabase.from('documents').select('*, contact:contacts(name)').order('created_at', { ascending: false }).limit(200); setDocs(data || []); setLoading(false) }
   useEffect(() => { load() }, [])
@@ -78,6 +114,12 @@ function ProposalsStudio({ notify }) {
   const save = async () => {
     await supabase.from('documents').update({ blocks, title: editing.title, theme: editing.theme || {}, data: editing.data || {}, slug: editing.slug, updated_at: new Date().toISOString() }).eq('id', editing.id)
     logAudit({ action: 'update', resource_type: 'documents', resource_id: editing.id, new_data: { blocks: blocks.length } }, tenantId)
+    // snapshot automático de versão (mantém as últimas 20)
+    try {
+      await supabase.from('doc_versions').insert({ document_id: editing.id, blocks, theme: editing.theme || {}, title: editing.title, label: 'auto' })
+      const { data: old } = await supabase.from('doc_versions').select('id').eq('document_id', editing.id).order('created_at', { ascending: false }).range(20, 999)
+      if (old && old.length) await supabase.from('doc_versions').delete().in('id', old.map((x) => x.id))
+    } catch { /* não bloqueia o salvar */ }
     setDirty(false); notify('Proposta salva', 'success')
   }
   // edição local de campos do documento (título/tema/cliente) — persiste no Salvar
@@ -148,11 +190,27 @@ function ProposalsStudio({ notify }) {
       ) : (
         <div className="space-y-2">
           {docs.map((d) => (
-            <button key={d.id} onClick={() => open(d)} className="w-full glass rounded-xl px-5 py-4 flex items-center gap-4 hover:bg-white/[0.03] transition-colors text-left">
-              <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-admin-text text-sm font-medium truncate">{d.title}</p><StatusBadge s={d.status} />{d.public_enabled && <span className="text-[9px] text-admin-sage">● no ar</span>}</div><p className="text-admin-muted/40 text-xs mt-0.5">{d.contact?.name || 'Sem cliente'}{d.signer_name ? ` · assinado por ${d.signer_name}` : ''}</p></div>
+            <div key={d.id} className="w-full glass rounded-xl px-5 py-4 flex items-center gap-4 hover:bg-white/[0.03] transition-colors group">
+              <button onClick={() => open(d)} className="min-w-0 flex-1 text-left">
+                <div className="flex items-center gap-2"><p className="text-admin-text text-sm font-medium truncate">{d.title}</p><StatusBadge s={d.status} />{d.public_enabled && <span className="text-[9px] text-admin-sage">● no ar</span>}</div>
+                <p className="text-admin-muted/40 text-xs mt-0.5">{d.contact?.name || 'Sem cliente'}{d.signer_name ? ` · assinado por ${d.signer_name}` : ''}</p>
+              </button>
               {d.data?.total > 0 && <span className="text-admin-gold text-sm shrink-0">{brl(d.data.total)}</span>}
-            </button>
+              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => downloadDoc(d)} title="Baixar / imprimir" className="p-2 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05]"><Icon name="download" className="w-4 h-4" /></button>
+                {mayEdit && <button onClick={() => setConfirmDel(d)} title="Excluir" className="p-2 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05]"><Icon name="trash" className="w-4 h-4" /></button>}
+              </div>
+            </div>
           ))}
+        </div>
+      )}
+      {confirmDel && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDel(null)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-serif text-xl text-admin-text mb-2">Excluir proposta</h3>
+            <p className="text-admin-muted/70 text-sm mb-6">Remover “{confirmDel.title}”? Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-3"><button onClick={() => removeDoc(confirmDel)} className="flex-1 bg-admin-rose/15 hover:bg-admin-rose/25 text-admin-rose py-2.5 rounded-xl text-sm">Excluir</button><button onClick={() => setConfirmDel(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
+          </div>
         </div>
       )}
       {creating && (
