@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Icon } from './ui'
+import { Icon, GlassSelect } from './ui'
 
 // Padrões físicos da franquia: por nível (metragem/layout/identidade/equipamentos/kit)
 // + kit da vertical principal escolhida. Usado pelo admin e como consulta do franqueado.
@@ -123,7 +123,6 @@ export function FranchiseStandards({ mode = 'admin', notify }) {
   if (mode === 'tenant') {
     const std = stds.find((s) => s.offering_slug === level)
     const kit = kitBySlug[vertical]
-    const selCls = 'glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
     // contrato amarrado: nível + vertical vêm do contrato do franqueado
     const linked = contract && contract.offering_slug
     return (
@@ -149,17 +148,13 @@ export function FranchiseStandards({ mode = 'admin', notify }) {
                 : 'Consulte o padrão físico da franquia Seravie. Escolha o nível e a vertical principal para ver a metragem, o layout, o mobiliário, os equipamentos e o kit de produtos originais que a Seravie entrega na implantação. A metragem é respeitada como via de regra.'}
             </div>
             <div className="flex flex-wrap gap-3 mb-5">
-              <div>
+              <div className="w-64">
                 <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Nível da franquia</label>
-                <select value={level} onChange={(e) => setLevel(e.target.value)} className={selCls}>
-                  {stds.map((s) => <option key={s.offering_slug} value={s.offering_slug}>{s.level_name} · {s.format_name}</option>)}
-                </select>
+                <GlassSelect value={level} onChange={setLevel} options={stds.map((s) => ({ value: s.offering_slug, label: `${s.level_name} · ${s.format_name}` }))} />
               </div>
-              <div>
+              <div className="w-64">
                 <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Vertical principal</label>
-                <select value={vertical} onChange={(e) => setVertical(e.target.value)} className={selCls}>
-                  {kits.map((k) => <option key={k.vertical_slug} value={k.vertical_slug}>{k.vertical_name}</option>)}
-                </select>
+                <GlassSelect value={vertical} onChange={setVertical} options={kits.map((k) => ({ value: k.vertical_slug, label: k.vertical_name }))} />
               </div>
             </div>
           </>
@@ -173,17 +168,14 @@ export function FranchiseStandards({ mode = 'admin', notify }) {
 
   // admin: todos os níveis lado a lado + seletor de vertical para pré-visualizar o kit
   const kit = kitBySlug[vertical]
-  const selCls = 'glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
   return (
     <div>
       <div className="glass-soft rounded-xl px-4 py-3 mb-5 text-xs text-admin-muted/60 leading-relaxed">
         Padrões físicos obrigatórios por nível de franquia. Edite a metragem direto nos cards (demais itens no banco). Escolha uma vertical para pré-visualizar o kit de produtos originais aplicado a cada nível.
       </div>
-      <div className="mb-5">
+      <div className="mb-5 w-64">
         <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Pré-visualizar vertical</label>
-        <select value={vertical} onChange={(e) => setVertical(e.target.value)} className={selCls}>
-          {kits.map((k) => <option key={k.vertical_slug} value={k.vertical_slug}>{k.vertical_name}</option>)}
-        </select>
+        <GlassSelect value={vertical} onChange={setVertical} options={kits.map((k) => ({ value: k.vertical_slug, label: k.vertical_name }))} />
       </div>
       <div className="grid lg:grid-cols-3 gap-4">
         {stds.map((s) => (
