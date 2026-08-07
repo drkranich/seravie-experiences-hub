@@ -174,6 +174,99 @@ function ShipmentsTab({ notify }) {
   )
 }
 
+// ---------- Políticas de etiqueta por marketplace ----------
+const MKT_CHANNELS = [
+  { key: 'amazon', name: 'Amazon' }, { key: 'mercado_livre', name: 'Mercado Livre' }, { key: 'shopee', name: 'Shopee' },
+  { key: 'magalu', name: 'Magalu' }, { key: 'americanas', name: 'Americanas' }, { key: 'carrefour', name: 'Carrefour' },
+  { key: 'casas_bahia', name: 'Casas Bahia' }, { key: 'ifood', name: 'iFood' }, { key: 'tiktok', name: 'TikTok Shop' },
+  { key: 'google', name: 'Google Merchant' },
+]
+const POLICY_OPTS = [
+  { value: 'receive_or_generate', label: 'Receber externa, gerar Seravie se faltar' },
+  { value: 'receive_only', label: 'Somente etiqueta do marketplace' },
+  { value: 'generate_only', label: 'Sempre gerar etiqueta Seravie' },
+]
+const FMT_OPTS = [{ value: 'a4', label: 'A4' }, { value: 'thermal', label: 'Térmica' }]
+const TRACK_OPTS = [{ value: 'marketplace', label: 'Rastreio informado pelo marketplace' }, { value: 'carrier', label: 'Rastreio pela transportadora' }, { value: 'manual', label: 'Rastreio manual' }]
+const FILE_TYPES = ['pdf', 'zpl', 'png', 'jpg', 'html']
+const TPL_OPTS = LABEL_TEMPLATES.map((t) => ({ value: t.key, label: t.name }))
+const defaultPolicy = (channel) => ({ channel, status: 'active', policy: 'receive_or_generate', default_template: 'a4_mixed', received_format: 'a4', tracking_origin: 'marketplace', accepted_files: ['pdf'], fallback_seravie: true, enqueue_external: true, keep_original: true, reprint_original: true, notes: '' })
+
+function MarketplacePolicies({ tenantId, notify }) {
+  const [rows, setRows] = useState({})
+  const [busy, setBusy] = useState('')
+  const load = async () => {
+    const { data } = await supabase.from('marketplace_label_policies').select('*')
+    setRows(Object.fromEntries((data || []).map((r) => [r.channel, r])))
+  }
+  useEffect(() => { load() }, [])
+  const get = (ch) => rows[ch] || defaultPolicy(ch)
+  const patch = (ch, k, v) => setRows((x) => ({ ...x, [ch]: { ...get(ch), [k]: v } }))
+  const toggleFile = (ch, f) => { const cur = get(ch).accepted_files || []; patch(ch, 'accepted_files', cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]) }
+  const save = async (ch) => {
+    setBusy(ch)
+    const p = get(ch)
+    const row = { tenant_id: tenantId, channel: ch, status: p.status, policy: p.policy, default_template: p.default_template, received_format: p.received_format, tracking_origin: p.tracking_origin, accepted_files: p.accepted_files, fallback_seravie: p.fallback_seravie, enqueue_external: p.enqueue_external, keep_original: p.keep_original, reprint_original: p.reprint_original, notes: p.notes || null, updated_at: new Date().toISOString() }
+    const { error } = await supabase.from('marketplace_label_policies').upsert(row, { onConflict: 'tenant_id,channel' })
+    setBusy('')
+    if (error) return notify?.('Erro ao salvar política: ' + error.message, 'error')
+    load(); notify?.(`Política de ${MKT_CHANNELS.find((c) => c.key === ch)?.name} salva`, 'success')
+  }
+  const Flag = ({ ch, k, label }) => {
+    const on = !!get(ch)[k]
+    return (
+      <button onClick={() => patch(ch, k, !on)} className="w-full glass-input rounded-lg px-3 py-2 flex items-center justify-between text-left">
+        <span className="text-admin-text text-xs">{label}</span>
+        <span className={`w-8 h-4 rounded-full relative transition-colors shrink-0 ${on ? 'bg-admin-champ/60' : 'bg-white/[0.1]'}`}><span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${on ? 'left-4' : 'left-0.5'}`} /></span>
+      </button>
+    )
+  }
+  const sel = 'w-full'
+  return (
+    <div className="glass rounded-2xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div><p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Etiquetas de marketplaces</p><p className="text-admin-muted/50 text-xs">Como cada canal trata a etiqueta recebida, rastreio externo, reimpressão e fallback Seravie.</p></div>
+      </div>
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {MKT_CHANNELS.map((c) => {
+          const p = get(c.key)
+          const configured = !!rows[c.key]
+          return (
+            <div key={c.key} className="glass-soft rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-admin-text text-sm font-medium">{c.name}</p>
+                <span className={`text-[10px] px-2 py-0.5 rounded ${configured && p.status === 'active' ? 'bg-admin-sage/15 text-admin-sage' : 'bg-white/[0.05] text-admin-muted/50'}`}>{configured ? (p.status === 'active' ? 'Ativa' : 'Pausada') : 'Não configurada'}</span>
+              </div>
+              <div className="space-y-2.5">
+                <div><label className="text-[9px] uppercase tracking-wider text-admin-muted/50 block mb-1">Política da etiqueta</label><GlassSelect value={p.policy} onChange={(v) => patch(c.key, 'policy', v)} options={POLICY_OPTS} className={sel} /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className="text-[9px] uppercase tracking-wider text-admin-muted/50 block mb-1">Modelo padrão</label><GlassSelect value={p.default_template} onChange={(v) => patch(c.key, 'default_template', v)} options={TPL_OPTS} className={sel} /></div>
+                  <div><label className="text-[9px] uppercase tracking-wider text-admin-muted/50 block mb-1">Formato recebido</label><GlassSelect value={p.received_format} onChange={(v) => patch(c.key, 'received_format', v)} options={FMT_OPTS} className={sel} /></div>
+                </div>
+                <div><label className="text-[9px] uppercase tracking-wider text-admin-muted/50 block mb-1">Origem do rastreio</label><GlassSelect value={p.tracking_origin} onChange={(v) => patch(c.key, 'tracking_origin', v)} options={TRACK_OPTS} className={sel} /></div>
+                <div>
+                  <label className="text-[9px] uppercase tracking-wider text-admin-muted/50 block mb-1">Arquivos aceitos</label>
+                  <div className="flex flex-wrap gap-1">
+                    {FILE_TYPES.map((f) => { const on = (p.accepted_files || []).includes(f); return <button key={f} onClick={() => toggleFile(c.key, f)} className={`text-[10px] px-2 py-1 rounded-lg uppercase ${on ? 'bg-admin-champ/20 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/50'}`}>{f}</button> })}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Flag ch={c.key} k="fallback_seravie" label="Fallback Seravie" />
+                  <Flag ch={c.key} k="enqueue_external" label="Enfileirar externa" />
+                  <Flag ch={c.key} k="keep_original" label="Guardar original" />
+                  <Flag ch={c.key} k="reprint_original" label="Reimprimir original" />
+                </div>
+                <textarea value={p.notes || ''} onChange={(e) => patch(c.key, 'notes', e.target.value)} rows={2} placeholder="Observações operacionais (ex.: se não vier etiqueta, gerar Seravie 100×150 mm)." className="w-full glass-input rounded-lg px-3 py-2 text-xs text-admin-text outline-none resize-none" />
+                <button onClick={() => save(c.key)} disabled={busy === c.key} className="w-full bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ rounded-lg py-2 text-xs disabled:opacity-50">{busy === c.key ? 'Salvando…' : 'Salvar política'}</button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ---------- Central de Logística & Etiquetas (fila + produto/estoque) ----------
 const QF = { queued: { label: 'Na fila', chip: 'bg-admin-gold/15 text-admin-gold' }, printed: { label: 'Impressa', chip: 'bg-admin-sage/15 text-admin-sage' }, failed: { label: 'Falha', chip: 'bg-admin-rose/15 text-admin-rose' } }
 function LabelsCenterTab({ notify }) {
@@ -269,6 +362,9 @@ function LabelsCenterTab({ notify }) {
           </div>
         )}
       </div>
+
+      {/* Políticas de etiqueta por marketplace */}
+      <MarketplacePolicies tenantId={tenantId} notify={notify} />
 
       {/* Etiquetas de produto e estoque */}
       <div className="glass rounded-2xl p-5">
