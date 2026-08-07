@@ -17,7 +17,7 @@ export function KdsTimer({ since, slaSec, now, big = false }) {
 }
 
 // Cartão premium de um pedido/ticket na tela de produção.
-export function TicketCard({ t, now, stage, onAdvance, onCancel, onEdit, onDragStart, tv = false }) {
+export function TicketCard({ t, now, stage, onAdvance, onCancel, onEdit, onDragStart, tv = false, touch = false }) {
   const ch = channelMeta(t.channel)
   const items = Array.isArray(t.items) ? t.items : []
   const obs = items.filter((i) => i.notes).map((i) => i.notes)
@@ -70,16 +70,16 @@ export function TicketCard({ t, now, stage, onAdvance, onCancel, onEdit, onDragS
         </div>
       )}
 
-      {/* ações (ocultas no modo TV) */}
+      {/* ações (ocultas no modo TV). No modo touch, botões grandes. */}
       {!tv && (
-        <div className="flex items-center gap-1.5">
+        <div className={`flex items-center ${touch ? 'gap-2' : 'gap-1.5'}`}>
           {stage && !stage.terminal && (
-            <button onClick={() => onAdvance(t)} className="flex-1 text-xs py-2 rounded-xl bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 transition-colors font-medium">
+            <button onClick={() => onAdvance(t)} className={`flex-1 rounded-xl bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 transition-colors font-medium ${touch ? 'text-base py-4' : 'text-xs py-2'}`}>
               {stage.key === 'queued' ? 'Iniciar' : stage.key === 'ready' ? 'Entregar' : 'Avançar'}
             </button>
           )}
-          {onEdit && <button onClick={() => onEdit(t)} title="Editar pedido" className="px-2.5 py-2 rounded-xl bg-white/[0.05] text-admin-muted/60 hover:text-admin-champ transition-colors"><Icon name="pen" className="w-3.5 h-3.5" /></button>}
-          <button onClick={() => onCancel(t)} title="Cancelar" className="px-2.5 py-2 rounded-xl bg-white/[0.05] text-admin-muted/60 hover:text-admin-rose transition-colors"><Icon name="x" className="w-3.5 h-3.5" /></button>
+          {onEdit && <button onClick={() => onEdit(t)} title="Editar pedido" className={`rounded-xl bg-white/[0.05] text-admin-muted/60 hover:text-admin-champ transition-colors ${touch ? 'px-4 py-4' : 'px-2.5 py-2'}`}><Icon name="pen" className={touch ? 'w-5 h-5' : 'w-3.5 h-3.5'} /></button>}
+          <button onClick={() => onCancel(t)} title="Cancelar" className={`rounded-xl bg-white/[0.05] text-admin-muted/60 hover:text-admin-rose transition-colors ${touch ? 'px-4 py-4' : 'px-2.5 py-2'}`}><Icon name="x" className={touch ? 'w-5 h-5' : 'w-3.5 h-3.5'} /></button>
         </div>
       )}
     </div>

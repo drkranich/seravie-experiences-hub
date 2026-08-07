@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Icon, GlassSelect } from './ui'
 import { getPreset } from '../../lib/flowEngine'
+import { DEFAULT_SOUND, SOUND_EVENTS, playSound } from '../../lib/kdsSound'
 import { KdsDashboard } from './kds/KdsDashboard'
 import { KdsBoard } from './kds/KdsBoard'
 import { KdsStations } from './kds/KdsStations'
@@ -9,6 +10,37 @@ import { KdsAnalytics } from './kds/KdsAnalytics'
 import { KdsAssistant } from './kds/KdsAssistant'
 import { KdsHistory } from './kds/KdsHistory'
 import { KdsTeam } from './kds/KdsTeam'
+import { KdsMenu } from './kds/KdsMenu'
+import { KdsQueues } from './kds/KdsQueues'
+
+// Painel de configuração de sons por evento (popover).
+function SoundPanel({ sound, setSound, onClose }) {
+  const upd = (patch) => setSound((s) => ({ ...s, ...patch }))
+  const updEvent = (k, v) => setSound((s) => ({ ...s, events: { ...s.events, [k]: v } }))
+  return (
+    <div className="fixed inset-0 z-[80] flex items-start justify-end p-4" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-5 w-72 mt-16 mr-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4"><p className="text-admin-text font-medium text-sm">Sons</p><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-4 h-4" /></button></div>
+        <label className="flex items-center justify-between mb-3"><span className="text-sm text-admin-muted">Sons ligados</span><input type="checkbox" checked={sound.enabled} onChange={(e) => upd({ enabled: e.target.checked })} className="accent-admin-champ w-4 h-4" /></label>
+        <div className="mb-3">
+          <p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1.5">Volume</p>
+          <input type="range" min="0" max="1" step="0.1" value={sound.volume} onChange={(e) => upd({ volume: Number(e.target.value) })} className="w-full accent-admin-champ" />
+        </div>
+        <div className="space-y-2 border-t border-white/[0.06] pt-3">
+          {SOUND_EVENTS.map((ev) => (
+            <div key={ev.key} className="flex items-center justify-between">
+              <span className="text-sm text-admin-muted">{ev.label}</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => playSound(ev.key, sound)} className="text-admin-champ/70 hover:text-admin-champ" title="Testar"><Icon name="play" className="w-3.5 h-3.5" /></button>
+                <input type="checkbox" checked={sound.events[ev.key] !== false} onChange={(e) => updEvent(ev.key, e.target.checked)} disabled={!sound.enabled} className="accent-admin-champ w-4 h-4" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Relógio grande do modo TV.
 function TvClock() {
@@ -19,7 +51,7 @@ function TvClock() {
 
 // Modo TV / Produção — tela cheia sem sidebar/menus. Só filas, timers e relógio.
 // Mantém um atalho discreto para criar pedido (útil em balcão/quiosque touch).
-function TvMode({ kind, soundOn, onExit, notify }) {
+function TvMode({ kind, sound, onExit, notify }) {
   const [counts, setCounts] = useState({ active: 0, late: 0, total: 0 })
   const newRef = useRef(null)
   const preset = getPreset(kind)
@@ -39,7 +71,7 @@ function TvMode({ kind, soundOn, onExit, notify }) {
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
-        <KdsBoard kind={kind} tv soundOn={soundOn} onCounts={setCounts} notify={notify} registerNew={(fn) => { newRef.current = fn }} />
+        <KdsBoard kind={kind} tv sound={sound} onCounts={setCounts} notify={notify} registerNew={(fn) => { newRef.current = fn }} />
       </div>
     </div>
   )
@@ -48,7 +80,9 @@ function TvMode({ kind, soundOn, onExit, notify }) {
 export function KDSPanel({ notify }) {
   const [tab, setTab] = useState('dashboard')
   const [tv, setTv] = useState(false)
-  const [soundOn, setSoundOn] = useState(true)
+  const [touch, setTouch] = useState(false)
+  const [sound, setSound] = useState(DEFAULT_SOUND)
+  const [soundPanel, setSoundPanel] = useState(false)
   const [counts, setCounts] = useState({ active: 0, late: 0, total: 0 })
   const newTicketRef = useRef(null) // função que abre o editor de novo pedido no board
   const kind = 'kitchen'
@@ -57,15 +91,17 @@ export function KDSPanel({ notify }) {
   const tabs = [
     { key: 'dashboard', label: 'Dashboard', icon: 'chart' },
     { key: 'production', label: 'Produção', icon: 'flame' },
+    { key: 'queues', label: 'Filas', icon: 'layers' },
     { key: 'map', label: 'Mapa da Cozinha', icon: 'map' },
-    { key: 'stations', label: 'Estações', icon: 'layers' },
+    { key: 'stations', label: 'Estações', icon: 'grid' },
+    { key: 'menu', label: 'Cardápios', icon: 'book' },
     { key: 'team', label: 'Equipe', icon: 'users' },
     { key: 'assistant', label: 'IA', icon: 'sparkles' },
     { key: 'analytics', label: 'Analytics', icon: 'chart' },
     { key: 'history', label: 'Histórico', icon: 'clock' },
   ]
 
-  if (tv) return <TvMode kind={kind} soundOn={soundOn} onExit={() => setTv(false)} notify={notify} />
+  if (tv) return <TvMode kind={kind} sound={sound} onExit={() => setTv(false)} notify={notify} />
 
   return (
     <div>
@@ -76,14 +112,18 @@ export function KDSPanel({ notify }) {
           <p className="text-admin-muted/60 text-sm mt-1">produção em tempo real · movido pelo Experience Flow Engine</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setSoundOn((s) => !s)} title={soundOn ? 'Sons ligados' : 'Sons desligados'} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${soundOn ? 'border-admin-champ/25 text-admin-champ' : 'border-white/10 text-admin-muted/50'}`}>
-            <Icon name="bell" className="w-4 h-4" />{soundOn ? 'Som' : 'Mudo'}
+          <button onClick={() => setTouch((v) => !v)} title="Modo touch (botões grandes)" className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${touch ? 'border-admin-champ/25 text-admin-champ bg-admin-champ/10' : 'border-white/10 text-admin-muted/50'}`}>
+            <Icon name="grip" className="w-4 h-4" />Touch
+          </button>
+          <button onClick={() => setSoundPanel(true)} title="Configurar sons" className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${sound.enabled ? 'border-admin-champ/25 text-admin-champ' : 'border-white/10 text-admin-muted/50'}`}>
+            <Icon name="bell" className="w-4 h-4" />{sound.enabled ? 'Som' : 'Mudo'}
           </button>
           <button onClick={() => setTv(true)} className="flex items-center gap-2 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors">
             <Icon name="tv" className="w-4 h-4" />Modo Produção
           </button>
         </div>
       </div>
+      {soundPanel && <SoundPanel sound={sound} setSound={setSound} onClose={() => setSoundPanel(false)} />}
 
       {/* Abas do módulo */}
       <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-xl w-fit flex-wrap">
@@ -100,15 +140,17 @@ export function KDSPanel({ notify }) {
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <p className="text-admin-muted/50 text-sm">{counts.active} {preset.unitPlural} ativos{counts.late > 0 ? ` · ${counts.late} atrasados` : ''}</p>
             <div className="flex items-center gap-3">
-              <p className="text-admin-muted/40 text-xs hidden sm:block">arraste os cartões entre as colunas</p>
+              <p className="text-admin-muted/40 text-xs hidden sm:block">{touch ? 'modo touch · botões grandes' : 'arraste os cartões entre as colunas'}</p>
               <button onClick={() => newTicketRef.current && newTicketRef.current()} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Novo pedido</button>
             </div>
           </div>
-          <KdsBoard kind={kind} soundOn={soundOn} onCounts={setCounts} notify={notify} registerNew={(fn) => { newTicketRef.current = fn }} />
+          <KdsBoard kind={kind} sound={sound} touch={touch} onCounts={setCounts} notify={notify} registerNew={(fn) => { newTicketRef.current = fn }} />
         </div>
       )}
+      {tab === 'queues' && <KdsQueues kind={kind} />}
       {tab === 'map' && <KdsKitchenMap kind={kind} />}
       {tab === 'stations' && <KdsStations notify={notify} kind={kind} />}
+      {tab === 'menu' && <KdsMenu kind={kind} notify={notify} />}
       {tab === 'team' && <KdsTeam kind={kind} notify={notify} />}
       {tab === 'assistant' && <KdsAssistant kind={kind} />}
       {tab === 'analytics' && <KdsAnalytics kind={kind} />}

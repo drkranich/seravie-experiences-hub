@@ -29,9 +29,11 @@ export function KdsTicketEditor({ ticket, kind = 'kitchen', onClose, onSaved, no
   const preset = getPreset(kind)
   const editing = !!ticket?.id
   const [stations, setStations] = useState([])
+  const [operators, setOperators] = useState([])
+  const [menu, setMenu] = useState([])
   const [form, setForm] = useState({
     reference: '', table_label: '', customer_name: '', channel: 'manual',
-    priority: '0', station_id: '', sla_min: Math.round((preset.defaultSlaSec || 900) / 60),
+    priority: '0', station_id: '', assignee: '', sla_min: Math.round((preset.defaultSlaSec || 900) / 60),
     notes: '', tags: [], items: [emptyItem()],
   })
   const [saving, setSaving] = useState(false)
@@ -39,13 +41,15 @@ export function KdsTicketEditor({ ticket, kind = 'kitchen', onClose, onSaved, no
 
   useEffect(() => {
     supabase.from('kds_stations').select('id, name').eq('active', true).order('sort_order').then(({ data }) => setStations(data || []))
-  }, [])
+    supabase.from('kds_operators').select('name').eq('kind', kind).eq('active', true).order('sort_order').then(({ data }) => setOperators(data || []))
+    supabase.from('kds_menu').select('name, category, prep_seconds').eq('kind', kind).eq('active', true).order('sort_order').then(({ data }) => setMenu(data || []))
+  }, [kind])
 
   useEffect(() => {
     if (ticket) setForm({
       reference: ticket.reference || '', table_label: ticket.table_label || '', customer_name: ticket.customer_name || '',
       channel: ticket.channel || 'manual', priority: String(ticket.priority ?? 0), station_id: ticket.station_id || '',
-      sla_min: Math.round((ticket.sla_seconds || 900) / 60), notes: ticket.notes || '',
+      assignee: ticket.assignee || '', sla_min: Math.round((ticket.sla_seconds || 900) / 60), notes: ticket.notes || '',
       tags: Array.isArray(ticket.tags) ? ticket.tags : [], items: (ticket.items && ticket.items.length ? ticket.items : [emptyItem()]),
     })
   }, [ticket])
@@ -68,7 +72,7 @@ export function KdsTicketEditor({ ticket, kind = 'kitchen', onClose, onSaved, no
       tenant_id: tenantId, kind, source: form.channel, channel: form.channel,
       reference: form.reference.trim() || null, table_label: form.table_label.trim() || null,
       customer_name: form.customer_name.trim() || null, priority: Number(form.priority) || 0,
-      station_id: form.station_id || null, sla_seconds: (Number(form.sla_min) || 15) * 60,
+      station_id: form.station_id || null, assignee: form.assignee || null, sla_seconds: (Number(form.sla_min) || 15) * 60,
       notes: form.notes.trim() || null, tags: form.tags, items,
     }
     setSaving(true)
@@ -99,16 +103,18 @@ export function KdsTicketEditor({ ticket, kind = 'kitchen', onClose, onSaved, no
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Canal</label><GlassSelect value={form.channel} onChange={(v) => set('channel', v)} options={CHANNELS} /></div>
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Prioridade</label><GlassSelect value={form.priority} onChange={(v) => set('priority', v)} options={PRIORITIES} /></div>
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Estação</label><GlassSelect value={form.station_id} onChange={(v) => set('station_id', v)} options={[{ value: '', label: '— sem estação —' }, ...stations.map((s) => ({ value: s.id, label: s.name }))]} /></div>
+          <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Responsável</label><GlassSelect value={form.assignee} onChange={(v) => set('assignee', v)} options={[{ value: '', label: '— sem responsável —' }, ...operators.map((o) => ({ value: o.name, label: o.name }))]} placeholder="Escolha um operador" /></div>
         </div>
 
         {/* itens */}
+        <datalist id="kds-menu-items">{menu.map((m) => <option key={m.name} value={m.name} />)}</datalist>
         <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Itens</label>
         <div className="space-y-2 mb-4">
           {form.items.map((it, i) => (
             <div key={i} className="flex gap-2 items-start">
               <input value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} type="number" min="1" className="w-16 glass-input rounded-xl px-3 py-2.5 text-sm text-admin-text outline-none text-center" />
               <div className="flex-1">
-                <input value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} className={inputCls} placeholder="Nome do item" />
+                <input value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} list="kds-menu-items" className={inputCls} placeholder="Nome do item" />
                 <input value={it.notes} onChange={(e) => setItem(i, 'notes', e.target.value)} className={`${inputCls} mt-1.5 text-xs`} placeholder="Observação do item (ex: sem cebola)" />
               </div>
               {form.items.length > 1 && <button onClick={() => delItem(i)} className="p-2 rounded-lg text-admin-muted/60 hover:text-admin-rose shrink-0"><Icon name="trash" className="w-4 h-4" /></button>}

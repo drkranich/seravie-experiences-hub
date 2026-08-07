@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { Icon } from '../ui'
 import { getPreset, stageByStatus, elapsedSeconds } from '../../../lib/flowEngine'
+import { playSound, DEFAULT_SOUND } from '../../../lib/kdsSound'
 import { TicketCard } from './KdsTicketCard'
 import { KdsTicketEditor } from './KdsTicketEditor'
 
@@ -12,28 +13,10 @@ function useClock() {
   return now
 }
 
-// Sons discretos via WebAudio (sem assets). Configuráveis (liga/desliga).
-function useChime(enabled) {
-  const ctxRef = useRef(null)
-  return (type = 'new') => {
-    if (!enabled) return
-    try {
-      ctxRef.current = ctxRef.current || new (window.AudioContext || window.webkitAudioContext)()
-      const ctx = ctxRef.current
-      const o = ctx.createOscillator(), g = ctx.createGain()
-      const freq = type === 'urgent' ? 880 : type === 'ready' ? 660 : type === 'cancel' ? 220 : 520
-      o.frequency.value = freq; o.type = 'sine'
-      g.gain.setValueAtTime(0.0001, ctx.currentTime)
-      g.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02)
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35)
-      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.36)
-    } catch { /* silêncio se o browser bloquear áudio */ }
-  }
-}
 
 // Tela de Produção (Kanban 7 colunas, drag&drop, timers).
 // tv=true entra no modo TV (sem ações, layout de tela cheia).
-export function KdsBoard({ kind = 'kitchen', tv = false, soundOn = true, stationFilter = '', onCounts, notify, registerNew }) {
+export function KdsBoard({ kind = 'kitchen', tv = false, touch = false, soundOn = true, sound, stationFilter = '', onCounts, notify, registerNew }) {
   const preset = getPreset(kind)
   const now = useClock()
   const [tickets, setTickets] = useState([])
@@ -41,7 +24,9 @@ export function KdsBoard({ kind = 'kitchen', tv = false, soundOn = true, station
   const [dragOver, setDragOver] = useState(null)
   const [editor, setEditor] = useState(null) // { } novo | ticket editar
   const prevCount = useRef(0)
-  const chime = useChime(soundOn)
+  // Config de som: usa `sound` (config granular) quando fornecida; senão o toggle simples.
+  const soundCfg = sound || { ...DEFAULT_SOUND, enabled: soundOn }
+  const chime = (type) => playSound(type, soundCfg)
 
   const load = async () => {
     let q = supabase.from('kds_tickets').select('*').eq('kind', kind)
@@ -136,7 +121,7 @@ export function KdsBoard({ kind = 'kitchen', tv = false, soundOn = true, station
             <div className={`space-y-2.5 flex-1 ${tv ? 'overflow-y-auto' : ''}`}>
               {list.length === 0 && <div className="text-admin-muted/20 text-xs text-center py-6 border border-dashed border-white/[0.05] rounded-xl">solte aqui</div>}
               {list.map((t) => (
-                <TicketCard key={t.id} t={t} now={now} stage={stage} onAdvance={advance} onCancel={cancel} onEdit={tv ? null : setEditor} onDragStart={tv ? null : onDragStart} tv={tv} />
+                <TicketCard key={t.id} t={t} now={now} stage={stage} onAdvance={advance} onCancel={cancel} onEdit={tv ? null : setEditor} onDragStart={tv || touch ? null : onDragStart} tv={tv} touch={touch} />
               ))}
             </div>
           </div>
