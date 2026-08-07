@@ -105,6 +105,13 @@ export function KdsTicketEditor({ ticket, kind = 'kitchen', onClose, onSaved, no
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Estação</label><GlassSelect value={form.station_id} onChange={(v) => set('station_id', v)} options={[{ value: '', label: '— sem estação —' }, ...stations.map((s) => ({ value: s.id, label: s.name }))]} /></div>
           <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Responsável</label><GlassSelect value={form.assignee} onChange={(v) => set('assignee', v)} options={[{ value: '', label: '— sem responsável —' }, ...operators.map((o) => ({ value: o.name, label: o.name }))]} placeholder="Escolha um operador" /></div>
         </div>
+        {/* Aviso: pedidos de delivery aparecem no Hub Delivery para despacho */}
+        {form.channel === 'delivery' && (
+          <div className="glass-soft rounded-xl px-3 py-2.5 mb-4 flex items-center gap-2 border border-admin-champ/20">
+            <Icon name="truck" className="w-4 h-4 text-admin-champ shrink-0" />
+            <p className="text-[12px] text-admin-muted/80">Este pedido vai aparecer no <b className="text-admin-champ">Hub Delivery</b> e, quando ficar pronto, move para “Saiu p/ entrega” para envio.</p>
+          </div>
+        )}
 
         {/* itens */}
         <datalist id="kds-menu-items">{menu.map((m) => <option key={m.name} value={m.name} />)}</datalist>
