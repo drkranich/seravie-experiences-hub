@@ -37,16 +37,26 @@ export function VerifyDocument() {
   )
 
   const d = state.document || {}
+  const b = state.branding || null
   const signers = state.signers || []
   const events = state.events || []
   const completed = d.status === 'completed'
+  const brandColor = b?.brand_color || THEME.accent
+  const brandName = b?.company_name || 'Seravie Experiences'
+  const showCredit = b ? b.show_seravie_credit !== false : true
 
   return (
     <div style={wrap}>
       <div style={card}>
+        {b && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            {b.logo_url && <img alt="logo" src={b.logo_url} style={{ height: 34, maxWidth: 140, objectFit: 'contain' }} />}
+            <span style={{ fontFamily: 'system-ui', fontSize: 16, fontWeight: 600, color: brandColor }}>{b.company_name}</span>
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <p style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: THEME.accent, margin: '0 0 6px' }}>Comprovante de assinatura</p>
+            <p style={{ fontSize: 12, letterSpacing: 2, textTransform: 'uppercase', color: brandColor, margin: '0 0 6px' }}>Comprovante de assinatura</p>
             <h1 style={{ fontSize: 28, margin: 0 }}>{d.title}</h1>
           </div>
           <span style={chip(completed)}>{completed ? '✓ ' : ''}{ST[d.status] || d.status}</span>
@@ -92,8 +102,9 @@ export function VerifyDocument() {
 
         <p style={{ fontSize: 11, opacity: 0.4, marginTop: 24, ...sysFont, lineHeight: 1.6 }}>
           Este comprovante atesta a assinatura eletrônica do documento acima, registrada com data, hora e IP de cada signatário,
-          conforme a MP 2.200-2/2001 (art. 10, §2º). Documento validável pelo código de verificação em seravieexperiences.com/validar.
+          conforme a MP 2.200-2/2001 (art. 10, §2º).{b?.website ? ` ${b.website}` : ''}
         </p>
+        {showCredit && <p style={{ fontSize: 10, opacity: 0.3, marginTop: 6, ...sysFont }}>Documento gerado via Seravie Experiences</p>}
       </div>
     </div>
   )

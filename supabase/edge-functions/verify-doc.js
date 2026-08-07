@@ -19,6 +19,7 @@ Deno.serve(async (req) => {
 
   const { data: signers } = await admin.from('signature_signers').select('name,email,role,status,signed_name,signed_ip,signed_at,viewed_at').eq('request_id', reqRow.id).order('order_index')
   const { data: events } = await admin.from('signature_events').select('event,ip,created_at').eq('request_id', reqRow.id).order('created_at')
+  const { data: brand } = await admin.from('document_branding').select('enabled,company_name,logo_url,brand_color,website,show_seravie_credit').eq('tenant_id', reqRow.tenant_id).maybeSingle()
 
   return json({
     ok: true,
@@ -27,6 +28,7 @@ Deno.serve(async (req) => {
       status: reqRow.status, created_at: reqRow.created_at, completed_at: reqRow.completed_at,
       verification_code: reqRow.verification_code,
     },
+    branding: (brand && brand.enabled) ? brand : null,
     signers: signers || [],
     events: events || [],
   })

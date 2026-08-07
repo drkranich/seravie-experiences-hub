@@ -14,10 +14,46 @@ const GOLD = rgb(0.72, 0.61, 0.38)
 const GREY = rgb(0.42, 0.45, 0.5)
 const DARK = rgb(0.17, 0.17, 0.17)
 
+function hexToRgb(hex, fallback) {
+  try {
+    const h = String(hex || '').replace('#', '')
+    if (h.length !== 6) return fallback
+    return rgb(parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255)
+  } catch { return fallback }
+}
+
+async function loadBranding(admin, tenantId) {
+  try {
+    const { data } = await admin.from('document_branding').select('*').eq('tenant_id', tenantId).maybeSingle()
+    return data || null
+  } catch { return null }
+}
+
 export async function buildStampedPdf(admin, reqRow, signers) {
   const out = await PDFDocument.create()
   const font = await out.embedFont(StandardFonts.Helvetica)
   const fontB = await out.embedFont(StandardFonts.HelveticaBold)
+
+  // marca do tenant (white-label). Se desativada, usa neutro (sem "Seravie" como empresa).
+  const brand = await loadBranding(admin, reqRow.tenant_id)
+  const useBrand = brand?.enabled
+  const companyName = (useBrand && brand.company_name) ? brand.company_name : 'Documento'
+  const headerColor = useBrand ? hexToRgb(brand.brand_color, NAVY) : NAVY
+  const showCredit = brand ? brand.show_seravie_credit !== false : true
+  // logo (opcional)
+  let logoImg = null, logoDims = null
+  if (useBrand && brand.logo_url) {
+    try {
+      const r = await fetch(brand.logo_url)
+      if (r.ok) {
+        const buf = new Uint8Array(await r.arrayBuffer())
+        const ct = r.headers.get('content-type') || ''
+        logoImg = ct.includes('png') || brand.logo_url.toLowerCase().includes('.png') ? await out.embedPng(buf) : await out.embedJpg(buf)
+        const lw = 90, lh = logoImg.height * (lw / logoImg.width)
+        logoDims = { lw, lh: Math.min(lh, 40) }
+      }
+    } catch { /* sem logo */ }
+  }
 
   // 1) documento original (se PDF) ou imagem → páginas
   let mergedOriginal = false
@@ -54,11 +90,16 @@ export async function buildStampedPdf(admin, reqRow, signers) {
   }
   const rule = (color = rgb(0.85, 0.82, 0.74)) => { page.drawLine({ start: { x: M, y: y + 6 }, end: { x: 545, y: y + 6 }, thickness: 0.6, color }); y -= 10 }
 
-  // cabeçalho
-  page.drawRectangle({ x: 0, y: 812, width: 595, height: 30, color: NAVY })
-  page.drawText('SERAVIE EXPERIENCES  ·  Manifesto de Assinaturas', { x: M, y: 821, size: 11, font: fontB, color: rgb(1, 1, 1) })
+  // cabeçalho — marca do cliente (ou neutro)
+  page.drawRectangle({ x: 0, y: 812, width: 595, height: 30, color: headerColor })
+  const headerText = `${(useBrand && brand.company_name) ? brand.company_name.toUpperCase() : 'DOCUMENTO'}  ·  Manifesto de Assinaturas`
+  page.drawText(headerText, { x: M, y: 821, size: 11, font: fontB, color: rgb(1, 1, 1) })
   y = 780
-  line('Comprovante de assinatura eletrônica', { size: 16, bold: true, color: NAVY, gap: 10 })
+  // logo do cliente, se houver
+  if (logoImg && logoDims) {
+    try { page.drawImage(logoImg, { x: M, y: y - logoDims.lh + 6, width: logoDims.lw, height: logoDims.lh }); y -= logoDims.lh + 6 } catch { /* noop */ }
+  }
+  line('Comprovante de assinatura eletrônica', { size: 16, bold: true, color: headerColor, gap: 10 })
   line(reqRow.title || 'Documento', { size: 13, color: GOLD, gap: 22 })
 
   line('DOCUMENTO', { size: 9, bold: true, color: GREY, gap: 14 })
@@ -96,7 +137,12 @@ export async function buildStampedPdf(admin, reqRow, signers) {
   page.drawText(String(reqRow.verification_code || ''), { x: M + 118, y: 60, size: 9, font, color: DARK })
   const origin = reqRow.app_origin || 'https://seravieexperiences.com'
   page.drawText(`Valide em: ${origin}/validar/${reqRow.verification_code}`, { x: M, y: 46, size: 8, font, color: GREY })
-  page.drawText('Assinatura eletrônica conforme MP 2.200-2/2001 (art. 10, §2º). Documento e prova preservados pela Seravie.', { x: M, y: 33, size: 7.5, font, color: GREY })
+  // linha do cliente (site/contato) + base legal
+  const contact = (useBrand && brand.footer_contact) ? brand.footer_contact : (useBrand && brand.website ? brand.website : '')
+  const legal = `Assinatura eletrônica conforme MP 2.200-2/2001 (art. 10, §2º).${contact ? '  ' + contact : ''}`
+  page.drawText(legal, { x: M, y: 33, size: 7.5, font, color: GREY })
+  // crédito discreto da plataforma (removível pelo cliente)
+  if (showCredit) page.drawText('Documento gerado via Seravie Experiences', { x: M, y: 22, size: 7, font, color: rgb(0.6, 0.62, 0.66) })
 
   const pdfBytes = await out.save()
   const path = `signed/${reqRow.id}-${reqRow.verification_code}.pdf`
