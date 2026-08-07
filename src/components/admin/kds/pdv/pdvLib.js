@@ -102,3 +102,31 @@ export async function commitSale({ tenantId, session, cart, discount, tip, payme
 
   return { sale }
 }
+
+// Cancela (estorna) uma venda concluída: marca como 'void', reverte o caixa,
+// cancela o ticket na cozinha (se houver) e devolve o estoque baixado.
+export async function cancelSale(sale, { reason } = {}) {
+  if (!sale || sale.status === 'void') return { error: 'Venda já cancelada' }
+  const { error } = await supabase.from('kds_sales').update({ status: 'void' }).eq('id', sale.id)
+  if (error) return { error: error.message }
+
+  // estorna o caixa: uma retirada equivalente a cada pagamento recebido
+  if (sale.session_id) {
+    for (const p of (sale.payments || [])) {
+      await supabase.from('cash_movements').insert({
+        tenant_id: sale.tenant_id, session_id: sale.session_id, type: 'refund', amount: money(p.amount),
+        payment_method: p.method, description: `Estorno venda #${sale.number}${reason ? ' · ' + reason : ''}`, reference_id: sale.id,
+      })
+    }
+  }
+  // cancela o ticket na cozinha
+  if (sale.ticket_id) { try { await supabase.rpc('kds_advance_ticket', { p_ticket_id: sale.ticket_id, p_status: 'cancelled' }) } catch { /* noop */ } }
+  // devolve estoque
+  for (const it of (sale.items || [])) {
+    if (it.menu_id) {
+      const { data: m } = await supabase.from('kds_menu').select('stock').eq('id', it.menu_id).maybeSingle()
+      if (m && m.stock != null) await supabase.from('kds_menu').update({ stock: m.stock + (it.qty || 1) }).eq('id', it.menu_id)
+    }
+  }
+  return { ok: true }
+}

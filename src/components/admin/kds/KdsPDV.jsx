@@ -31,7 +31,7 @@ export function KdsPDV({ kind = 'kitchen', notify }) {
       </div>
 
       {sub === 'history' ? (
-        <KdsPDVHistory kind={kind} />
+        <KdsPDVHistory kind={kind} notify={notify} />
       ) : !session ? (
         <CashOpen notify={notify} onOpened={setSession} />
       ) : (
