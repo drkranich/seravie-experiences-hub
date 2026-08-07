@@ -65,3 +65,46 @@ export function defaultWidgetsForSegment(segmentKey) {
   const prof = seg ? POS_PROFILES[seg.profile] : null
   return prof ? [...prof.widgets] : ['product_admin']
 }
+
+// ---- BUSINESS PACKS (Marketplace de Módulos / Loja de Extensões) ----
+// O núcleo (venda, caixa, cliente, produtos, pagamento) é sempre ativo.
+// Cada pack ativa um conjunto de widgets de uma vez. A empresa monta seu POS.
+export const POS_PACKS = [
+  { key: 'essentials', name: 'Essenciais', icon: 'star', color: 'champ', tagline: 'Toda operação de varejo',
+    desc: 'Código de barras, cadastro de produtos, cupom e fidelidade — o mínimo de uma loja moderna.',
+    widgets: ['barcode', 'product_admin', 'coupon', 'loyalty'] },
+  { key: 'food', name: 'Alimentação', icon: 'flame', color: 'copper', tagline: 'Cafeteria, restaurante, padaria',
+    desc: 'Comandas e mesas, observação por item (sem açúcar, extras…) e envio para a cozinha (KDS).',
+    widgets: ['comandas', 'item_notes', 'kds'] },
+  { key: 'beauty', name: 'Beleza & Saúde', icon: 'heart', color: 'rose', tagline: 'Salão, spa, clínica',
+    desc: 'Agenda de serviços com profissional e horário, junto à venda de produtos.',
+    widgets: ['agenda'] },
+  { key: 'automotive', name: 'Automotivo & Assistência', icon: 'layers', color: 'sage', tagline: 'Oficina, assistência técnica',
+    desc: 'Ordem de serviço com veículo/objeto, peças e mão de obra, faturada no PDV.',
+    widgets: ['service_orders'] },
+  { key: 'hospitality', name: 'Hotelaria', icon: 'building', color: 'gold', tagline: 'Hotel, pousada',
+    desc: 'Consumo lançado na conta do quarto/hóspede e cobrado no check-out.',
+    widgets: ['hospedagem'] },
+  { key: 'payments', name: 'Pagamentos+', icon: 'chart', color: 'champ', tagline: 'Cobrança avançada',
+    desc: 'Cobrança online via Stripe (link de pagamento para o cliente).',
+    widgets: ['stripe'] },
+  { key: 'self_service', name: 'Autoatendimento', icon: 'grid', color: 'sage', tagline: 'Totem, tablet',
+    desc: 'Modo cliente em tela cheia com botões grandes — o cliente monta o pedido.',
+    widgets: ['self_checkout'] },
+  { key: 'experience', name: 'Seravie Experiences', icon: 'spark', color: 'champ', tagline: 'Ecossistema completo', premium: true,
+    desc: 'Liga tudo do ecossistema Seravie: comandas, KDS, agenda, cupom, fidelidade e mais.',
+    widgets: ['barcode', 'product_admin', 'coupon', 'item_notes', 'comandas', 'kds', 'stripe', 'loyalty', 'agenda'] },
+]
+export const POS_PACK_MAP = Object.fromEntries(POS_PACKS.map((p) => [p.key, p]))
+
+// Um pack está "ativo" se todos os seus widgets estão habilitados
+export function isPackActive(pack, enabledWidgets) {
+  const set = new Set(enabledWidgets || [])
+  return pack.widgets.length > 0 && pack.widgets.every((w) => set.has(w))
+}
+// Liga (ou desliga) todos os widgets de um pack sobre a lista atual
+export function applyPack(pack, enabledWidgets, turnOn = true) {
+  const set = new Set(enabledWidgets || [])
+  pack.widgets.forEach((w) => turnOn ? set.add(w) : set.delete(w))
+  return [...set]
+}

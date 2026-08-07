@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
 import { Icon, GlassSelect, GlassDate } from './ui'
-import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MAP, defaultWidgetsForSegment } from '../../lib/posConfig'
+import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MAP, defaultWidgetsForSegment, POS_PACKS, POS_PACK_MAP, isPackActive, applyPack } from '../../lib/posConfig'
 import { uploadTo } from '../../lib/storage'
 import { exportPdf, exportCsv } from '../../lib/export'
 
@@ -66,6 +66,9 @@ export function POSPanel({ notify }) {
   const [showReports, setShowReports] = useState(false)
   const [showLeads, setShowLeads] = useState(false)
   const [showDash, setShowDash] = useState(false)
+  const [showIA, setShowIA] = useState(false)
+  const [showReturns, setShowReturns] = useState(false)
+  const [showIntegrations, setShowIntegrations] = useState(false)
   const [showAgenda, setShowAgenda] = useState(false)
   const [showOS, setShowOS] = useState(false)
   const [showRooms, setShowRooms] = useState(false)
@@ -123,15 +126,22 @@ export function POSPanel({ notify }) {
     setShowOnboarding(false)
     notify(`Perfil "${seg?.label}" configurado`, 'success')
   }
-  const toggleWidget = (key) => {
-    // update otimista funcional (evita perder toggles em cliques rápidos) + persiste
+  const persistWidgets = (next) => {
     setPosProfile((prev) => {
-      const cur = prev?.widgets || []
-      const next = cur.includes(key) ? cur.filter((w) => w !== key) : [...cur, key]
       const row = { ...(prev || { tenant_id: tenantId, profile: 'retail' }), widgets: next, tenant_id: tenantId, updated_at: new Date().toISOString() }
-      supabase.from('pos_profiles').upsert(row, { onConflict: 'tenant_id' }).then(({ error }) => { if (error) notify('Erro ao salvar widget', 'error') })
+      supabase.from('pos_profiles').upsert(row, { onConflict: 'tenant_id' }).then(({ error }) => { if (error) notify('Erro ao salvar configuração', 'error') })
       return { ...(prev || {}), widgets: next }
     })
+  }
+  const toggleWidget = (key) => {
+    const cur = posProfile?.widgets || []
+    persistWidgets(cur.includes(key) ? cur.filter((w) => w !== key) : [...cur, key])
+  }
+  const togglePack = (pack) => {
+    const cur = posProfile?.widgets || []
+    const on = isPackActive(pack, cur)
+    persistWidgets(applyPack(pack, cur, !on))
+    notify(on ? `Pack "${pack.name}" desativado` : `Pack "${pack.name}" ativado`, 'success')
   }
 
   const loadSession = async () => {
@@ -600,6 +610,30 @@ export function POSPanel({ notify }) {
     notify(`Venda #${order.number} registrada${earnedPoints ? ` · +${earnedPoints} pts` : ''}`, 'success')
   }
 
+  // ---------- Devolução / estorno de venda ----------
+  const refundOrder = async (order, reason) => {
+    if (!session) { notify('Abra o caixa para registrar a devolução', 'error'); return { ok: false } }
+    // marca o pedido como devolvido
+    await supabase.from('orders').update({ status: 'refunded', payment_status: 'refunded', notes: (order.notes ? order.notes + ' · ' : '') + `Devolução: ${reason || 'sem motivo'}` }).eq('id', order.id)
+    // estorna caixa (saída) referente ao total
+    await supabase.from('cash_movements').insert({ tenant_id: tenantId, session_id: session.id, type: 'withdrawal', amount: Number(order.total) || 0, payment_method: order.payment_method || 'dinheiro', description: `Devolução venda #${order.number}`, reference_id: order.id, created_by: user?.id || null })
+    // lançamento financeiro negativo
+    await supabase.from('financial_entries').insert({ tenant_id: tenantId, unit_id: profile?.unit_id || null, type: 'expense', category: 'devolucao', description: `Devolução PDV #${order.number}`, amount: Number(order.total) || 0, date: new Date().toISOString().slice(0, 10), payment_method: order.payment_method || 'dinheiro', reference_id: order.id, reference_type: 'order', created_by: user?.id || null }).catch(() => {})
+    // devolve o estoque dos itens
+    for (const it of (Array.isArray(order.items) ? order.items : [])) {
+      if (!it.product_id) continue
+      const { data: p } = await supabase.from('products').select('stock').eq('id', it.product_id).maybeSingle()
+      if (p && p.stock != null) {
+        const bal = Number(p.stock) + (Number(it.qty) || 0)
+        await supabase.from('products').update({ stock: bal }).eq('id', it.product_id)
+        await supabase.from('stock_movements').insert({ tenant_id: tenantId, product_id: it.product_id, type: 'return', quantity: Number(it.qty) || 0, balance_after: bal, reference_id: order.id, reference_type: 'order', created_by: user?.id || null }).catch(() => {})
+      }
+    }
+    await loadSession(); loadProducts()
+    notify(`Venda #${order.number} devolvida · ${brl(order.total)} estornado`, 'success')
+    return { ok: true }
+  }
+
   // ---------- Comandas (holds) ----------
   const holdSale = async () => {
     if (cart.length === 0) { notify('Carrinho vazio', 'error'); return }
@@ -686,8 +720,10 @@ export function POSPanel({ notify }) {
           {hasWidget('hospedagem') && <button onClick={() => setShowRooms(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Hospedagem</button>}
           {hasWidget('self_checkout') && <button onClick={() => setSelfCheckout(true)} className="px-3 py-2 rounded-xl text-xs text-admin-sage bg-admin-sage/10 hover:bg-admin-sage/20 transition-colors">Modo cliente</button>}
           <button onClick={() => setGiftModal('sell')} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Vender vale</button>
+          <button onClick={() => setShowIA(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors"><Icon name="spark" className="w-3.5 h-3.5" />IA</button>
           <button onClick={() => setShowDash(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Dashboard</button>
           <button onClick={() => setShowLeads(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Leads</button>
+          <button onClick={() => setShowReturns(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Devoluções</button>
           <button onClick={() => setShowReports(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Relatórios</button>
           <button onClick={() => setShowDay(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Resumo do dia</button>
           <button onClick={() => { setMoveModal('deposit'); setMoveForm({ amount: '', description: '' }) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Suprimento</button>
@@ -1059,7 +1095,7 @@ export function POSPanel({ notify }) {
 
       {receipt && <ReceiptModal receipt={receipt} tenantName={profile?.tenant_name} onPrint={printReceipt} onClose={() => setReceipt(null)} />}
 
-      {showConfig && <PosConfigDrawer profile={posProfile} onToggle={toggleWidget} onReSegment={() => { setShowConfig(false); setShowOnboarding(true) }} onClose={() => setShowConfig(false)} />}
+      {showConfig && <ModuleMarketplace profile={posProfile} onToggle={toggleWidget} onTogglePack={togglePack} onReSegment={() => { setShowConfig(false); setShowOnboarding(true) }} onOpenIntegrations={() => { setShowConfig(false); setShowIntegrations(true) }} onClose={() => setShowConfig(false)} />}
 
       {productModal && <ProductModal initial={productModal} categories={categories} busy={busy} onSave={saveProduct} onDelete={productModal.id ? () => deleteProduct(productModal) : null} onClose={() => setProductModal(null)} />}
 
@@ -1074,6 +1110,12 @@ export function POSPanel({ notify }) {
       {showLeads && <LeadsModal notify={notify} onClose={() => setShowLeads(false)} />}
 
       {showDash && <ProductDashboard products={products} notify={notify} onClose={() => setShowDash(false)} />}
+
+      {showIA && <PosIntelligence products={products} notify={notify} onClose={() => setShowIA(false)} />}
+
+      {showReturns && <ReturnsDeliveryModal tenantId={tenantId} notify={notify} onRefund={refundOrder} onClose={() => setShowReturns(false)} />}
+
+      {showIntegrations && <IntegrationsModal tenantId={tenantId} notify={notify} onClose={() => setShowIntegrations(false)} />}
 
       {showAgenda && <AgendaModal tenantId={tenantId} contacts={contacts} customer={customer} notify={notify} onClose={() => setShowAgenda(false)} />}
 
@@ -1210,6 +1252,184 @@ function ProductDashboard({ products, notify, onClose }) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Devoluções + Delivery/Retirada ----------
+function ReturnsDeliveryModal({ tenantId, notify, onRefund, onClose }) {
+  const [tab, setTab] = useState('returns') // returns | delivery
+  const [orders, setOrders] = useState(null)
+  const [deliveries, setDeliveries] = useState(null)
+  const [confirm, setConfirm] = useState(null) // pedido a devolver
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const loadOrders = async () => {
+    setOrders(null)
+    const { data } = await supabase.from('orders').select('id, number, total, items, payment_method, status, customer_name, created_at').eq('channel', 'pdv').order('created_at', { ascending: false }).limit(40)
+    setOrders(data || [])
+  }
+  const loadDeliveries = async () => {
+    setDeliveries(null)
+    const { data } = await supabase.from('orders').select('id, number, total, status, customer_name, channel, created_at').in('channel', ['delivery', 'pickup']).order('created_at', { ascending: false }).limit(40)
+    setDeliveries(data || [])
+  }
+  useEffect(() => { tab === 'returns' ? loadOrders() : loadDeliveries() }, [tab])
+
+  const doRefund = async () => {
+    setBusy(true); const r = await onRefund(confirm, reason); setBusy(false)
+    if (r?.ok) { setConfirm(null); setReason(''); loadOrders() }
+  }
+  const setDelivStatus = async (o, status) => { await supabase.from('orders').update({ status }).eq('id', o.id); loadDeliveries() }
+  const DSTAT = ['pending', 'preparing', 'out_for_delivery', 'delivered']
+  const DLABEL = { pending: 'Pendente', preparing: 'Preparando', out_for_delivery: 'Saiu p/ entrega', delivered: 'Entregue', ready: 'Pronto p/ retirar' }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Pós-venda</p><h2 className="font-serif text-2xl text-admin-text">Devoluções & Entregas</h2></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        <div className="flex gap-1 bg-white/[0.03] p-1 rounded-xl mb-4 w-max">
+          {[['returns', 'Devoluções'], ['delivery', 'Delivery / retirada']].map(([k, l]) => (
+            <button key={k} onClick={() => setTab(k)} className={`px-3 py-1.5 rounded-lg text-sm ${tab === k ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}>{l}</button>
+          ))}
+        </div>
+
+        {tab === 'returns' ? (
+          <div className="overflow-y-auto">
+            {confirm ? (
+              <div className="glass rounded-2xl p-5">
+                <p className="text-admin-text text-sm mb-1">Devolver a venda <span className="text-admin-champ">#{confirm.number}</span> de {brl(confirm.total)}?</p>
+                <p className="text-admin-muted/50 text-xs mb-4">Isso estorna o valor no caixa e devolve os itens ao estoque. Não apaga o histórico.</p>
+                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo (ex: produto com defeito)" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none mb-4" />
+                <div className="flex gap-3">
+                  <button onClick={doRefund} disabled={busy} className="flex-1 bg-admin-rose/15 text-admin-rose hover:bg-admin-rose/25 rounded-xl py-2.5 text-sm font-medium disabled:opacity-50">{busy ? 'Processando…' : 'Confirmar devolução'}</button>
+                  <button onClick={() => { setConfirm(null); setReason('') }} className="px-4 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+                </div>
+              </div>
+            ) : orders === null ? <p className="text-admin-muted/30 text-sm py-10 text-center">Carregando vendas…</p>
+              : orders.length === 0 ? <p className="text-admin-muted/40 text-sm py-10 text-center">Nenhuma venda registrada.</p>
+              : (
+                <div className="space-y-2">
+                  {orders.map((o) => {
+                    const refunded = o.status === 'refunded'
+                    return (
+                      <div key={o.id} className="glass-soft rounded-xl p-3 flex items-center gap-3">
+                        <span className="text-admin-muted/40 text-xs tabular-nums">#{o.number}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-admin-text text-sm truncate">{o.customer_name || 'Consumidor final'} · {(o.items || []).length} item(s)</p>
+                          <p className="text-admin-muted/40 text-[11px]">{new Date(o.created_at).toLocaleString('pt-BR')}</p>
+                        </div>
+                        <span className="text-admin-gold text-sm">{brl(o.total)}</span>
+                        {refunded ? <span className="text-admin-rose text-[11px]">devolvida</span>
+                          : <button onClick={() => setConfirm(o)} className="text-admin-rose/80 hover:text-admin-rose text-xs">devolver</button>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+          </div>
+        ) : (
+          <div className="overflow-y-auto">
+            {deliveries === null ? <p className="text-admin-muted/30 text-sm py-10 text-center">Carregando…</p>
+              : deliveries.length === 0 ? <p className="text-admin-muted/40 text-sm py-12 text-center">Nenhum pedido de delivery ou retirada.<br /><span className="text-[11px]">Pedidos com canal "delivery" ou "pickup" aparecem aqui para acompanhar o status.</span></p>
+              : (
+                <div className="space-y-2">
+                  {deliveries.map((o) => (
+                    <div key={o.id} className="glass-soft rounded-xl p-3">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${o.channel === 'delivery' ? 'bg-admin-copper/15 text-admin-copper' : 'bg-admin-sage/15 text-admin-sage'}`}>{o.channel === 'delivery' ? 'Delivery' : 'Retirada'}</span>
+                        <span className="text-admin-text text-sm flex-1 truncate">#{o.number} · {o.customer_name || '—'}</span>
+                        <span className="text-admin-gold text-sm">{brl(o.total)}</span>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {DSTAT.map((s) => <button key={s} onClick={() => setDelivStatus(o, s)} className={`text-[11px] px-2 py-1 rounded-lg ${o.status === s ? 'bg-admin-champ/20 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/60 hover:text-admin-text'}`}>{DLABEL[s]}</button>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------- IA / Adaptive POS — inteligência sobre a operação ----------
+function PosIntelligence({ products, notify, onClose }) {
+  const [insights, setInsights] = useState(null)
+  useEffect(() => {
+    (async () => {
+      const desde = new Date(Date.now() - 30 * 86400000).toISOString()
+      const { data: orders } = await supabase.from('orders').select('items, total, created_at').eq('channel', 'pdv').gte('created_at', desde).limit(5000)
+      const list = orders || []
+      const out = []
+
+      // 1) Estoque baixo/zerado -> sugestão de compra
+      const lowStock = products.filter((p) => p._src !== 'craft' && p.stock != null && p.min_stock != null && p.min_stock > 0 && p.stock <= p.min_stock)
+      const outStock = products.filter((p) => p._src !== 'craft' && p.stock != null && p.stock <= 0)
+      if (outStock.length) out.push({ kind: 'buy', tone: 'rose', icon: 'cart', title: `${outStock.length} produto(s) sem estoque`, body: `Reponha para não perder venda: ${outStock.slice(0, 3).map((p) => p.name).join(', ')}${outStock.length > 3 ? '…' : ''}.` })
+      if (lowStock.length) out.push({ kind: 'buy', tone: 'gold', icon: 'tag', title: `${lowStock.length} produto(s) com estoque baixo`, body: `Abaixo do mínimo: ${lowStock.slice(0, 3).map((p) => `${p.name} (${p.stock})`).join(', ')}${lowStock.length > 3 ? '…' : ''}. Considere comprar.` })
+
+      // 2) Vendas por produto -> parados (promoção) e campeões
+      const sold = {}
+      list.forEach((o) => (Array.isArray(o.items) ? o.items : []).forEach((it) => { const k = (it.name || '').trim(); if (!k) return; sold[k] = (sold[k] || 0) + (Number(it.qty) || 0) }))
+      const soldNames = new Set(Object.keys(sold))
+      const idle = products.filter((p) => p._src !== 'craft' && (p.stock == null || p.stock > 0) && !soldNames.has((p.name || '').trim()))
+      if (idle.length) out.push({ kind: 'promo', tone: 'champ', icon: 'spark', title: `${idle.length} produto(s) parado(s) há 30 dias`, body: `Sem vender: ${idle.slice(0, 3).map((p) => p.name).join(', ')}${idle.length > 3 ? '…' : ''}. Crie uma promoção ou combo para girar o estoque.` })
+      const topSeller = Object.entries(sold).sort((a, b) => b[1] - a[1])[0]
+      if (topSeller) out.push({ kind: 'insight', tone: 'sage', icon: 'chart', title: `Campeão: ${topSeller[0]}`, body: `${topSeller[1]} unidades em 30 dias. Garanta estoque e destaque no PDV.` })
+
+      // 3) Co-ocorrência real -> cross-sell ("quem levou X levou Y")
+      const co = {}
+      list.forEach((o) => {
+        const names = [...new Set((Array.isArray(o.items) ? o.items : []).map((it) => (it.name || '').trim()).filter(Boolean))]
+        for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+          const key = [names[i], names[j]].sort().join(' + ')
+          co[key] = (co[key] || 0) + 1
+        }
+      })
+      const topCo = Object.entries(co).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1])[0]
+      if (topCo) out.push({ kind: 'crosssell', tone: 'copper', icon: 'layers', title: 'Combo natural detectado', body: `"${topCo[0]}" foram vendidos juntos ${topCo[1]}×. Ofereça como combo ou sugira no caixa.` })
+
+      // 4) Horário de pico
+      const byHour = {}
+      list.forEach((o) => { const h = new Date(o.created_at).getHours(); byHour[h] = (byHour[h] || 0) + 1 })
+      const peak = Object.entries(byHour).sort((a, b) => b[1] - a[1])[0]
+      if (peak && list.length >= 5) out.push({ kind: 'insight', tone: 'champ', icon: 'clock', title: `Pico de vendas às ${peak[0]}h`, body: `É quando você mais vende. Reforce a equipe e o estoque nesse horário.` })
+
+      // 5) Capital parado
+      const capital = idle.reduce((s, p) => s + (p.stock || 0) * Number(p.cost || 0), 0)
+      if (capital > 0) out.push({ kind: 'insight', tone: 'rose', icon: 'chart', title: `${brl0(capital)} em capital parado`, body: `Valor investido em produtos que não venderam no período. Liquide para liberar caixa.` })
+
+      if (!out.length) out.push({ kind: 'insight', tone: 'sage', icon: 'check', title: 'Tudo em ordem', body: 'Sem alertas no momento. Registre mais vendas para a IA gerar recomendações.' })
+      setInsights(out)
+    })()
+  }, [])
+
+  const toneMap = { champ: 'text-admin-champ bg-admin-champ/10', gold: 'text-admin-gold bg-admin-gold/10', sage: 'text-admin-sage bg-admin-sage/10', rose: 'text-admin-rose bg-admin-rose/10', copper: 'text-admin-copper bg-admin-copper/10' }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-1">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70 flex items-center gap-1.5"><Icon name="spark" className="w-3 h-3" />Adaptive POS</p><h2 className="font-serif text-2xl text-admin-text">Inteligência do negócio</h2></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        <p className="text-admin-muted/40 text-xs mb-4">A IA observa suas vendas e estoque (últimos 30 dias) e sugere ações.</p>
+        <div className="overflow-y-auto space-y-2.5">
+          {insights === null ? <p className="text-admin-muted/30 text-sm py-10 text-center">Analisando sua operação…</p>
+            : insights.map((s, i) => (
+              <div key={i} className="glass-soft rounded-2xl p-4 flex items-start gap-3">
+                <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${toneMap[s.tone] || toneMap.champ}`}><Icon name={s.icon} className="w-4 h-4" /></span>
+                <div className="min-w-0"><p className="text-admin-text text-sm font-medium">{s.title}</p><p className="text-admin-muted/60 text-[13px] leading-snug mt-0.5">{s.body}</p></div>
+              </div>
+            ))}
+        </div>
       </div>
     </div>
   )
@@ -1562,44 +1782,178 @@ function PosOnboarding({ onPick }) {
 }
 
 // ---------- Configuração: widgets liga/desliga ----------
-function PosConfigDrawer({ profile, onToggle, onReSegment, onClose }) {
-  const groups = [...new Set(POS_WIDGETS.map((w) => w.group))]
-  const enabled = profile?.widgets || []
+// ---------- Integrações reais (PIX / fiscal / marketplace) ----------
+const INTEGRATIONS = [
+  { key: 'pix_mercadopago', category: 'pix', name: 'PIX — Mercado Pago', icon: 'chart', desc: 'Conciliação automática de PIX e cartão via Mercado Pago.', fields: [{ k: 'client_id', label: 'Client ID' }], secretHint: 'O Access Token vai nos Secrets do Supabase (MP_ACCESS_TOKEN).' },
+  { key: 'pix_pagseguro', category: 'pix', name: 'PIX — PagSeguro/PagBank', icon: 'chart', desc: 'Recebimento e conciliação de PIX via PagBank.', fields: [{ k: 'email', label: 'E-mail da conta' }], secretHint: 'O token vai nos Secrets do Supabase (PAGSEGURO_TOKEN).' },
+  { key: 'nfce', category: 'fiscal', name: 'NFC-e (nota fiscal)', icon: 'check', desc: 'Emissão de NFC-e autorizada pela SEFAZ na finalização da venda.', fields: [{ k: 'cnpj', label: 'CNPJ' }, { k: 'ie', label: 'Inscrição Estadual' }, { k: 'csc_id', label: 'ID do CSC' }], secretHint: 'O certificado A1 e o CSC ficam nos Secrets do Supabase.' },
+  { key: 'marketplace_ifood', category: 'marketplace', name: 'iFood', icon: 'flame', desc: 'Pedidos do iFood entram como delivery no PDV.', fields: [{ k: 'merchant_id', label: 'Merchant ID' }], secretHint: 'Client secret nos Secrets do Supabase (IFOOD_SECRET).' },
+  { key: 'marketplace_ml', category: 'marketplace', name: 'Mercado Livre', icon: 'cart', desc: 'Pedidos do Mercado Livre sincronizados com o estoque.', fields: [{ k: 'seller_id', label: 'Seller ID' }], secretHint: 'Token OAuth nos Secrets do Supabase (ML_TOKEN).' },
+  { key: 'marketplace_shopee', category: 'marketplace', name: 'Shopee', icon: 'cart', desc: 'Pedidos da Shopee puxados para separação e entrega.', fields: [{ k: 'shop_id', label: 'Shop ID' }], secretHint: 'Chave da API nos Secrets do Supabase (SHOPEE_KEY).' },
+]
+function IntegrationsModal({ tenantId, notify, onClose }) {
+  const [rows, setRows] = useState(null) // map provider -> row
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState({})
+  const load = async () => {
+    const { data } = await supabase.from('pos_integrations').select('*')
+    setRows(Object.fromEntries((data || []).map((r) => [r.provider, r])))
+  }
+  useEffect(() => { load() }, [])
+  const save = async (integ, enabled, config) => {
+    const row = { tenant_id: tenantId, provider: integ.key, category: integ.category, enabled, config: config || {}, status: enabled ? 'connected' : 'disconnected', updated_at: new Date().toISOString() }
+    const { error } = await supabase.from('pos_integrations').upsert(row, { onConflict: 'tenant_id,provider' })
+    if (error) return notify('Erro ao salvar integração: ' + error.message, 'error')
+    setEditing(null); load(); notify(enabled ? `${integ.name} conectada` : `${integ.name} desligada`, 'success')
+  }
+  const cats = [['pix', 'Pagamentos (PIX / cartão)'], ['fiscal', 'Nota fiscal'], ['marketplace', 'Marketplaces']]
+  const inputCls = 'w-full glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md h-full glass-pop overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between mb-1">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Configurar POS</p>
-            <h2 className="font-serif text-2xl text-admin-text">Widgets do módulo</h2>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Conexões</p><h2 className="font-serif text-2xl text-admin-text">Integrações</h2></div>
           <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
         </div>
-        <button onClick={onReSegment} className="w-full glass-soft rounded-xl px-4 py-3 flex items-center justify-between hover:bg-white/[0.04] mb-5 mt-3">
-          <div className="flex items-center gap-2.5">
-            <Icon name={POS_SEGMENT_MAP[profile?.segment]?.icon || 'grid'} className="w-4 h-4 text-admin-champ" />
-            <div className="text-left"><p className="text-admin-text text-sm">{POS_SEGMENT_MAP[profile?.segment]?.label || 'Segmento'}</p><p className="text-admin-muted/40 text-[11px]">Trocar de segmento</p></div>
+        {editing ? (
+          <div className="overflow-y-auto">
+            <p className="text-admin-text text-sm mb-1">{editing.name}</p>
+            <p className="text-admin-muted/50 text-xs mb-4">{editing.desc}</p>
+            <div className="space-y-2.5 mb-4">
+              {editing.fields.map((f) => (
+                <div key={f.k}><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1">{f.label}</label>
+                  <input value={form[f.k] || ''} onChange={(e) => setForm((x) => ({ ...x, [f.k]: e.target.value }))} className={inputCls} /></div>
+              ))}
+            </div>
+            <div className="glass-soft rounded-xl px-3 py-2.5 mb-4 flex items-start gap-2">
+              <Icon name="check" className="w-4 h-4 text-admin-sage mt-0.5 shrink-0" />
+              <p className="text-admin-muted/60 text-[11px] leading-snug">{editing.secretHint} As chaves secretas nunca passam pelo painel — você as coloca direto nos Secrets do Supabase, com segurança.</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => save(editing, true, form)} className="flex-1 btn-gradient rounded-xl py-2.5 text-sm font-medium">Conectar</button>
+              <button onClick={() => setEditing(null)} className="px-4 py-2.5 rounded-xl text-sm text-admin-muted">Voltar</button>
+            </div>
           </div>
-          <Icon name="spark" className="w-4 h-4 text-admin-champ/50" />
-        </button>
-        {groups.map((g) => (
-          <div key={g} className="mb-5">
-            <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">{g}</p>
-            <div className="space-y-2">
-              {POS_WIDGETS.filter((w) => w.group === g).map((w) => {
-                const on = enabled.includes(w.key)
+        ) : (
+          <div className="overflow-y-auto space-y-5">
+            {cats.map(([cat, label]) => (
+              <div key={cat}>
+                <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">{label}</p>
+                <div className="space-y-2">
+                  {INTEGRATIONS.filter((i) => i.category === cat).map((integ) => {
+                    const row = rows?.[integ.key]
+                    const on = row?.enabled
+                    return (
+                      <div key={integ.key} className="glass-soft rounded-xl p-3.5 flex items-center gap-3">
+                        <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${on ? 'bg-admin-sage/15 text-admin-sage' : 'bg-white/[0.04] text-admin-muted/40'}`}><Icon name={integ.icon} className="w-4 h-4" /></span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2"><p className="text-admin-text text-sm">{integ.name}</p>{on && <span className="text-[9px] uppercase tracking-wider text-admin-sage bg-admin-sage/10 px-1.5 py-0.5 rounded">conectado</span>}</div>
+                          <p className="text-admin-muted/40 text-[11px] leading-tight">{integ.desc}</p>
+                        </div>
+                        {on ? <button onClick={() => save(integ, false, row?.config)} className="text-admin-muted/50 hover:text-admin-rose text-xs shrink-0">desligar</button>
+                          : <button onClick={() => { setEditing(integ); setForm(row?.config || {}) }} className="text-admin-champ text-xs shrink-0">conectar</button>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <p className="text-admin-muted/40 text-[11px]">Estas conexões preparam o PDV para conciliação automática de PIX/cartão, emissão de NFC-e e ingestão de pedidos de marketplaces. As chaves secretas ficam nos Secrets do Supabase — nunca no painel.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Marketplace de Módulos (Loja de Extensões) ----------
+function ModuleMarketplace({ profile, onToggle, onTogglePack, onReSegment, onOpenIntegrations, onClose }) {
+  const [tab, setTab] = useState('packs') // packs | widgets
+  const enabled = profile?.widgets || []
+  const groups = [...new Set(POS_WIDGETS.map((w) => w.group))]
+  const tone = (c) => ({ champ: 'text-admin-champ bg-admin-champ/10', gold: 'text-admin-gold bg-admin-gold/10', sage: 'text-admin-sage bg-admin-sage/10', rose: 'text-admin-rose bg-admin-rose/10', copper: 'text-admin-copper bg-admin-copper/10' }[c] || 'text-admin-champ bg-admin-champ/10')
+  const activeCount = POS_PACKS.filter((p) => isPackActive(p, enabled)).length
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Seravie POS</p>
+              <h2 className="font-serif text-2xl text-admin-text">Marketplace de Módulos</h2>
+              <p className="text-admin-muted/50 text-sm mt-1">Ative só o que seu negócio precisa. O núcleo — venda, caixa, cliente, produtos e pagamento — já vem incluso.</p>
+            </div>
+            <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+          </div>
+          <div className="flex items-center gap-3 mt-4">
+            <button onClick={onReSegment} className="glass-soft rounded-xl px-3 py-2 flex items-center gap-2 hover:bg-white/[0.04]">
+              <Icon name={POS_SEGMENT_MAP[profile?.segment]?.icon || 'grid'} className="w-4 h-4 text-admin-champ" />
+              <span className="text-admin-text text-sm">{POS_SEGMENT_MAP[profile?.segment]?.label || 'Segmento'}</span>
+              <span className="text-admin-muted/40 text-[11px]">trocar</span>
+            </button>
+            <div className="mx-auto" />
+            <div className="flex gap-1 bg-white/[0.03] p-1 rounded-xl">
+              {[['packs', 'Packs'], ['widgets', 'Ajuste fino']].map(([k, l]) => (
+                <button key={k} onClick={() => setTab(k)} className={`px-3 py-1.5 rounded-lg text-sm ${tab === k ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}>{l}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto p-6">
+          {tab === 'packs' ? (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {POS_PACKS.map((pack) => {
+                const on = isPackActive(pack, enabled)
                 return (
-                  <button key={w.key} onClick={() => onToggle(w.key)} className="w-full glass-soft rounded-xl px-3.5 py-3 flex items-center gap-3 hover:bg-white/[0.04] text-left">
-                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${on ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/40'}`}><Icon name={w.icon} className="w-4 h-4" /></span>
-                    <div className="flex-1 min-w-0"><p className="text-admin-text text-sm">{w.label}</p><p className="text-admin-muted/40 text-[11px] leading-tight">{w.desc}</p></div>
-                    <span className={`w-9 h-5 rounded-full shrink-0 relative transition-colors ${on ? 'bg-admin-champ/60' : 'bg-white/[0.08]'}`}><span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-4' : 'left-0.5'}`} /></span>
-                  </button>
+                  <div key={pack.key} className={`rounded-2xl p-4 border transition-all ${on ? 'border-admin-champ/40 bg-admin-champ/[0.04]' : 'glass-soft border-transparent'}`}>
+                    <div className="flex items-start gap-3 mb-2">
+                      <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tone(pack.color)}`}><Icon name={pack.icon} className="w-5 h-5" /></span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2"><p className="text-admin-text text-sm font-medium">{pack.name}</p>{pack.premium && <span className="text-[9px] uppercase tracking-wider text-admin-gold bg-admin-gold/10 px-1.5 py-0.5 rounded">premium</span>}</div>
+                        <p className="text-admin-muted/40 text-[11px]">{pack.tagline}</p>
+                      </div>
+                    </div>
+                    <p className="text-admin-muted/60 text-xs leading-snug mb-3 min-h-[2.4em]">{pack.desc}</p>
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {pack.widgets.map((wk) => <span key={wk} className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.05] text-admin-muted/60">{POS_WIDGET_MAP[wk]?.label || wk}</span>)}
+                    </div>
+                    <button onClick={() => onTogglePack(pack)} className={`w-full rounded-xl py-2 text-sm font-medium transition-colors ${on ? 'bg-admin-sage/15 text-admin-sage hover:bg-admin-sage/25' : 'btn-gradient'}`}>{on ? '✓ Ativo — desativar' : 'Ativar pack'}</button>
+                  </div>
                 )
               })}
             </div>
+          ) : (
+            <div className="space-y-5">
+              {groups.map((g) => (
+                <div key={g}>
+                  <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">{g}</p>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {POS_WIDGETS.filter((w) => w.group === g).map((w) => {
+                      const on = enabled.includes(w.key)
+                      return (
+                        <button key={w.key} onClick={() => onToggle(w.key)} className="glass-soft rounded-xl px-3.5 py-3 flex items-center gap-3 hover:bg-white/[0.04] text-left">
+                          <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${on ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/40'}`}><Icon name={w.icon} className="w-4 h-4" /></span>
+                          <div className="flex-1 min-w-0"><p className="text-admin-text text-sm">{w.label}</p><p className="text-admin-muted/40 text-[11px] leading-tight">{w.desc}</p></div>
+                          <span className={`w-9 h-5 rounded-full shrink-0 relative transition-colors ${on ? 'bg-admin-champ/60' : 'bg-white/[0.08]'}`}><span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-4' : 'left-0.5'}`} /></span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-3 border-t border-white/[0.06] flex items-center justify-between">
+          <span className="text-admin-muted/40 text-[11px]">{activeCount} pack(s) ativos · {enabled.length} recurso(s) ligado(s)</span>
+          <div className="flex items-center gap-4">
+            <button onClick={onOpenIntegrations} className="text-admin-muted/60 text-sm hover:text-admin-champ flex items-center gap-1.5"><Icon name="layers" className="w-4 h-4" />Integrações</button>
+            <button onClick={onClose} className="text-admin-champ text-sm hover:underline">Concluir</button>
           </div>
-        ))}
-        <p className="text-admin-muted/40 text-[11px]">Venda, caixa, cliente, produtos e pagamento são o núcleo e estão sempre ativos.</p>
+        </div>
       </div>
     </div>
   )
