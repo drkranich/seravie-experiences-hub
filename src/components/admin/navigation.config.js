@@ -134,6 +134,7 @@ export const CORE_SECTIONS = [
       { key: 'users', label: 'Usuários & Acessos', icon: 'user', route: 'users' },
       { key: 'subscription', label: 'Minha Assinatura', icon: 'star', route: 'subscription' },
       { key: 'plans', label: 'Planos da Plataforma', icon: 'gear', route: 'plans' },
+      { key: 'service_pricing', label: 'Franquias & Assessoria', icon: 'leaf', route: 'service_pricing' },
       { key: 'superadmin', label: 'Super Admin', icon: 'gear', route: 'superadmin' },
       { key: 'settings', label: 'Configurações', icon: 'gear', route: 'settings', pages: [
         { key: 'set.brand', label: 'Marca (logo/favicon)', route: 'settings' },

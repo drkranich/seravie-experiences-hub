@@ -48,6 +48,7 @@ import { AutomationPanel } from '../components/admin/AutomationPanel'
 import { RolesPanel } from '../components/admin/RolesPanel'
 import { AuditLogPanel } from '../components/admin/AuditLogPanel'
 import { PlansAdmin } from '../components/admin/PlansAdmin'
+import { ServicesAdmin } from '../components/admin/ServicesAdmin'
 import { UsersPanel } from '../components/admin/UsersPanel'
 import { CoursesPanel, CouponsPanel, SlaPanel, GoalsPanel, EquipmentPanel } from '../components/admin/modulePanels'
 import { PayablesPanel, DrePanel } from '../components/admin/FinanceAdvanced'
@@ -158,6 +159,7 @@ export function AdminDashboard({ onExit }) {
     roles: <RolesPanel notify={notify} />,
     audit: <AuditLogPanel notify={notify} />,
     plans: <PlansAdmin notify={notify} />,
+    service_pricing: <ServicesAdmin notify={notify} />,
     subscription: <SubscriptionPanel notify={notify} />,
     receivables: <ReceivablesPanel notify={notify} />,
     users: <UsersPanel notify={notify} />,
@@ -265,7 +267,7 @@ export function AdminDashboard({ onExit }) {
     // Rede Seravie (franqueador)
     'expansao', 'franqueados', 'royalties', 'implantacoes', 'catalogo_oficial', 'standards', 'certification',
     // Plataforma / sistema
-    'plans', 'superadmin', 'verticals',
+    'plans', 'service_pricing', 'superadmin', 'verticals',
   ])
   const isSuperUser = profile?.role_slug === 'super_admin'
 

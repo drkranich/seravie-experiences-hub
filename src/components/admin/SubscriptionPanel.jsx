@@ -4,6 +4,7 @@ import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
 import { VERTICAL_CORES } from './navigation.config'
 import { ConnectCard } from './ConnectCard'
+import { InvestmentShowcase } from './InvestmentShowcase'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const STATUS = { active: 'Ativa', trialing: 'Em teste', past_due: 'Pagamento pendente', canceled: 'Cancelada', cancelled: 'Cancelada', none: 'Sem assinatura' }
@@ -240,6 +241,9 @@ export function SubscriptionPanel({ notify }) {
           </div>
         </div>
       )}
+
+      {/* Vitrine de investimento: franquias e assessoria (serviços à parte) */}
+      <InvestmentShowcase />
     </div>
   )
 }
