@@ -210,11 +210,11 @@ function CreateModal({ tenantId, notify, onClose, onDone }) {
         )}
         {source === 'vault' && (
           <div className="mb-4"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Arquivo do cofre</label>
-            <GlassSelect value={vaultId} onChange={setVaultId} options={[{ value: '', label: '— selecione —' }, ...vaultDocs.map((d) => ({ value: d.id, label: `${d.title} (${d.file_name})` }))]} /></div>
+            <GlassSelect value={vaultId} onChange={(v) => { setVaultId(v); const d = vaultDocs.find((x) => x.id === v); if (d && !title.trim()) setTitle(d.title) }} options={[{ value: '', label: '— selecione —' }, ...vaultDocs.map((d) => ({ value: d.id, label: `${d.title} (${d.file_name})` }))]} /></div>
         )}
         {source === 'proposal' && (
           <div className="mb-4"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Proposta / contrato</label>
-            <GlassSelect value={proposalId} onChange={setProposalId} options={[{ value: '', label: '— selecione —' }, ...proposals.map((p) => ({ value: p.id, label: p.title }))]} /></div>
+            <GlassSelect value={proposalId} onChange={(v) => { setProposalId(v); const p = proposals.find((x) => x.id === v); if (p && !title.trim()) setTitle(p.title) }} options={[{ value: '', label: '— selecione —' }, ...proposals.map((p) => ({ value: p.id, label: p.title }))]} /></div>
         )}
 
         <div className="space-y-3">

@@ -57,11 +57,26 @@ Deno.serve(async (req) => {
   if (!body.signature_data) return json({ error: 'signature_required' }, 400)
 
   const nowIso = new Date().toISOString()
+
+  // documento de identificação (opcional): salva no bucket vault e registra na trilha
+  let idDocPath = null, idDocKind = null
+  if (body.id_document && body.id_document.data) {
+    try {
+      const parsed = parseDataUrl(body.id_document.data)
+      if (parsed) {
+        idDocKind = (body.id_document.kind || 'outro').toString().slice(0, 20)
+        const ext = extFromMime(parsed.mime) || 'bin'
+        idDocPath = `${reqRow.tenant_id}/signatures/${reqRow.id}/id-${signer.id}-${idDocKind}.${ext}`
+        await admin.storage.from('vault').upload(idDocPath, parsed.bytes, { contentType: parsed.mime, upsert: true })
+      }
+    } catch (_) { idDocPath = null }
+  }
+
   await admin.from('signature_signers').update({
     status: 'signed', signature_data: body.signature_data, signed_name: signedName,
     signed_ip: ip, signed_user_agent: req.headers.get('user-agent') || '', signed_at: nowIso,
   }).eq('id', signer.id)
-  await admin.from('signature_events').insert({ request_id: reqRow.id, signer_id: signer.id, tenant_id: reqRow.tenant_id, event: 'signed', ip, detail: { name: signedName } })
+  await admin.from('signature_events').insert({ request_id: reqRow.id, signer_id: signer.id, tenant_id: reqRow.tenant_id, event: 'signed', ip, detail: { name: signedName, ...(idDocPath ? { id_document_path: idDocPath, id_document_kind: idDocKind } : {}) } })
 
   const { data: all } = await admin.from('signature_signers').select('status').eq('request_id', reqRow.id)
   const done = (all || []).every((s) => s.status === 'signed')
@@ -77,6 +92,20 @@ Deno.serve(async (req) => {
 
   return json({ ok: true, status: newStatus })
 })
+
+// converte dataURL (base64) em bytes + mime
+function parseDataUrl(dataUrl) {
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(String(dataUrl))
+  if (!m) return null
+  const mime = m[1]
+  const bin = atob(m[2])
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return { mime, bytes }
+}
+function extFromMime(mime) {
+  return { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'application/pdf': 'pdf', 'image/webp': 'webp' }[(mime || '').toLowerCase()] || null
+}
 
 // chama a stamp-doc internamente (autorização por service role)
 async function stampDoc(requestId) {
