@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
 import { Icon, GlassSelect } from './ui'
+import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MAP, defaultWidgetsForSegment } from '../../lib/posConfig'
 
 const PAYMENT_METHODS = [
   { value: 'dinheiro', label: 'Dinheiro' },
@@ -59,6 +60,40 @@ export function POSPanel({ notify }) {
   const [stripeLink, setStripeLink] = useState(null)
   const [manualCode, setManualCode] = useState('')
 
+  // ---- Motor adaptativo por segmento ----
+  const [posProfile, setPosProfile] = useState(null) // linha de pos_profiles
+  const [profileLoaded, setProfileLoaded] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
+  const [productModal, setProductModal] = useState(null) // { ...produto } para editar | {} para novo
+  const hasWidget = (key) => !!posProfile?.widgets?.includes(key)
+
+  const loadProfile = async () => {
+    const { data } = await supabase.from('pos_profiles').select('*').maybeSingle()
+    setPosProfile(data || null)
+    setProfileLoaded(true)
+    if (!data) setShowOnboarding(true)
+  }
+  const saveProfile = async (patch) => {
+    const base = posProfile || { tenant_id: tenantId, profile: 'retail', widgets: [] }
+    const row = { ...base, ...patch, tenant_id: tenantId, updated_at: new Date().toISOString() }
+    const { data, error } = await supabase.from('pos_profiles').upsert(row, { onConflict: 'tenant_id' }).select().single()
+    if (error) { notify('Erro ao salvar configuração do POS', 'error'); return }
+    setPosProfile(data)
+    return data
+  }
+  const chooseSegment = async (segKey) => {
+    const seg = POS_SEGMENT_MAP[segKey]
+    await saveProfile({ segment: segKey, profile: seg?.profile || 'retail', widgets: defaultWidgetsForSegment(segKey), onboarded_at: new Date().toISOString() })
+    setShowOnboarding(false)
+    notify(`Perfil "${seg?.label}" configurado`, 'success')
+  }
+  const toggleWidget = async (key) => {
+    const cur = posProfile?.widgets || []
+    const next = cur.includes(key) ? cur.filter((w) => w !== key) : [...cur, key]
+    await saveProfile({ widgets: next })
+  }
+
   const loadSession = async () => {
     setLoading(true)
     const { data } = await supabase.from('cash_sessions').select('*').eq('status', 'open')
@@ -91,7 +126,34 @@ export function POSPanel({ notify }) {
     const { data: cts } = await supabase.from('contacts').select('id, name').order('name').limit(500)
     setContacts(cts || [])
   }
-  useEffect(() => { loadSession(); loadProducts(); loadAux() }, [])
+  useEffect(() => { loadSession(); loadProducts(); loadAux(); loadProfile() }, [])
+
+  // ---------- Cadastro rápido de produtos (widget product_admin) ----------
+  const saveProduct = async (form) => {
+    const payload = {
+      tenant_id: tenantId, name: (form.name || '').trim(), price: num(form.price), cost: num(form.cost),
+      stock: form.stock === '' || form.stock == null ? null : parseInt(form.stock),
+      sku: form.sku?.trim() || null, category_id: form.category_id || null,
+      images: form.image?.trim() ? [form.image.trim()] : [], status: 'active',
+    }
+    if (!payload.name) { notify('Informe o nome do produto', 'error'); return }
+    setBusy(true)
+    let error
+    if (form.id) ({ error } = await supabase.from('products').update(payload).eq('id', form.id))
+    else ({ error } = await supabase.from('products').insert(payload))
+    setBusy(false)
+    if (error) { notify('Erro ao salvar produto: ' + error.message, 'error'); return }
+    setProductModal(null); loadProducts()
+    notify(form.id ? 'Produto atualizado' : 'Produto cadastrado', 'success')
+  }
+  const deleteProduct = async (p) => {
+    setBusy(true)
+    const { error } = await supabase.from('products').update({ status: 'archived' }).eq('id', p.id)
+    setBusy(false)
+    if (error) { notify('Erro ao excluir produto', 'error'); return }
+    setProductModal(null); removeItem(p.id); loadProducts()
+    notify('Produto removido do catálogo', 'success')
+  }
 
   // ---------- Caixa ----------
   const openCash = async () => {
@@ -404,7 +466,10 @@ export function POSPanel({ notify }) {
 
   const printReceipt = () => window.print()
 
-  if (loading) return <div className="p-10 text-admin-muted/40 text-sm">Carregando caixa…</div>
+  if (loading || !profileLoaded) return <div className="p-10 text-admin-muted/40 text-sm">Carregando caixa…</div>
+
+  // Primeira configuração: qual é o seu segmento?
+  if (showOnboarding) return <PosOnboarding onPick={chooseSegment} />
 
   if (!session) return (
     <div className="p-6 lg:p-10 max-w-md">
@@ -434,7 +499,14 @@ export function POSPanel({ notify }) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => setShowHolds(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Comandas {holds.length > 0 && `(${holds.length})`}</button>
+          {posProfile?.segment && (
+            <button onClick={() => setShowConfig(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors" title="Configurar segmento e widgets do POS">
+              <Icon name={POS_SEGMENT_MAP[posProfile.segment]?.icon || 'grid'} className="w-3.5 h-3.5" />
+              {POS_SEGMENT_MAP[posProfile.segment]?.label || 'Segmento'}
+            </button>
+          )}
+          {hasWidget('comandas') && <button onClick={() => setShowHolds(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Comandas {holds.length > 0 && `(${holds.length})`}</button>}
+          {hasWidget('kds') && <button onClick={() => { window.location.hash = '#admin'; setTimeout(() => notify('Abra o Seravie Cuisine no menu para acompanhar a cozinha', 'info'), 100) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Cozinha (KDS)</button>}
           <button onClick={() => setShowDay(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Resumo do dia</button>
           <button onClick={() => { setMoveModal('deposit'); setMoveForm({ amount: '', description: '' }) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Suprimento</button>
           <button onClick={() => { setMoveModal('withdrawal'); setMoveForm({ amount: '', description: '' }) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Sangria</button>
@@ -458,19 +530,26 @@ export function POSPanel({ notify }) {
         {/* Produtos */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-white/[0.06]">
           <div className="p-4 border-b border-white/[0.06] space-y-3">
-            <div className="relative">
-              <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar produto ou SKU…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
-            </div>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
-                <Icon name="tag" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-champ/50" />
-                <input data-barcode="1" value={manualCode} onChange={(e) => setManualCode(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScan(manualCode); setManualCode('') } }}
-                  placeholder="Código de barras — bipe ou digite…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
+                <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar produto ou SKU…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
               </div>
-              <span className="flex items-center gap-1.5 text-[10px] text-admin-sage bg-admin-sage/10 px-2.5 py-2 rounded-lg shrink-0" title="Leitor USB detectado como teclado — bipe para adicionar"><span className="w-1.5 h-1.5 rounded-full bg-admin-sage animate-pulse" />Leitor pronto</span>
+              {hasWidget('product_admin') && (
+                <button onClick={() => setProductModal({ name: '', price: '', cost: '', stock: '', sku: '', category_id: catFilter || '', image: '' })} className="flex items-center gap-1.5 shrink-0 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-3.5 py-2.5 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Novo produto</button>
+              )}
             </div>
+            {hasWidget('barcode') && (
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Icon name="tag" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-champ/50" />
+                  <input data-barcode="1" value={manualCode} onChange={(e) => setManualCode(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScan(manualCode); setManualCode('') } }}
+                    placeholder="Código de barras — bipe ou digite…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text placeholder-admin-muted/30 outline-none" />
+                </div>
+                <span className="flex items-center gap-1.5 text-[10px] text-admin-sage bg-admin-sage/10 px-2.5 py-2 rounded-lg shrink-0" title="Leitor USB detectado como teclado — bipe para adicionar"><span className="w-1.5 h-1.5 rounded-full bg-admin-sage animate-pulse" />Leitor pronto</span>
+              </div>
+            )}
             {categories.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                 <button onClick={() => setCatFilter('')} className={`shrink-0 px-4 py-2 rounded-xl text-xs transition-all border ${!catFilter ? 'bg-admin-champ/15 text-admin-champ border-admin-champ/30' : 'bg-white/[0.03] text-admin-muted/60 border-transparent hover:text-admin-text hover:border-white/10'}`}>
@@ -523,7 +602,12 @@ export function POSPanel({ notify }) {
                           </div>
                         </div>
                       </button>
-                      <button onClick={() => { setStockModal(p); setStockForm({ quantity: '', notes: '' }) }} className="w-full px-3 pb-2.5 -mt-1 text-[10px] text-admin-muted/30 hover:text-admin-champ transition-colors text-left">+ estoque</button>
+                      <div className="flex items-center gap-3 px-3 pb-2.5 -mt-1">
+                        <button onClick={() => { setStockModal(p); setStockForm({ quantity: '', notes: '' }) }} className="text-[10px] text-admin-muted/30 hover:text-admin-champ transition-colors">+ estoque</button>
+                        {hasWidget('product_admin') && p._src !== 'craft' && (
+                          <button onClick={() => setProductModal({ id: p.id, name: p.name, price: p.price, cost: p.cost, stock: p.stock ?? '', sku: p.sku || '', category_id: p.category_id || '', image: (p.images && p.images[0]) || '' })} className="text-[10px] text-admin-muted/30 hover:text-admin-champ transition-colors">editar</button>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -577,7 +661,7 @@ export function POSPanel({ notify }) {
                     <p className="text-admin-gold text-sm w-16 text-right">{brl(lineTotal(i))}</p>
                   </div>
                 </div>
-                <input value={i.note || ''} onChange={(e) => setItemNote(i.product_id, e.target.value)} placeholder="+ observação (ex: sem açúcar, leite vegetal…)" className="w-full mt-2 bg-transparent border-t border-white/[0.05] pt-1.5 text-[11px] text-admin-text placeholder-admin-muted/25 outline-none" />
+                {hasWidget('item_notes') && <input value={i.note || ''} onChange={(e) => setItemNote(i.product_id, e.target.value)} placeholder="+ observação (ex: sem açúcar, leite vegetal…)" className="w-full mt-2 bg-transparent border-t border-white/[0.05] pt-1.5 text-[11px] text-admin-text placeholder-admin-muted/25 outline-none" />}
               </div>
             ))}
           </div>
@@ -591,7 +675,7 @@ export function POSPanel({ notify }) {
                 <input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0,00" className="w-full glass-input rounded-lg pl-7 pr-2 py-1.5 text-sm text-admin-text outline-none text-right" /></div>
             </div>
             {/* Cupom */}
-            {appliedCoupon ? (
+            {hasWidget('coupon') && (appliedCoupon ? (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-admin-sage">Cupom {appliedCoupon.code} · − {brl(couponValue)}</span>
                 <button onClick={() => { setAppliedCoupon(null); setCouponCode('') }} className="text-admin-muted/40 hover:text-admin-rose text-xs">remover</button>
@@ -601,7 +685,7 @@ export function POSPanel({ notify }) {
                 <input value={couponCode} onChange={(e) => setCouponCode(e.target.value)} placeholder="Cupom" className="flex-1 glass-input rounded-lg px-3 py-1.5 text-sm text-admin-text outline-none uppercase" />
                 <button onClick={applyCoupon} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">Aplicar</button>
               </div>
-            )}
+            ))}
             <div className="flex items-center justify-between"><span className="text-admin-text font-medium">Total</span><span className="text-admin-champ text-xl font-medium">{brl(total)}</span></div>
 
             {/* Pagamentos adicionados */}
@@ -626,15 +710,15 @@ export function POSPanel({ notify }) {
               <div className="relative w-28"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-admin-muted/40 text-xs">R$</span>
                 <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={remaining > 0 ? remaining.toFixed(2) : '0,00'} className="w-full glass-input rounded-lg pl-7 pr-2 py-2 text-sm text-admin-text outline-none" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid ${hasWidget('stripe') ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
               <button onClick={addPayment} disabled={total <= 0} className="py-2 rounded-lg text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-40">+ pagamento</button>
-              <button onClick={chargeStripe} disabled={total <= 0 || busy} className="py-2 rounded-lg text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-40">Cobrar Stripe</button>
+              {hasWidget('stripe') && <button onClick={chargeStripe} disabled={total <= 0 || busy} className="py-2 rounded-lg text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-40">Cobrar Stripe</button>}
             </div>
 
             <input value={saleNotes} onChange={(e) => setSaleNotes(e.target.value)} placeholder="Observações da venda…" className="w-full glass-input rounded-lg px-3 py-2 text-xs text-admin-text outline-none" />
 
             <div className="flex gap-2">
-              <button onClick={holdSale} disabled={busy || cart.length === 0} className="px-4 py-3 rounded-xl text-sm text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-40">Segurar</button>
+              {hasWidget('comandas') && <button onClick={holdSale} disabled={busy || cart.length === 0} className="px-4 py-3 rounded-xl text-sm text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-40">Segurar</button>}
               <button onClick={finalizeSale} disabled={!canFinalize || busy} className="flex-1 btn-gradient rounded-xl py-3 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed">Finalizar {cart.length > 0 && `· ${brl(total)}`}</button>
             </div>
           </div>
@@ -739,7 +823,116 @@ export function POSPanel({ notify }) {
       )}
 
       {receipt && <ReceiptModal receipt={receipt} tenantName={profile?.tenant_name} onPrint={printReceipt} onClose={() => setReceipt(null)} />}
+
+      {showConfig && <PosConfigDrawer profile={posProfile} onToggle={toggleWidget} onReSegment={() => { setShowConfig(false); setShowOnboarding(true) }} onClose={() => setShowConfig(false)} />}
+
+      {productModal && <ProductModal initial={productModal} categories={categories} busy={busy} onSave={saveProduct} onDelete={productModal.id ? () => deleteProduct(productModal) : null} onClose={() => setProductModal(null)} />}
     </div>
+  )
+}
+
+// ---------- Onboarding: qual é o seu segmento? ----------
+function PosOnboarding({ onPick }) {
+  return (
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center p-6">
+      <div className="w-full max-w-3xl">
+        <div className="text-center mb-8">
+          <p className="text-[11px] tracking-[0.2em] uppercase text-admin-champ/70 mb-2">Seravie POS</p>
+          <h1 className="font-serif text-4xl text-admin-text mb-2">Qual é o seu segmento?</h1>
+          <p className="text-admin-muted/60 text-sm max-w-lg mx-auto">O PDV se adapta ao seu negócio: ligamos só os recursos que fazem sentido para você. Dá para mudar depois a qualquer momento.</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+          {POS_SEGMENTS.map((s) => (
+            <button key={s.key} onClick={() => onPick(s.key)} className="glass rounded-2xl p-4 text-left hover:border-admin-champ/30 border border-transparent transition-all lift group">
+              <span className="w-10 h-10 rounded-xl bg-admin-champ/10 flex items-center justify-center text-admin-champ mb-3 group-hover:bg-admin-champ/20 transition-colors"><Icon name={s.icon} className="w-5 h-5" /></span>
+              <p className="text-admin-text text-sm font-medium leading-tight">{s.label}</p>
+              <p className="text-admin-muted/40 text-[10px] mt-0.5">{POS_PROFILES[s.profile]?.label}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------- Configuração: widgets liga/desliga ----------
+function PosConfigDrawer({ profile, onToggle, onReSegment, onClose }) {
+  const groups = [...new Set(POS_WIDGETS.map((w) => w.group))]
+  const enabled = profile?.widgets || []
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md h-full glass-pop overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-1">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Configurar POS</p>
+            <h2 className="font-serif text-2xl text-admin-text">Widgets do módulo</h2>
+          </div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        <button onClick={onReSegment} className="w-full glass-soft rounded-xl px-4 py-3 flex items-center justify-between hover:bg-white/[0.04] mb-5 mt-3">
+          <div className="flex items-center gap-2.5">
+            <Icon name={POS_SEGMENT_MAP[profile?.segment]?.icon || 'grid'} className="w-4 h-4 text-admin-champ" />
+            <div className="text-left"><p className="text-admin-text text-sm">{POS_SEGMENT_MAP[profile?.segment]?.label || 'Segmento'}</p><p className="text-admin-muted/40 text-[11px]">Trocar de segmento</p></div>
+          </div>
+          <Icon name="spark" className="w-4 h-4 text-admin-champ/50" />
+        </button>
+        {groups.map((g) => (
+          <div key={g} className="mb-5">
+            <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">{g}</p>
+            <div className="space-y-2">
+              {POS_WIDGETS.filter((w) => w.group === g).map((w) => {
+                const on = enabled.includes(w.key)
+                return (
+                  <button key={w.key} onClick={() => onToggle(w.key)} className="w-full glass-soft rounded-xl px-3.5 py-3 flex items-center gap-3 hover:bg-white/[0.04] text-left">
+                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${on ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/40'}`}><Icon name={w.icon} className="w-4 h-4" /></span>
+                    <div className="flex-1 min-w-0"><p className="text-admin-text text-sm">{w.label}</p><p className="text-admin-muted/40 text-[11px] leading-tight">{w.desc}</p></div>
+                    <span className={`w-9 h-5 rounded-full shrink-0 relative transition-colors ${on ? 'bg-admin-champ/60' : 'bg-white/[0.08]'}`}><span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-4' : 'left-0.5'}`} /></span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+        <p className="text-admin-muted/40 text-[11px]">Venda, caixa, cliente, produtos e pagamento são o núcleo e estão sempre ativos.</p>
+      </div>
+    </div>
+  )
+}
+
+// ---------- Cadastro rápido de produto ----------
+function ProductModal({ initial, categories, busy, onSave, onDelete, onClose }) {
+  const [f, setF] = useState(initial)
+  const set = (patch) => setF((x) => ({ ...x, ...patch }))
+  const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  return (
+    <Modal title={f.id ? 'Editar produto' : 'Novo produto'} onClose={onClose}>
+      <div className="space-y-3">
+        <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome *</label>
+          <input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} className={inputCls} placeholder="Ex: Café Especial" /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Preço (R$)</label>
+            <input type="number" value={f.price} onChange={(e) => set({ price: e.target.value })} className={inputCls} placeholder="0,00" /></div>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Custo (R$)</label>
+            <input type="number" value={f.cost} onChange={(e) => set({ cost: e.target.value })} className={inputCls} placeholder="0,00" /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Estoque</label>
+            <input type="number" value={f.stock} onChange={(e) => set({ stock: e.target.value })} className={inputCls} placeholder="deixe vazio p/ ilimitado" /></div>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">SKU / código</label>
+            <input value={f.sku} onChange={(e) => set({ sku: e.target.value })} className={inputCls} placeholder="opcional" /></div>
+        </div>
+        <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Categoria</label>
+          <GlassSelect value={f.category_id || ''} onChange={(v) => set({ category_id: v })} options={[{ value: '', label: 'Sem categoria' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]} /></div>
+        <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Foto (URL)</label>
+          <input value={f.image} onChange={(e) => set({ image: e.target.value })} className={inputCls} placeholder="https://…" /></div>
+        {f.image && <img src={f.image} alt="" className="w-full h-32 object-cover rounded-xl" onError={(e) => { e.target.style.display = 'none' }} />}
+      </div>
+      <div className="flex items-center gap-3 mt-6">
+        <button onClick={() => onSave(f)} disabled={busy} className="flex-1 btn-gradient rounded-xl py-2.5 text-sm font-medium disabled:opacity-50">{f.id ? 'Salvar' : 'Cadastrar'}</button>
+        {onDelete && <button onClick={onDelete} disabled={busy} className="px-4 py-2.5 rounded-xl text-sm text-admin-rose border border-admin-rose/30 hover:bg-admin-rose/10 transition-colors">Excluir</button>}
+        <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+      </div>
+    </Modal>
   )
 }
 
