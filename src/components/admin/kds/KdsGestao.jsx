@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, GlassSelect } from '../ui'
+import { Icon, GlassSelect, GlassMonth } from '../ui'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const UNITS = ['un', 'kg', 'g', 'L', 'ml', 'porção']
@@ -241,7 +241,7 @@ function PayrollTab({ notify }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="glass-input rounded-xl px-4 py-2 text-sm text-admin-text outline-none" />
+        <GlassMonth value={month} onChange={(v) => setMonth(String(v).slice(0, 7))} />
         <button onClick={openNew} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm"><Icon name="plus" className="w-4 h-4" />Lançar</button>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-4">
