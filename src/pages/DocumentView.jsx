@@ -120,5 +120,21 @@ function Block({ b, theme, data, glass }) {
       <p className="whitespace-pre-wrap leading-relaxed">{merge(b.text, data)}</p>
     </div>
   )
+  if (t === 'callout') return (
+    <div className="my-6" style={{ borderLeft: `3px solid ${theme.accent}`, background: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: '16px 20px' }}>
+      {b.title && <p className="text-[11px] tracking-widerx uppercase mb-1.5" style={{ color: theme.accent }}>{merge(b.title, data)}</p>}
+      <p className="opacity-85 leading-relaxed whitespace-pre-wrap">{merge(b.text, data)}</p>
+    </div>
+  )
+  if (t === 'divider') return <div className="my-8" style={{ height: 1, background: 'rgba(255,255,255,0.12)' }} />
+  if (t === 'signature_line') return (
+    <div className="flex gap-10 my-8">
+      {[b.left_label || 'Contratante', b.right_label || 'Contratada'].map((lbl, i) => (
+        <div key={i} className="flex-1 text-center">
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.4)', marginTop: 48, paddingTop: 8 }} className="text-xs opacity-60">{lbl}</div>
+        </div>
+      ))}
+    </div>
+  )
   return null
 }

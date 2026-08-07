@@ -8,6 +8,7 @@ import { ResourceTabs } from './ResourcePanel'
 import { DocumentVault } from './DocumentVault'
 import { SignaturePanel } from './SignaturePanel'
 import { DocumentBranding } from './DocumentBranding'
+import { DocStudioEditor } from './DocStudioEditor'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const STATUS = { draft: ['Rascunho', 'bg-admin-gold/10 text-admin-gold'], sent: ['Enviado', 'bg-admin-champ/10 text-admin-champ'], viewed: ['Visto', 'bg-admin-champ/10 text-admin-champ'], accepted: ['Aceito', 'bg-admin-sage/10 text-admin-sage'], signed: ['Assinado', 'bg-admin-sage/15 text-admin-sage'], rejected: ['Recusado', 'bg-admin-rose/10 text-admin-rose'] }
@@ -75,10 +76,12 @@ function ProposalsStudio({ notify }) {
   }
 
   const save = async () => {
-    await supabase.from('documents').update({ blocks, updated_at: new Date().toISOString() }).eq('id', editing.id)
+    await supabase.from('documents').update({ blocks, title: editing.title, theme: editing.theme || {}, data: editing.data || {}, slug: editing.slug, updated_at: new Date().toISOString() }).eq('id', editing.id)
     logAudit({ action: 'update', resource_type: 'documents', resource_id: editing.id, new_data: { blocks: blocks.length } }, tenantId)
     setDirty(false); notify('Proposta salva', 'success')
   }
+  // edição local de campos do documento (título/tema/cliente) — persiste no Salvar
+  const patchDoc = (patch) => { setEditing((d) => ({ ...d, ...patch })); setDirty(true) }
   const setField = async (patch) => { await supabase.from('documents').update(patch).eq('id', editing.id); setEditing((d) => ({ ...d, ...patch })); load() }
 
   const publish = async () => {
@@ -169,67 +172,19 @@ function ProposalsStudio({ notify }) {
     </div>
   )
 
-  // ---- EDITOR ----
+  // ---- EDITOR (estúdio três colunas) ----
   return (
-    <div>
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <div className="flex items-center gap-3"><button onClick={() => { setEditing(null); load() }} className="text-[11px] tracking-wider uppercase text-admin-muted/60 hover:text-admin-champ">← Propostas</button><StatusBadge s={editing.status} /></div>
-        <div className="flex items-center gap-2">
-          {editing.public_enabled && <a href={publicUrl(editing.slug)} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ">Ver ao vivo</a>}
-          {editing.stripe_invoice_id ? (
-            <a href={editing.stripe_invoice_url || '#'} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-admin-sage/15 text-admin-sage">Fatura {editing.invoice_status === 'paid' ? 'paga ✓' : 'emitida'}</a>
-          ) : mayEdit && ['accepted', 'signed'].includes(editing.status) && editing.quote_id && (
-            <button onClick={issueInvoice} disabled={invoicing} className="text-xs px-4 py-2 rounded-xl bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 disabled:opacity-50">{invoicing ? 'Emitindo…' : 'Emitir fatura'}</button>
-          )}
-          {mayEdit && <button onClick={saveToVault} disabled={vaulting} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ disabled:opacity-50">{vaulting ? 'Guardando…' : 'Guardar no cofre'}</button>}
-          {mayEdit && dirty && <button onClick={save} className="text-xs px-4 py-2 rounded-xl bg-admin-sage/15 text-admin-sage hover:bg-admin-sage/25">Salvar</button>}
-          {mayEdit && <button onClick={publish} className={`text-xs px-4 py-2 rounded-xl ${editing.public_enabled ? 'bg-admin-gold/15 text-admin-gold' : 'bg-admin-champ/15 text-admin-champ'}`}>{editing.public_enabled ? 'Despublicar' : 'Publicar link'}</button>}
-        </div>
-      </div>
-
-      {editing.public_enabled && <div className="glass-soft rounded-xl px-4 py-2.5 mb-4 flex items-center gap-2"><Icon name="link" className="w-4 h-4 text-admin-champ/70" /><code className="text-admin-text/80 text-xs break-all flex-1">{publicUrl(editing.slug)}</code><button onClick={() => { navigator.clipboard?.writeText(publicUrl(editing.slug)); notify('Link copiado', 'success') }} className="text-[10px] px-2 py-1 rounded-lg bg-admin-champ/15 text-admin-champ shrink-0">copiar</button></div>}
-
-      <div className="grid lg:grid-cols-[240px_1fr] gap-4">
-        {/* blocos */}
-        <div className="glass rounded-2xl p-4 h-fit">
-          <div className="flex items-center justify-between mb-3"><p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Blocos ({blocks.length})</p></div>
-          <div className="space-y-1.5 mb-4">
-            {blocks.map((b, i) => (
-              <div key={i} onClick={() => setSel(i)} className={`rounded-lg border p-2 cursor-pointer transition-colors ${sel === i ? 'border-admin-champ/50 bg-admin-champ/[0.06]' : 'border-white/[0.06] hover:bg-white/[0.03]'}`}>
-                <div className="flex items-center gap-1.5"><span className="text-admin-text text-xs truncate flex-1">{BLOCK_LIB.find((x) => x.type === b.type)?.label || b.type}</span>
-                  <button onClick={(e) => { e.stopPropagation(); move(i, -1) }} className="text-admin-muted/40 hover:text-admin-champ text-[10px]">▲</button>
-                  <button onClick={(e) => { e.stopPropagation(); move(i, 1) }} className="text-admin-muted/40 hover:text-admin-champ text-[10px]">▼</button>
-                  <button onClick={(e) => { e.stopPropagation(); removeBlock(i) }} className="text-admin-muted/40 hover:text-admin-rose text-[10px]">✕</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-1.5">Adicionar</p>
-          <div className="grid grid-cols-2 gap-1.5">{BLOCK_LIB.map((b) => <button key={b.type} onClick={() => addBlock(b.type)} className="text-[10px] px-2 py-1.5 rounded-lg bg-white/[0.04] text-admin-muted/70 hover:text-admin-champ hover:bg-admin-champ/10 text-left">{b.label}</button>)}</div>
-        </div>
-
-        {/* editor do bloco */}
-        <div className="glass rounded-2xl p-5">
-          {sel == null ? <p className="text-admin-muted/30 text-sm text-center py-16">Selecione um bloco para editar.<br /><span className="text-xs">Variáveis: <code className="text-admin-champ">{'{{title}}'}</code>, <code className="text-admin-champ">{'{{client}}'}</code></span></p> : (() => {
-            const b = blocks[sel]; const set = (p) => setBlock(sel, p)
-            const F = ({ k, label, area }) => area
-              ? <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">{label}</label><textarea value={b[k] || ''} onChange={(e) => set({ [k]: e.target.value })} rows={4} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" /></div>
-              : <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">{label}</label><input value={b[k] || ''} onChange={(e) => set({ [k]: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
-            return (
-              <div className="space-y-3">
-                <p className="text-[11px] uppercase tracking-wider text-admin-champ/70">{BLOCK_LIB.find((x) => x.type === b.type)?.label}</p>
-                {b.type === 'cover' && <><F k="eyebrow" label="Selo (acima do título)" /><F k="title" label="Título" /><F k="subtitle" label="Subtítulo" /><FlowImageField label="Logo" value={b.logo_url || ''} onChange={(url) => set({ logo_url: url })} folder="documents" /><FlowImageField label="Imagem de capa" value={b.image_url || ''} onChange={(url) => set({ image_url: url })} folder="documents" /></>}
-                {b.type === 'heading' && <F k="text" label="Título da seção" />}
-                {b.type === 'text' && <F k="text" label="Parágrafo" area />}
-                {b.type === 'image' && <FlowImageField label="Imagem" value={b.url || ''} onChange={(url) => set({ url })} folder="documents" />}
-                {b.type === 'quote_table' && <><F k="title" label="Título da tabela" /><p className="text-admin-muted/40 text-xs">Os itens e o total vêm do orçamento vinculado automaticamente.</p></>}
-                {b.type === 'terms' && <><F k="title" label="Título" /><F k="text" label="Texto dos termos" area /></>}
-              </div>
-            )
-          })()}
-        </div>
-      </div>
-    </div>
+    <DocStudioEditor
+      editing={editing}
+      blocks={blocks}
+      onChange={(nb) => { setBlocks(nb); setDirty(true) }}
+      data={editing.data || {}}
+      sel={sel} setSel={setSel}
+      dirty={dirty} mayEdit={mayEdit}
+      onSave={save} onPublish={publish} onVault={saveToVault} onInvoice={issueInvoice}
+      onDocField={patchDoc} onBack={() => { setEditing(null); load() }}
+      publicUrl={publicUrl} invoicing={invoicing} vaulting={vaulting} notify={notify}
+    />
   )
 }
 

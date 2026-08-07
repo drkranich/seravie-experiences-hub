@@ -78,7 +78,7 @@ import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.con
 const FULLSCREEN = ['conversations', 'helpdesk', 'pos']
 // Rotas que usam a largura total da tela (sem o limite max-w-6xl), mas mantendo
 // o respiro das margens — ideal para painéis operacionais largos como o KDS.
-const WIDE = ['kds']
+const WIDE = ['kds', 'documents']
 const ROUTE_LABELS = { catalog: 'Catálogo', messages: 'Formulários', franchise: 'Franquias' }
 
 export function AdminDashboard({ onExit }) {
