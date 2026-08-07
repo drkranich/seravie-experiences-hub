@@ -104,7 +104,7 @@ export function QuoteStudio({ notify }) {
   const openQuote = async (q) => {
     setEditing(q); setDirty(false)
     const { data } = await supabase.from('quote_items').select('*').eq('quote_id', q.id).order('sort_order')
-    setItems((data || []).map((x) => ({ ...x })))
+    setItems((data || []).map((x) => ({ ...x, ...(x.metadata && typeof x.metadata === 'object' ? { product_id: x.metadata.product_id, sku: x.metadata.sku, image: x.metadata.image, stock: x.metadata.stock, unit: x.metadata.unit } : {}) })))
   }
   const openNew = async () => {
     setCreating(true)
@@ -135,7 +135,7 @@ export function QuoteStudio({ notify }) {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex gap-1 bg-white/[0.03] p-1 rounded-xl">
-            {[['dashboard', 'Dashboard'], ['list', 'Orçamentos']].map(([k, l]) => (
+            {[['dashboard', 'Dashboard'], ['list', 'Orçamentos'], ['analytics', 'Analytics']].map(([k, l]) => (
               <button key={k} onClick={() => setView(k)} className={`px-3 py-1.5 rounded-lg text-sm ${view === k ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}>{l}</button>
             ))}
           </div>
@@ -145,6 +145,7 @@ export function QuoteStudio({ notify }) {
 
       {loading ? <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando…</p>
         : view === 'dashboard' ? <Dashboard quotes={quotes} onOpen={openQuote} onGoList={() => setView('list')} />
+        : view === 'analytics' ? <Analytics quotes={quotes} tenantId={tenantId} />
         : <QuoteList quotes={quotes} onOpen={openQuote} />}
 
       {creating && (
@@ -241,6 +242,139 @@ function KPI({ label, v, icon, accent, hint }) {
       <div className="flex items-start justify-between">
         <div><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-2">{label}</p><p className={`text-2xl font-medium ${tone} tabular-nums leading-none`}>{v}</p>{hint && <p className="text-admin-muted/40 text-[11px] mt-1.5">{hint}</p>}</div>
         <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center shrink-0`}><Icon name={icon} className={`w-4 h-4 ${tone}`} /></div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------- ANALYTICS COMERCIAL ----------------
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+function Analytics({ quotes, tenantId }) {
+  const [topItems, setTopItems] = useState(null)
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from('quote_items').select('name, qty, unit_price, quote:quotes(status)').limit(4000)
+      const agg = {}
+      ;(data || []).forEach((it) => {
+        const k = (it.name || '').trim(); if (!k) return
+        const won = it.quote?.status === 'accepted'
+        const a = agg[k] || (agg[k] = { name: k, count: 0, qty: 0, revenue: 0, wonRevenue: 0 })
+        a.count += 1; a.qty += Number(it.qty) || 0
+        const v = (Number(it.qty) || 0) * (Number(it.unit_price) || 0)
+        a.revenue += v; if (won) a.wonRevenue += v
+      })
+      setTopItems(Object.values(agg).sort((x, y) => y.wonRevenue - x.wonRevenue || y.revenue - x.revenue).slice(0, 8))
+    })()
+  }, [tenantId])
+
+  const a = useMemo(() => {
+    const won = quotes.filter((q) => q.status === 'accepted')
+    const lost = quotes.filter((q) => q.status === 'rejected')
+    const funnel = ['draft', 'sent', 'viewed', 'negotiating', 'accepted'].map((st) => ({
+      st, label: STATUS[st][0],
+      count: quotes.filter((q) => q.status === st).length + (st !== 'accepted' ? 0 : 0),
+    }))
+    // funil acumulado: quantos alcançaram ao menos cada etapa
+    const order = ['draft', 'sent', 'viewed', 'negotiating', 'accepted']
+    const reached = order.map((st, i) => {
+      const idx = (q) => order.indexOf(q.status === 'rejected' ? 'negotiating' : q.status)
+      const n = quotes.filter((q) => idx(q) >= i || q.status === 'accepted').length
+      return { st, label: STATUS[st][0], n }
+    })
+    // receita mensal (últimos 6 meses) por aprovados
+    const now = new Date(); const months = []
+    for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ y: d.getFullYear(), m: d.getMonth(), label: MESES[d.getMonth()], won: 0, sent: 0 }) }
+    quotes.forEach((q) => {
+      const d = new Date(q.updated_at || q.created_at); const bucket = months.find((x) => x.y === d.getFullYear() && x.m === d.getMonth())
+      if (!bucket) return
+      if (q.status === 'accepted') bucket.won += Number(q.total || 0)
+      bucket.sent += Number(q.total || 0)
+    })
+    const maxMonth = Math.max(1, ...months.map((x) => x.sent))
+    const wonRev = won.reduce((s, q) => s + Number(q.total || 0), 0)
+    const closed = won.length + lost.length
+    const conv = closed ? won.length / closed * 100 : 0
+    const avgMargin = won.length ? won.reduce((s, q) => s + Number(q.metadata?.margin || q.margin || 0), 0) / won.length : 0
+    const avgCycle = (() => {
+      const spans = won.filter((q) => q.created_at && q.updated_at).map((q) => (new Date(q.updated_at) - new Date(q.created_at)) / 86400000)
+      return spans.length ? spans.reduce((s, x) => s + x, 0) / spans.length : 0
+    })()
+    return { won, lost, reached, months, maxMonth, wonRev, conv, avgMargin, avgCycle, maxFunnel: Math.max(1, reached[0]?.n || 1) }
+  }, [quotes])
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KPI label="Taxa de conversão" v={pct(a.conv)} icon="spark" accent="sage" hint={`${a.won.length} ganhos / ${a.lost.length} perdidos`} />
+        <KPI label="Receita ganha" v={brl0(a.wonRev)} icon="chart" accent="gold" />
+        <KPI label="Margem média (ganhos)" v={pct(a.avgMargin)} icon="tag" accent="champ" />
+        <KPI label="Ciclo médio de fechamento" v={`${a.avgCycle.toFixed(0)} d`} icon="clock" accent="copper" />
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        {/* Receita mensal */}
+        <div className="glass rounded-2xl p-5">
+          <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-4">Receita — últimos 6 meses</p>
+          <div className="flex items-end gap-3 h-44">
+            {a.months.map((mo, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 h-full">
+                <div className="w-full flex flex-col justify-end h-full relative">
+                  <div className="w-full rounded-t-md bg-white/[0.05]" style={{ height: `${mo.sent / a.maxMonth * 100}%` }} title={`Emitido: ${brl0(mo.sent)}`} />
+                  <div className="w-full rounded-t-md bg-admin-gold/70 absolute bottom-0" style={{ height: `${mo.won / a.maxMonth * 100}%` }} title={`Ganho: ${brl0(mo.won)}`} />
+                </div>
+                <span className="text-[10px] text-admin-muted/40">{mo.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-4 mt-3 text-[10px] text-admin-muted/40">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-admin-gold/70" />Ganho</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-white/[0.15]" />Emitido</span>
+          </div>
+        </div>
+
+        {/* Funil */}
+        <div className="glass rounded-2xl p-5">
+          <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-4">Funil comercial</p>
+          <div className="space-y-2">
+            {a.reached.map((f, i) => {
+              const w = f.n / a.maxFunnel * 100
+              const prev = a.reached[i - 1]?.n
+              const dropTxt = prev && prev > 0 ? pct(f.n / prev * 100) : '100%'
+              return (
+                <div key={f.st}>
+                  <div className="flex items-center justify-between text-xs mb-1"><span className="text-admin-muted/70">{f.label}</span><span className="text-admin-muted/40 tabular-nums">{f.n} · {dropTxt}</span></div>
+                  <div className="h-6 rounded-lg bg-white/[0.03] overflow-hidden"><div className="h-full rounded-lg bg-gradient-to-r from-admin-champ/50 to-admin-champ/20" style={{ width: `${Math.max(w, 2)}%` }} /></div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Top itens */}
+      <div className="glass rounded-2xl p-5">
+        <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-4">Itens que mais geram receita</p>
+        {topItems === null ? <p className="text-admin-muted/30 text-sm py-6 text-center">Carregando…</p>
+          : topItems.length === 0 ? <p className="text-admin-muted/40 text-sm py-6 text-center">Ainda sem itens em orçamentos.</p>
+          : (
+            <div className="space-y-1.5">
+              {topItems.map((it, i) => {
+                const max = topItems[0].wonRevenue || topItems[0].revenue || 1
+                const v = it.wonRevenue || it.revenue
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-admin-muted/30 text-xs w-4 tabular-nums">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-admin-text truncate mr-2">{it.name}</span><span className="text-admin-gold shrink-0">{brl0(v)}</span></div>
+                      <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden"><div className="h-full rounded-full bg-admin-gold/60" style={{ width: `${v / max * 100}%` }} /></div>
+                    </div>
+                    <span className="text-admin-muted/30 text-[10px] w-16 text-right">{it.count}× · {it.qty} un</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        <p className="text-admin-muted/40 text-[11px] mt-4">Barras por receita de orçamentos <span className="text-admin-sage">aprovados</span>; quando não há aprovados, considera o total emitido.</p>
       </div>
     </div>
   )
@@ -349,6 +483,12 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
   const setItem = (i, patch) => { setItems((xs) => xs.map((r, j) => j === i ? { ...r, ...patch } : r)); setDirty(true) }
   const addItem = (kind) => { setItems((xs) => [...xs, { ...emptyItem(), kind: kind || 'product' }]); setDirty(true) }
   const removeItem = (i) => { setItems((xs) => xs.filter((_, j) => j !== i)); setDirty(true) }
+  const [catalogOpen, setCatalogOpen] = useState(false)
+  const addFromCatalog = (p) => {
+    setItems((xs) => [...xs, { ...emptyItem(), kind: 'product', name: p.name, unit_price: Number(p.price) || 0, unit_cost: Number(p.cost) || 0,
+      product_id: p.id, sku: p.sku || null, image: (p.images && p.images[0]) || null, stock: p.stock, unit: p.unit || null }])
+    setDirty(true); notify?.(`"${p.name}" adicionado do catálogo`, 'success')
+  }
 
   // IA: adicionar item sugerido e ajustar preços à margem-alvo
   const addSuggested = (c) => { setItems((xs) => [...xs, { ...emptyItem(), name: c.name, unit_price: Number(c.suggested_price) || 0 }]); setDirty(true); notify?.(`"${c.name}" adicionado`, 'success') }
@@ -366,6 +506,7 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
       tenant_id: tenantId, quote_id: editing.id, name: r.name, kind: r.kind, description: r.description || null, qty: Number(r.qty) || 0,
       unit_cost: Number(r.unit_cost) || 0, unit_price: Number(r.unit_price) || 0, discount: Number(r.discount) || 0,
       discount_type: r.discount_type, tax_rate: Number(r.tax_rate) || 0, sort_order: k,
+      metadata: r.product_id ? { product_id: r.product_id, sku: r.sku || null, image: r.image || null, stock: r.stock, unit: r.unit || null } : null,
     }))
     if (rows.length) await supabase.from('quote_items').insert(rows)
     // garante que o cenário ativo (itens/engine atuais) esteja gravado no metadata
@@ -450,7 +591,12 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
           <div className="glass rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Itens ({items.length})</p>
-              {mayEdit && <AddItemMenu onAdd={(k) => addItem(k)} />}
+              {mayEdit && (
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => setCatalogOpen(true)} className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-admin-muted/80 hover:text-admin-champ hover:bg-admin-champ/10 flex items-center gap-1"><Icon name="cart" className="w-3 h-3" />Do catálogo</button>
+                  <AddItemMenu onAdd={(k) => addItem(k)} />
+                </div>
+              )}
             </div>
             {items.length === 0 ? <p className="text-admin-muted/30 text-sm text-center py-8">Adicione itens ao orçamento.</p> : (
               <div className="space-y-3">
@@ -461,6 +607,13 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
                   const lineMargin = r.unit_price > 0 ? (r.unit_price - r.unit_cost) / r.unit_price * 100 : 0
                   return (
                     <div key={i} className="glass-soft rounded-xl p-3">
+                      {r.product_id && (
+                        <div className="flex items-center gap-2 mb-2">
+                          {r.image ? <img src={r.image} alt="" className="w-8 h-8 rounded-lg object-cover" /> : <span className="w-8 h-8 rounded-lg bg-admin-champ/10 flex items-center justify-center text-admin-champ"><Icon name="cart" className="w-4 h-4" /></span>}
+                          <span className="text-[10px] text-admin-muted/50">do catálogo{r.sku ? ` · ${r.sku}` : ''}</span>
+                          {typeof r.stock === 'number' && <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${r.stock <= 0 ? 'bg-admin-rose/15 text-admin-rose' : r.qty > r.stock ? 'bg-admin-gold/15 text-admin-gold' : 'bg-admin-sage/15 text-admin-sage'}`}>{r.stock <= 0 ? 'sem estoque' : r.qty > r.stock ? `estoque ${r.stock} (insuf.)` : `estoque ${r.stock}`}</span>}
+                        </div>
+                      )}
                       <div className="flex gap-2 mb-2">
                         <input value={r.name} onChange={(e) => setItem(i, { name: e.target.value })} placeholder="Descrição do item" className="flex-1 glass-input rounded-lg px-3 py-2 text-sm text-admin-text outline-none" />
                         <div className="w-32 shrink-0"><GlassSelect value={r.kind} onChange={(v) => setItem(i, { kind: v })} options={Object.entries(KIND).map(([value, label]) => ({ value, label }))} /></div>
@@ -545,6 +698,68 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
       </div>
 
       {compareOpen && <CompareModal scenarios={allScenariosForCompare} onClose={() => setCompareOpen(false)} onPick={(key) => { setCompareOpen(false); switchScen(key) }} />}
+      {catalogOpen && <CatalogPicker tenantId={tenantId} onClose={() => setCatalogOpen(false)} onPick={addFromCatalog} />}
+    </div>
+  )
+}
+
+// ---------------- PRODUTOS INTELIGENTES (catálogo Commerce Hub) ----------------
+function CatalogPicker({ tenantId, onClose, onPick }) {
+  const [prods, setProds] = useState(null)
+  const [cats, setCats] = useState([])
+  const [cat, setCat] = useState('all')
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    (async () => {
+      const [{ data: p }, { data: c }] = await Promise.all([
+        supabase.from('products').select('id, name, sku, price, cost, stock, unit, images, category_id, status').eq('status', 'active').order('name').limit(500),
+        supabase.from('product_categories').select('id, name').order('name'),
+      ])
+      setProds(p || []); setCats(c || [])
+    })()
+  }, [tenantId])
+  const list = useMemo(() => (prods || []).filter((p) => {
+    if (cat !== 'all' && p.category_id !== cat) return false
+    if (q && !(`${p.name} ${p.sku || ''}`.toLowerCase().includes(q.toLowerCase()))) return false
+    return true
+  }), [prods, cat, q])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div><h2 className="font-serif text-2xl text-admin-text">Catálogo</h2><p className="text-admin-muted/40 text-xs">Puxe produtos reais do Commerce Hub — preço, custo e estoque já preenchidos.</p></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        <div className="flex items-center gap-2 mb-3">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto ou SKU…" className="flex-1 glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none" />
+          <div className="w-52"><GlassSelect value={cat} onChange={setCat} options={[{ value: 'all', label: 'Todas as categorias' }, ...cats.map((c) => ({ value: c.id, label: c.name }))]} /></div>
+        </div>
+        <div className="overflow-y-auto -mx-1 px-1">
+          {prods === null ? <p className="text-admin-muted/30 text-sm py-10 text-center">Carregando catálogo…</p>
+            : list.length === 0 ? <p className="text-admin-muted/40 text-sm py-10 text-center">{(prods || []).length === 0 ? 'Nenhum produto no catálogo. Cadastre em Seravie Commerce Hub.' : 'Nenhum produto encontrado.'}</p>
+            : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {list.map((p) => {
+                  const m = p.price > 0 ? (p.price - (p.cost || 0)) / p.price * 100 : 0
+                  return (
+                    <button key={p.id} onClick={() => { onPick(p); onClose() }} className="glass-soft rounded-xl p-3 text-left hover:bg-white/[0.04] flex items-center gap-3">
+                      {p.images && p.images[0] ? <img src={p.images[0]} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" /> : <span className="w-11 h-11 rounded-lg bg-admin-champ/10 flex items-center justify-center text-admin-champ shrink-0"><Icon name="cart" className="w-5 h-5" /></span>}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-admin-text text-sm truncate">{p.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-admin-gold text-sm">{brl0(p.price)}</span>
+                          {p.cost > 0 && <span className="text-admin-muted/40 text-[10px]">margem {pct(m)}</span>}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${p.stock <= 0 ? 'bg-admin-rose/15 text-admin-rose' : 'bg-admin-sage/15 text-admin-sage'}`}>{p.stock <= 0 ? 'sem estoque' : `${p.stock} em estoque`}</span>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+        </div>
+      </div>
     </div>
   )
 }
