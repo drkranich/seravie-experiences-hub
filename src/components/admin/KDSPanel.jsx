@@ -12,6 +12,7 @@ import { KdsHistory } from './kds/KdsHistory'
 import { KdsTeam } from './kds/KdsTeam'
 import { KdsMenu } from './kds/KdsMenu'
 import { KdsQueues } from './kds/KdsQueues'
+import { KdsPDV } from './kds/KdsPDV'
 
 // Painel de configuração de sons por evento (popover).
 function SoundPanel({ sound, setSound, onClose }) {
@@ -90,6 +91,7 @@ export function KDSPanel({ notify }) {
 
   const tabs = [
     { key: 'dashboard', label: 'Dashboard', icon: 'chart' },
+    { key: 'pdv', label: 'PDV', icon: 'cart' },
     { key: 'production', label: 'Produção', icon: 'flame' },
     { key: 'queues', label: 'Filas', icon: 'layers' },
     { key: 'map', label: 'Mapa da Cozinha', icon: 'map' },
@@ -135,6 +137,7 @@ export function KDSPanel({ notify }) {
       </div>
 
       {tab === 'dashboard' && <KdsDashboard kind={kind} />}
+      {tab === 'pdv' && <KdsPDV kind={kind} notify={notify} />}
       {tab === 'production' && (
         <div>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
