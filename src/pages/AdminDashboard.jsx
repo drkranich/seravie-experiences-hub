@@ -49,6 +49,7 @@ import { RolesPanel } from '../components/admin/RolesPanel'
 import { AuditLogPanel } from '../components/admin/AuditLogPanel'
 import { PlansAdmin } from '../components/admin/PlansAdmin'
 import { ServicesAdmin } from '../components/admin/ServicesAdmin'
+import { FranchiseStandards } from '../components/admin/FranchiseStandards'
 import { UsersPanel } from '../components/admin/UsersPanel'
 import { CoursesPanel, CouponsPanel, SlaPanel, GoalsPanel, EquipmentPanel } from '../components/admin/modulePanels'
 import { PayablesPanel, DrePanel } from '../components/admin/FinanceAdvanced'
@@ -160,6 +161,8 @@ export function AdminDashboard({ onExit }) {
     audit: <AuditLogPanel notify={notify} />,
     plans: <PlansAdmin notify={notify} />,
     service_pricing: <ServicesAdmin notify={notify} />,
+    standards: <FranchiseStandards mode="admin" notify={notify} />,
+    meu_espaco: <FranchiseStandards mode="tenant" notify={notify} />,
     subscription: <SubscriptionPanel notify={notify} />,
     receivables: <ReceivablesPanel notify={notify} />,
     users: <UsersPanel notify={notify} />,

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Icon } from './ui'
 import { ResourceTabs } from './ResourcePanel'
+import { FranchiseStandards } from './FranchiseStandards'
 
 // Gestão dos serviços à parte: Franquias e Assessoria.
 // Super admin edita preços (setup, mensal, anual, royalty), visibilidade e status.
@@ -126,6 +127,7 @@ export function ServicesAdmin({ notify }) {
       tabs={[
         { key: 'franchise', label: 'Franquias', render: () => <OfferingsTable kind="franchise" notify={notify} /> },
         { key: 'advisory', label: 'Assessoria', render: () => <OfferingsTable kind="advisory" notify={notify} /> },
+        { key: 'standards', label: 'Padrões Físicos', render: () => <FranchiseStandards mode="admin" notify={notify} /> },
       ]}
     />
   )

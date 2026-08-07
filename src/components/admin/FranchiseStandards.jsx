@@ -1,0 +1,167 @@
+import { useState, useEffect, useMemo } from 'react'
+import { supabase } from '../../lib/supabase'
+import { Icon } from './ui'
+
+// Padrões físicos da franquia: por nível (metragem/layout/identidade/equipamentos/kit)
+// + kit da vertical principal escolhida. Usado pelo admin e como consulta do franqueado.
+// mode="admin"  → mostra todos os níveis + edição de metragem.
+// mode="tenant" → franqueado escolhe nível + vertical e vê o playbook da sua loja.
+
+function Chips({ items, icon = 'check', tone = 'sage' }) {
+  const list = Array.isArray(items) ? items : []
+  if (list.length === 0) return null
+  const color = { sage: 'text-admin-sage', champ: 'text-admin-champ', gold: 'text-admin-gold', copper: 'text-admin-copper' }[tone]
+  return (
+    <ul className="space-y-1">
+      {list.map((it, i) => (
+        <li key={i} className="flex items-start gap-1.5 text-admin-muted/75 text-xs"><Icon name={icon} className={`w-3 h-3 ${color} mt-0.5 shrink-0`} />{it}</li>
+      ))}
+    </ul>
+  )
+}
+
+function Section({ title, children }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-1.5">{title}</p>
+      {children}
+    </div>
+  )
+}
+
+function LevelCard({ std, kit, editable, onArea, onSave, saving }) {
+  return (
+    <div className="glass rounded-2xl p-5">
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <p className="text-admin-text font-medium text-lg">{std.level_name}</p>
+          <p className="text-admin-muted/50 text-xs">{std.format_name}</p>
+        </div>
+        <div className="text-right">
+          {editable ? (
+            <div className="flex items-center gap-1 justify-end">
+              <input type="number" value={std.area_min_m2 ?? ''} onChange={(e) => onArea('area_min_m2', e.target.value)} className="w-14 glass-input rounded-lg px-1.5 py-1 text-sm text-admin-text outline-none text-right" />
+              <span className="text-admin-muted/40 text-xs">–</span>
+              <input type="number" value={std.area_max_m2 ?? ''} onChange={(e) => onArea('area_max_m2', e.target.value)} className="w-14 glass-input rounded-lg px-1.5 py-1 text-sm text-admin-text outline-none text-right" />
+              <span className="text-admin-muted/40 text-xs">m²</span>
+            </div>
+          ) : (
+            <p className="text-admin-champ text-xl font-medium">{std.area_min_m2}–{std.area_max_m2} <span className="text-admin-muted/40 text-xs">m²</span></p>
+          )}
+          <p className="text-admin-muted/40 text-[10px] mt-0.5">{std.max_verticals} vertical principal</p>
+        </div>
+      </div>
+
+      <div className="space-y-3 mt-4">
+        <Section title="Layout do espaço"><Chips items={std.layout} icon="grid" tone="champ" /></Section>
+        <Section title="Identidade & mobiliário"><Chips items={std.identity} icon="star" tone="gold" /></Section>
+        <Section title="Equipamentos & tecnologia"><Chips items={std.equipment} icon="check" tone="sage" /></Section>
+        <Section title="Kit inicial (base)"><Chips items={std.starter_kit} icon="gift" tone="copper" /></Section>
+        {kit && (
+          <div className="mt-3 pt-3 border-t border-white/[0.06]">
+            <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-1.5">Vertical: {kit.vertical_name}</p>
+            {kit.layout_focus && <p className="text-admin-muted/60 text-xs italic mb-2">{kit.layout_focus}</p>}
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Section title="Produtos assinatura"><Chips items={kit.signature_products} icon="spark" tone="gold" /></Section>
+              <Section title="Estoque inicial"><Chips items={kit.starter_stock} icon="box" tone="sage" /></Section>
+            </div>
+          </div>
+        )}
+        {std.notes && <p className="text-admin-muted/50 text-[11px] italic mt-2">{std.notes}</p>}
+      </div>
+
+      {editable && (
+        <button onClick={onSave} disabled={saving} className="mt-4 w-full py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ disabled:opacity-40">
+          {saving ? 'Salvando…' : 'Salvar metragem'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+export function FranchiseStandards({ mode = 'admin', notify }) {
+  const [stds, setStds] = useState([])
+  const [kits, setKits] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(null)
+  // seleção do franqueado
+  const [level, setLevel] = useState('')
+  const [vertical, setVertical] = useState('')
+
+  useEffect(() => {
+    (async () => {
+      const [{ data: s }, { data: k }] = await Promise.all([
+        supabase.from('franchise_space_standards').select('*').eq('is_active', true).order('sort_order'),
+        supabase.from('franchise_vertical_kits').select('*').eq('is_active', true).order('vertical_name'),
+      ])
+      setStds(s || []); setKits(k || [])
+      if (s && s.length) setLevel(s[0].offering_slug)
+      if (k && k.length) setVertical(k[0].vertical_slug)
+      setLoading(false)
+    })()
+  }, [])
+
+  const kitBySlug = useMemo(() => Object.fromEntries(kits.map((k) => [k.vertical_slug, k])), [kits])
+  const setArea = (id, field, val) => setStds((xs) => xs.map((s) => s.id === id ? { ...s, [field]: val } : s))
+  const saveArea = async (s) => {
+    setSaving(s.id)
+    const { error } = await supabase.from('franchise_space_standards').update({ area_min_m2: Number(s.area_min_m2) || 0, area_max_m2: Number(s.area_max_m2) || 0 }).eq('id', s.id)
+    setSaving(null)
+    if (error) return notify?.('Erro ao salvar', 'error')
+    notify?.(`${s.level_name}: metragem atualizada`, 'success')
+  }
+
+  if (loading) return <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando padrões…</p>
+
+  if (mode === 'tenant') {
+    const std = stds.find((s) => s.offering_slug === level)
+    const kit = kitBySlug[vertical]
+    const selCls = 'glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+    return (
+      <div>
+        <div className="glass-soft rounded-xl px-4 py-3 mb-5 text-xs text-admin-muted/60 leading-relaxed">
+          Consulte o padrão físico da sua franquia Seravie. Escolha o seu nível e a vertical principal da sua loja para ver a metragem, o layout, o mobiliário, os equipamentos e o kit de produtos originais que a Seravie entrega na implantação. A metragem é respeitada como via de regra.
+        </div>
+        <div className="flex flex-wrap gap-3 mb-5">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Nível da franquia</label>
+            <select value={level} onChange={(e) => setLevel(e.target.value)} className={selCls}>
+              {stds.map((s) => <option key={s.offering_slug} value={s.offering_slug}>{s.level_name} · {s.format_name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Vertical principal</label>
+            <select value={vertical} onChange={(e) => setVertical(e.target.value)} className={selCls}>
+              {kits.map((k) => <option key={k.vertical_slug} value={k.vertical_slug}>{k.vertical_name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="max-w-xl">
+          {std ? <LevelCard std={std} kit={kit} editable={false} /> : <p className="text-admin-muted/40 text-sm">Padrão não encontrado.</p>}
+        </div>
+      </div>
+    )
+  }
+
+  // admin: todos os níveis lado a lado + seletor de vertical para pré-visualizar o kit
+  const kit = kitBySlug[vertical]
+  const selCls = 'glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+  return (
+    <div>
+      <div className="glass-soft rounded-xl px-4 py-3 mb-5 text-xs text-admin-muted/60 leading-relaxed">
+        Padrões físicos obrigatórios por nível de franquia. Edite a metragem direto nos cards (demais itens no banco). Escolha uma vertical para pré-visualizar o kit de produtos originais aplicado a cada nível.
+      </div>
+      <div className="mb-5">
+        <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Pré-visualizar vertical</label>
+        <select value={vertical} onChange={(e) => setVertical(e.target.value)} className={selCls}>
+          {kits.map((k) => <option key={k.vertical_slug} value={k.vertical_slug}>{k.vertical_name}</option>)}
+        </select>
+      </div>
+      <div className="grid lg:grid-cols-3 gap-4">
+        {stds.map((s) => (
+          <LevelCard key={s.id} std={s} kit={kit} editable onArea={(f, v) => setArea(s.id, f, v)} onSave={() => saveArea(s)} saving={saving === s.id} />
+        ))}
+      </div>
+    </div>
+  )
+}

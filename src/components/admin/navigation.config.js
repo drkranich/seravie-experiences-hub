@@ -133,6 +133,7 @@ export const CORE_SECTIONS = [
       { key: 'verticals', label: 'Frentes / Núcleos', icon: 'leaf', route: 'verticals' },
       { key: 'users', label: 'Usuários & Acessos', icon: 'user', route: 'users' },
       { key: 'subscription', label: 'Minha Assinatura', icon: 'star', route: 'subscription' },
+      { key: 'meu_espaco', label: 'Meu Espaço (Franquia)', icon: 'layout', route: 'meu_espaco' },
       { key: 'plans', label: 'Planos da Plataforma', icon: 'gear', route: 'plans' },
       { key: 'service_pricing', label: 'Franquias & Assessoria', icon: 'leaf', route: 'service_pricing' },
       { key: 'superadmin', label: 'Super Admin', icon: 'gear', route: 'superadmin' },
