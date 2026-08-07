@@ -112,7 +112,7 @@ export function DocumentVault({ notify }) {
       </div>
 
       {/* filtros */}
-      <div className="glass rounded-2xl p-4 mb-4 grid md:grid-cols-5 gap-3">
+      <div className="glass rounded-2xl p-4 mb-4 grid md:grid-cols-6 gap-3">
         <div className="md:col-span-2">
           <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Buscar</label>
           <div className="relative">
@@ -128,11 +128,15 @@ export function DocumentVault({ notify }) {
           <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Assunto</label>
           <GlassSelect value={fSubj} onChange={setFSubj} options={[{ value: '', label: 'Todos' }, ...subjectsOfFilter.map((s) => ({ value: s.id, label: s.name }))]} />
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">De</label><GlassDate value={fFrom} onChange={setFFrom} /></div>
-          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Até</label><GlassDate value={fTo} onChange={setFTo} /></div>
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">De</label>
+          <GlassDate value={fFrom} onChange={setFFrom} />
         </div>
-        {hasFilters && <div className="md:col-span-5"><button onClick={clearFilters} className="text-admin-muted/60 hover:text-admin-text text-xs flex items-center gap-1"><Icon name="x" className="w-3 h-3" />Limpar filtros</button></div>}
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Até</label>
+          <GlassDate value={fTo} onChange={setFTo} />
+        </div>
+        {hasFilters && <div className="md:col-span-6"><button onClick={clearFilters} className="text-admin-muted/60 hover:text-admin-text text-xs flex items-center gap-1"><Icon name="x" className="w-3 h-3" />Limpar filtros</button></div>}
       </div>
 
       {/* lista */}

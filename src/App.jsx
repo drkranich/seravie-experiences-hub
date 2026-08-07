@@ -11,6 +11,7 @@ import { ClientExperience } from './pages/ClientExperience'
 import { FlowExperience } from './pages/FlowExperience'
 import { DocumentView } from './pages/DocumentView'
 import { SignDocument } from './pages/SignDocument'
+import { VerifyDocument } from './pages/VerifyDocument'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { RecoverPassword } from './pages/RecoverPassword'
 
@@ -63,6 +64,9 @@ export default function App() {
 
   // Assinatura pública de documento (/sign/<token>)
   if (pub('sign')) return <SignDocument />
+
+  // Validação pública de documento assinado (/validar/<code>)
+  if (pub('validar')) return <VerifyDocument />
 
   // Aceite de convite de equipe (precedência: funciona logado ou não)
   if (pub('convite')) return <AcceptInvite />

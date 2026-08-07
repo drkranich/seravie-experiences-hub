@@ -114,6 +114,7 @@ function CreateModal({ tenantId, notify, onClose, onDone }) {
   const [proposalId, setProposalId] = useState('')
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
+  const [notifyEmail, setNotifyEmail] = useState('')
   const [signers, setSigners] = useState([{ name: '', email: '' }])
   const [busy, setBusy] = useState(false)
   const inRef = useRef(null)
@@ -140,7 +141,7 @@ function CreateModal({ tenantId, notify, onClose, onDone }) {
     setBusy(true)
 
     // monta o payload conforme a origem
-    const payload = { title: title.trim(), message: message.trim() || null, source }
+    const payload = { title: title.trim(), message: message.trim() || null, source, notify_email: notifyEmail.trim() || null, app_origin: window.location.origin }
     if (source === 'upload') {
       if (!file) { setBusy(false); return notify?.('Selecione um arquivo', 'error') }
       const up = await uploadToVault(file, { folder: 'sign' })
@@ -219,6 +220,7 @@ function CreateModal({ tenantId, notify, onClose, onDone }) {
         <div className="space-y-3">
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Título *</label><input value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} /></div>
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Mensagem ao signatário</label><input value={message} onChange={(e) => setMessage(e.target.value)} className={inputCls} placeholder="Ex.: Por favor, revise e assine." /></div>
+          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Avisar por e-mail quando concluir (opcional)</label><input value={notifyEmail} onChange={(e) => setNotifyEmail(e.target.value)} className={inputCls} placeholder="seu@email.com" /></div>
         </div>
 
         <div className="mt-4">
@@ -307,13 +309,12 @@ function RequestDetail({ req: initial, tenantId, mayEdit, notify, onBack }) {
           <button onClick={onBack} className="text-[11px] tracking-wider uppercase text-admin-muted/60 hover:text-admin-champ">← Assinaturas</button>
           <span className={`text-[9px] px-2 py-0.5 rounded-lg ${s[1]}`}>{s[0]}</span>
         </div>
-        {mayEdit && (
-          <div className="flex items-center gap-2">
-            {req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={resendEmail} disabled={sending} className="text-xs px-3 py-2 rounded-xl bg-admin-champ/15 text-admin-champ disabled:opacity-50">{sending ? 'Enviando…' : 'Enviar por e-mail'}</button>}
-            {req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={cancel} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-rose">Cancelar</button>}
-            <button onClick={() => setConfirmDel(true)} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-rose"><Icon name="trash" className="w-3.5 h-3.5" /></button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {req.verification_code && <a href={`${window.location.origin}/validar/${req.verification_code}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-admin-sage/15 text-admin-sage flex items-center gap-1"><Icon name="check" className="w-3.5 h-3.5" />Comprovante</a>}
+          {mayEdit && req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={resendEmail} disabled={sending} className="text-xs px-3 py-2 rounded-xl bg-admin-champ/15 text-admin-champ disabled:opacity-50">{sending ? 'Enviando…' : 'Enviar por e-mail'}</button>}
+          {mayEdit && req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={cancel} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-rose">Cancelar</button>}
+          {mayEdit && <button onClick={() => setConfirmDel(true)} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-rose"><Icon name="trash" className="w-3.5 h-3.5" /></button>}
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">

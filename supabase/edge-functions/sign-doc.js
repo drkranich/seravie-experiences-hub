@@ -66,8 +66,49 @@ Deno.serve(async (req) => {
   const { data: all } = await admin.from('signature_signers').select('status').eq('request_id', reqRow.id)
   const done = (all || []).every((s) => s.status === 'signed')
   const newStatus = done ? 'completed' : 'signed'
-  await admin.from('signature_requests').update({ status: newStatus, updated_at: nowIso }).eq('id', reqRow.id)
-  if (done) await admin.from('signature_events').insert({ request_id: reqRow.id, tenant_id: reqRow.tenant_id, event: 'completed', ip })
+  await admin.from('signature_requests').update({ status: newStatus, updated_at: nowIso, completed_at: done ? nowIso : null }).eq('id', reqRow.id)
+  if (done) {
+    await admin.from('signature_events').insert({ request_id: reqRow.id, tenant_id: reqRow.tenant_id, event: 'completed', ip })
+    // Notificação de conclusão ao dono/criador (via provedor de e-mail do tenant).
+    try { await notifyCompletion(admin, reqRow) } catch (_) { /* não bloqueia a assinatura */ }
+  }
 
   return json({ ok: true, status: newStatus })
 })
+
+// ---- notificação de conclusão + envio via provedor do tenant ----
+async function notifyCompletion(admin, reqRow) {
+  const to = reqRow.notify_email
+  if (!to) return
+  const origin = reqRow.app_origin || Deno.env.get('PUBLIC_APP_URL') || ''
+  const validateUrl = `${origin}/validar/${reqRow.verification_code}`
+  const { data: signers } = await admin.from('signature_signers').select('name,email,signed_name,signed_at').eq('request_id', reqRow.id)
+  const rows = (signers || []).map((s) => `<li>${s.signed_name || s.name || s.email || 'Signatário'} — ${s.signed_at ? new Date(s.signed_at).toLocaleString('pt-BR') : ''}</li>`).join('')
+  const html = `<div style="font-family:system-ui,Arial;max-width:560px;margin:auto;padding:28px;background:#faf8f2;border-radius:16px">
+    <p style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#55634D;margin:0 0 6px">Documento concluído</p>
+    <h1 style="color:#1F3A5F;font-size:24px;margin:0 0 10px">${reqRow.title}</h1>
+    <p style="color:#444;font-size:15px">Todos os signatários assinaram. Segue a lista:</p>
+    <ul style="color:#444;font-size:14px">${rows}</ul>
+    ${origin ? `<a href="${validateUrl}" style="display:inline-block;margin:14px 0;background:#B89C61;color:#1a1a1a;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600">Ver comprovante de validação</a>` : ''}
+    <p style="color:#888;font-size:12px;margin-top:16px">Código de verificação: ${reqRow.verification_code}</p>
+  </div>`
+  await sendViaTenant(admin, reqRow.tenant_id, { to, subject: `Assinado: ${reqRow.title}`, html, text: `O documento "${reqRow.title}" foi assinado por todos. Verificação: ${reqRow.verification_code}` })
+}
+
+async function sendViaTenant(admin, tenantId, msg) {
+  const { data: ch } = await admin.from('messaging_channels').select('credentials').eq('tenant_id', tenantId).eq('channel', 'email_send').maybeSingle()
+  const c = ch?.credentials || {}
+  if (!c.from_email || (!c.api_key && !c.smtp_host)) return  // sem provedor: silencioso
+  const provider = (c.provider || (c.smtp_host ? 'smtp' : 'resend')).toLowerCase()
+  const from = `${c.from_name || 'Seravie'} <${c.from_email}>`
+  if (provider === 'resend' && c.api_key) {
+    await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: `Bearer ${c.api_key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from, to: [msg.to], subject: msg.subject, html: msg.html, text: msg.text }) })
+  } else if (provider === 'sendgrid' && c.api_key) {
+    await fetch('https://api.sendgrid.com/v3/mail/send', { method: 'POST', headers: { Authorization: `Bearer ${c.api_key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ personalizations: [{ to: [{ email: msg.to }] }], from: { email: c.from_email, name: c.from_name || 'Seravie' }, subject: msg.subject, content: [{ type: 'text/plain', value: msg.text || ' ' }, { type: 'text/html', value: msg.html }] }) })
+  } else if (c.smtp_host) {
+    const { SMTPClient } = await import('https://deno.land/x/denomailer@1.6.0/mod.ts')
+    const port = Number(c.smtp_port || 587)
+    const client = new SMTPClient({ connection: { hostname: c.smtp_host, port, tls: port === 465, auth: { username: c.smtp_user, password: c.smtp_pass } } })
+    try { await client.send({ from, to: msg.to, subject: msg.subject, content: msg.text || ' ', html: msg.html }); await client.close() } catch { try { await client.close() } catch { /* noop */ } }
+  }
+}
