@@ -6,6 +6,7 @@ import { Icon, GlassSelect, GlassDate } from './ui'
 import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MAP, defaultWidgetsForSegment, POS_PACKS, POS_PACK_MAP, isPackActive, applyPack } from '../../lib/posConfig'
 import { uploadTo } from '../../lib/storage'
 import { exportPdf, exportCsv } from '../../lib/export'
+import { printProductLabels, printThermalReceipt, LABEL_TEMPLATES, LABEL_TEMPLATE_MAP, labelCellHtml } from '../../lib/labels'
 
 const PAYMENT_METHODS = [
   { value: 'dinheiro', label: 'Dinheiro' },
@@ -69,6 +70,7 @@ export function POSPanel({ notify }) {
   const [showIA, setShowIA] = useState(false)
   const [showReturns, setShowReturns] = useState(false)
   const [showIntegrations, setShowIntegrations] = useState(false)
+  const [showLabels, setShowLabels] = useState(false)
   const [showAgenda, setShowAgenda] = useState(false)
   const [showOS, setShowOS] = useState(false)
   const [showRooms, setShowRooms] = useState(false)
@@ -722,6 +724,7 @@ export function POSPanel({ notify }) {
           <button onClick={() => setGiftModal('sell')} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Vender vale</button>
           <button onClick={() => setShowIA(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors"><Icon name="spark" className="w-3.5 h-3.5" />IA</button>
           <button onClick={() => setShowDash(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Dashboard</button>
+          <button onClick={() => setShowLabels(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Etiquetas</button>
           <button onClick={() => setShowLeads(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Leads</button>
           <button onClick={() => setShowReturns(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Devoluções</button>
           <button onClick={() => setShowReports(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Relatórios</button>
@@ -1116,6 +1119,8 @@ export function POSPanel({ notify }) {
       {showReturns && <ReturnsDeliveryModal tenantId={tenantId} notify={notify} onRefund={refundOrder} onClose={() => setShowReturns(false)} />}
 
       {showIntegrations && <IntegrationsModal tenantId={tenantId} notify={notify} onClose={() => setShowIntegrations(false)} />}
+
+      {showLabels && <LabelsModal products={products} brand={profile?.tenant_name} notify={notify} onClose={() => setShowLabels(false)} />}
 
       {showAgenda && <AgendaModal tenantId={tenantId} contacts={contacts} customer={customer} notify={notify} onClose={() => setShowAgenda(false)} />}
 
@@ -1867,6 +1872,94 @@ function IntegrationsModal({ tenantId, notify, onClose }) {
   )
 }
 
+// ---------- Etiquetas de código de barras (seletor de modelo + prévia) ----------
+function LabelsModal({ products, brand, notify, onClose }) {
+  const [step, setStep] = useState('select') // select | template
+  const [qty, setQty] = useState({}) // product_id -> quantidade
+  const [q, setQ] = useState('')
+  const [tplKey, setTplKey] = useState('bc_60x40')
+  const list = products.filter((p) => p._src !== 'craft' && (!q || `${p.name} ${p.sku || ''}`.toLowerCase().includes(q.toLowerCase())))
+  const chosen = products.filter((p) => (qty[p.id] || 0) > 0).map((p) => ({ name: p.name, price: p.price, sku: p.sku, barcode: p.barcode, qty: qty[p.id] }))
+  const totalLabels = chosen.reduce((s, c) => s + (parseInt(c.qty) || 0), 0)
+  const setQ2 = (id, v) => setQty((x) => ({ ...x, [id]: Math.max(0, parseInt(v) || 0) }))
+  const tpl = LABEL_TEMPLATE_MAP[tplKey]
+  const previewItem = chosen[0] || { name: 'Produto exemplo', price: 49.9, sku: 'SKU-EXEMPLO', barcode: '' }
+  const groups = [...new Set(LABEL_TEMPLATES.map((t) => t.group))]
+
+  const doPrint = () => {
+    if (!chosen.length) return notify('Selecione ao menos um produto', 'error')
+    printProductLabels(chosen, { templateKey: tplKey, brand: brand || '' })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        {step === 'select' ? (
+          <>
+            <div className="p-6 pb-4 border-b border-white/[0.06] flex items-start justify-between">
+              <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Impressão</p><h2 className="font-serif text-2xl text-admin-text">Etiquetas de código de barras</h2><p className="text-admin-muted/50 text-sm mt-1">Escolha os produtos e a quantidade de etiquetas de cada um.</p></div>
+              <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-3 border-b border-white/[0.06]">
+              <div className="relative"><Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar produto ou SKU…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2 text-sm text-admin-text outline-none" /></div>
+            </div>
+            <div className="overflow-y-auto p-4 space-y-1.5">
+              {list.length === 0 ? <p className="text-admin-muted/40 text-sm py-10 text-center">{products.length === 0 ? 'Cadastre produtos para gerar etiquetas.' : 'Nenhum produto encontrado.'}</p>
+                : list.map((p) => (
+                  <div key={p.id} className="glass-soft rounded-xl p-2.5 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-white/[0.04] overflow-hidden shrink-0 flex items-center justify-center">{(p.images && p.images[0]) ? <img src={p.images[0]} alt="" className="w-full h-full object-cover" /> : <Icon name="cart" className="w-4 h-4 text-admin-champ/25" />}</div>
+                    <div className="flex-1 min-w-0"><p className="text-admin-text text-sm truncate">{p.name}</p><p className="text-admin-muted/40 text-[11px]">{p.sku || p.barcode || 'sem código'} · {brl(p.price)}</p></div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={() => setQ2(p.id, (qty[p.id] || 0) - 1)} className="w-7 h-7 rounded-lg bg-white/[0.05] text-admin-text">−</button>
+                      <input value={qty[p.id] || 0} onChange={(e) => setQ2(p.id, e.target.value)} className="w-12 glass-input rounded-lg px-2 py-1 text-sm text-admin-text outline-none text-center" />
+                      <button onClick={() => setQ2(p.id, (qty[p.id] || 0) + 1)} className="w-7 h-7 rounded-lg bg-white/[0.05] text-admin-text">+</button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+            <div className="px-6 py-3 border-t border-white/[0.06] flex items-center justify-between">
+              <span className="text-admin-muted/50 text-sm">{totalLabels} etiqueta(s) selecionada(s)</span>
+              <button onClick={() => totalLabels ? setStep('template') : notify('Selecione ao menos um produto', 'error')} className="btn-gradient rounded-xl px-5 py-2 text-sm font-medium">Escolher modelo →</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="p-6 pb-4 border-b border-white/[0.06] flex items-start justify-between">
+              <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Formato de impressão</p><h2 className="font-serif text-2xl text-admin-text">Escolha o modelo da etiqueta</h2><p className="text-admin-muted/50 text-sm mt-1">{totalLabels} etiqueta(s) selecionada(s). O modelo define tamanho, densidade e leitura do código.</p></div>
+              <button onClick={onClose} className="text-admin-muted hover:text-admin-text">Fechar</button>
+            </div>
+            <div className="grid lg:grid-cols-[1fr_260px] gap-5 overflow-hidden p-6">
+              <div className="overflow-y-auto grid sm:grid-cols-2 gap-2.5 content-start">
+                {LABEL_TEMPLATES.map((t) => {
+                  const on = tplKey === t.key
+                  return (
+                    <button key={t.key} onClick={() => setTplKey(t.key)} className={`text-left rounded-2xl p-3.5 border transition-all ${on ? 'border-admin-champ/50 bg-admin-champ/[0.06]' : 'glass-soft border-transparent hover:border-white/10'}`}>
+                      <p className={`text-[9px] uppercase tracking-wider mb-1 ${t.recommended ? 'text-admin-gold' : 'text-admin-muted/40'}`}>{t.recommended ? 'Recomendado' : t.group}</p>
+                      <p className="text-admin-text text-sm font-medium leading-tight">{t.name}</p>
+                      <p className="text-admin-muted/50 text-[11px] leading-snug mt-1 mb-2 min-h-[3em]">{t.desc}</p>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.05] text-admin-muted/60">{t.dim}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="glass rounded-2xl p-4 flex flex-col">
+                <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-3">Prévia</p>
+                <div className="flex-1 flex items-center justify-center bg-white rounded-xl p-3 overflow-hidden" dangerouslySetInnerHTML={{ __html: `<style>.lbl{font-family:Arial;text-align:center;border:1px solid #ddd;border-radius:4px;padding:4px 6px;transform:scale(${tpl && tpl.w > 70 ? 0.8 : 1});} .brand{font-size:8px;letter-spacing:1px;text-transform:uppercase;color:#888} .lname{font-size:11px;font-weight:600;margin:1px 0} .lprice{font-size:15px;font-weight:700} .bc svg{max-width:100%;height:auto} .nocode{font-size:10px;color:#666;font-family:monospace}</style>` + labelCellHtml(tpl, previewItem, brand || '') }} />
+                <p className="text-admin-muted/40 text-[11px] mt-3">Use modelos compactos para SKU e produtos pequenos. Use modelos completos para envio e rastreio.</p>
+              </div>
+            </div>
+            <div className="px-6 py-3 border-t border-white/[0.06] flex items-center justify-between">
+              <button onClick={() => setStep('select')} className="text-admin-muted/60 text-sm hover:text-admin-text">← Voltar</button>
+              <button onClick={doPrint} className="btn-gradient rounded-xl px-5 py-2 text-sm font-medium">Imprimir neste modelo</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ---------- Marketplace de Módulos (Loja de Extensões) ----------
 function ModuleMarketplace({ profile, onToggle, onTogglePack, onReSegment, onOpenIntegrations, onClose }) {
   const [tab, setTab] = useState('packs') // packs | widgets
@@ -2425,9 +2518,11 @@ function ReceiptModal({ receipt, tenantName, onPrint, onClose }) {
           {receipt.fiscal && <p className="text-[10px] mt-1 text-center">{receipt.fiscal.status === 'authorized' ? 'NFC-e autorizada' : 'NFC-e pendente (configurar emissão)'}</p>}
           <p className="text-center text-[10px] mt-3">Obrigado pela preferência!</p>
         </div>
-        <div className="flex gap-3 mt-5">
-          <button onClick={onPrint} className="flex-1 btn-gradient rounded-xl py-2.5 text-sm font-medium">Imprimir</button>
-          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Nova venda</button>
+        <div className="grid grid-cols-2 gap-2 mt-5">
+          <button onClick={() => printThermalReceipt(receipt, { width: 80, tenantName, pmLabel: PM_LABEL })} className="btn-gradient rounded-xl py-2.5 text-sm font-medium">Térmica 80mm</button>
+          <button onClick={() => printThermalReceipt(receipt, { width: 58, tenantName, pmLabel: PM_LABEL })} className="rounded-xl py-2.5 text-sm text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Térmica 58mm</button>
+          <button onClick={onPrint} className="rounded-xl py-2.5 text-sm text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Imprimir A4</button>
+          <button onClick={onClose} className="rounded-xl py-2.5 text-sm text-admin-muted">Nova venda</button>
         </div>
       </div>
     </div>
