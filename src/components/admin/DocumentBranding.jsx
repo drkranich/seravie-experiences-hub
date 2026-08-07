@@ -97,7 +97,7 @@ export function DocumentBranding({ notify }) {
         </div>
 
         <label className="flex items-center justify-between glass rounded-xl px-4 py-3 mt-4">
-          <div><p className="text-admin-text text-sm font-medium">Mostrar crédito “via Seravie”</p><p className="text-admin-muted/40 text-xs">Linha discreta no rodapé do documento. Desligue para white-label total.</p></div>
+          <div><p className="text-admin-text text-sm font-medium">Mostrar crédito “via Seravie Experiences”</p><p className="text-admin-muted/40 text-xs">Linha discreta no rodapé do documento. Desligue para white-label total.</p></div>
           <Toggle checked={form.show_seravie_credit !== false} onChange={(v) => set({ show_seravie_credit: v })} />
         </label>
 
