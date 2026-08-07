@@ -67,17 +67,17 @@ const CHANNELS = [
   {
     key: 'email_send', name: 'E-mail (disparo)', color: '#8a7a4a', tint: '#8a7a4a18', letter: '↗',
     blurb: 'Envie e-mails do sistema pela sua marca (Resend ou SMTP).',
-    help: 'Provedor que ENVIA os e-mails automáticos (convites, recuperação de senha, notificações) saindo do SEU domínio. Resend: host smtp.resend.com, usuário "resend", senha = sua API key, porta 465/587. Verifique o domínio no provedor (SPF/DKIM).',
-    primary: 'api_key',
+    help: 'Provedor que ENVIA os e-mails automáticos (convites de assinatura, notificações) saindo do SEU domínio. Escolha o provedor: Resend/SendGrid usam a API key; SMTP (Gmail, Outlook, Zoho, servidor próprio) e Amazon SES usam host/porta/usuário/senha. Verifique o domínio no provedor (SPF/DKIM).',
+    primary: 'from_email',
     fields: [
+      { key: 'provider', label: 'Provedor', type: 'select', options: [['resend', 'Resend (API key)'], ['sendgrid', 'SendGrid (API key)'], ['smtp', 'SMTP genérico (Gmail, Outlook, Zoho…)'], ['ses', 'Amazon SES']] },
       { key: 'from_email', label: 'Remetente (De:)', placeholder: 'no-reply@seudominio.com' },
       { key: 'from_name', label: 'Nome do remetente', placeholder: 'Sua Marca' },
-      { key: 'provider', label: 'Provedor', placeholder: 'resend' },
-      { key: 'api_key', label: 'API key (Resend)', secret: true },
-      { key: 'smtp_host', label: 'SMTP host (opcional)', placeholder: 'smtp.resend.com' },
-      { key: 'smtp_port', label: 'SMTP porta (opcional)', placeholder: '465' },
-      { key: 'smtp_user', label: 'SMTP usuário (opcional)', placeholder: 'resend' },
-      { key: 'smtp_pass', label: 'SMTP senha (opcional)', secret: true },
+      { key: 'api_key', label: 'API key (Resend/SendGrid)', secret: true },
+      { key: 'smtp_host', label: 'SMTP host (SMTP/SES)', placeholder: 'smtp.gmail.com' },
+      { key: 'smtp_port', label: 'SMTP porta', placeholder: '587' },
+      { key: 'smtp_user', label: 'SMTP usuário', placeholder: 'seu@email.com' },
+      { key: 'smtp_pass', label: 'SMTP senha / senha de app', secret: true },
     ],
   },
   {
@@ -108,6 +108,19 @@ export function MessagingChannels({ notify, context = 'conversations' }) {
   const [form, setForm] = useState({ credentials: {}, is_enabled: false, settings: {} })
   const [reveal, setReveal] = useState({})
   const [saving, setSaving] = useState(false)
+  const [testTo, setTestTo] = useState('')
+  const [testing, setTesting] = useState(false)
+
+  const testEmail = async () => {
+    setTesting(true)
+    // salva antes de testar, para a edge function ler as credenciais atuais
+    const payload = { tenant_id: tenantId, channel: 'email_send', credentials: form.credentials, settings: form.settings || {}, is_enabled: !!form.is_enabled, status: form.is_enabled ? 'connected' : 'disconnected', updated_at: new Date().toISOString() }
+    await supabase.from('messaging_channels').upsert(payload, { onConflict: 'tenant_id,channel' })
+    const { data, error } = await supabase.functions.invoke('send-email', { body: { action: 'test', to: testTo || form.credentials.from_email } })
+    setTesting(false)
+    if (error || data?.error) return notify('Falha no teste: ' + (data?.detail || data?.error || error?.message || 'erro'), 'error')
+    notify('E-mail de teste enviado! Verifique a caixa de entrada.', 'success')
+  }
 
   const load = async () => { setLoading(true); const { data } = await supabase.from('messaging_channels').select('*'); setRows(data || []); setLoading(false) }
   useEffect(() => { load() }, [])
@@ -198,10 +211,14 @@ export function MessagingChannels({ notify, context = 'conversations' }) {
               {editing.fields.map((f) => (
                 <div key={f.key}>
                   <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{f.label}</label>
-                  <div className="relative">
-                    <input type={f.secret && !reveal[f.key] ? 'password' : 'text'} value={form.credentials[f.key] || ''} onChange={(e) => setCred(f.key, e.target.value)} placeholder={f.placeholder || ''} className={`w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none ${f.secret ? 'pr-16' : ''}`} />
-                    {f.secret && <button onClick={() => setReveal((r) => ({ ...r, [f.key]: !r[f.key] }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-admin-champ/70 hover:text-admin-champ px-2 py-1">{reveal[f.key] ? 'ocultar' : 'mostrar'}</button>}
-                  </div>
+                  {f.type === 'select' ? (
+                    <GlassSelect value={form.credentials[f.key] || (f.options?.[0]?.[0] || '')} onChange={(v) => setCred(f.key, v)} options={(f.options || []).map(([value, label]) => ({ value, label }))} />
+                  ) : (
+                    <div className="relative">
+                      <input type={f.secret && !reveal[f.key] ? 'password' : 'text'} value={form.credentials[f.key] || ''} onChange={(e) => setCred(f.key, e.target.value)} placeholder={f.placeholder || ''} className={`w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none ${f.secret ? 'pr-16' : ''}`} />
+                      {f.secret && <button onClick={() => setReveal((r) => ({ ...r, [f.key]: !r[f.key] }))} className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-admin-champ/70 hover:text-admin-champ px-2 py-1">{reveal[f.key] ? 'ocultar' : 'mostrar'}</button>}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -222,6 +239,16 @@ export function MessagingChannels({ notify, context = 'conversations' }) {
               </div>
             )}
 
+            {editing.key === 'email_send' && (
+              <div className="mt-5 pt-4 border-t border-white/[0.06]">
+                <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2">Testar envio</p>
+                <div className="flex gap-2">
+                  <input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder={form.credentials.from_email || 'seu@email.com'} className="flex-1 glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" />
+                  <button onClick={testEmail} disabled={testing} className="bg-admin-sage/15 hover:bg-admin-sage/25 text-admin-sage px-4 rounded-xl text-sm shrink-0 disabled:opacity-50">{testing ? 'Enviando…' : 'Enviar teste'}</button>
+                </div>
+                <p className="text-admin-muted/40 text-[10px] mt-1.5">Envia um e-mail de teste com as credenciais acima para confirmar que o provedor funciona.</p>
+              </div>
+            )}
             <div className="flex gap-3 mt-6"><button onClick={save} disabled={saving} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar conexão'}</button><button onClick={() => setEditing(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
           </div>
         </div>

@@ -22,6 +22,31 @@ const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-t
 const fmtDT = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—'
 const signLink = (token) => `${window.location.origin}/sign/${token}`
 
+// dispara o convite de assinatura por e-mail (via provedor conectado do tenant).
+// retorna { sent, skipped, failed } — nunca lança: o fluxo não trava sem e-mail.
+async function sendInvites(reqTitle, message, signers) {
+  const out = { sent: 0, skipped: 0, failed: 0, notConfigured: false }
+  for (const sg of signers) {
+    if (!sg.email || sg.status === 'signed') { out.skipped++; continue }
+    const link = signLink(sg.token)
+    const html = `<div style="font-family:system-ui,Arial;max-width:560px;margin:auto;padding:28px;background:#faf8f2;border-radius:16px">
+      <p style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#B89C61;margin:0 0 6px">Documento para assinatura</p>
+      <h1 style="color:#1F3A5F;font-size:24px;margin:0 0 10px">${reqTitle}</h1>
+      ${message ? `<p style="color:#444;font-size:15px">${message}</p>` : ''}
+      <p style="color:#444;font-size:15px">Olá${sg.name ? ' ' + sg.name : ''}, você foi convidado(a) a assinar este documento eletronicamente.</p>
+      <a href="${link}" style="display:inline-block;margin:16px 0;background:#B89C61;color:#1a1a1a;text-decoration:none;padding:13px 26px;border-radius:10px;font-weight:600">Revisar e assinar</a>
+      <p style="color:#888;font-size:12px;margin-top:18px">Ou copie o link: ${link}</p>
+    </div>`
+    try {
+      const { data, error } = await supabase.functions.invoke('send-email', { body: { action: 'send', to: sg.email, subject: `Assinatura: ${reqTitle}`, html, text: `Assine o documento "${reqTitle}": ${link}` } })
+      if (data?.error === 'not_configured') { out.notConfigured = true; out.skipped++ }
+      else if (error || data?.error) out.failed++
+      else out.sent++
+    } catch { out.failed++ }
+  }
+  return out
+}
+
 export function SignaturePanel({ notify }) {
   const { profile, canEdit } = useTenant()
   const tenantId = profile?.tenant_id
@@ -137,12 +162,29 @@ function CreateModal({ tenantId, notify, onClose, onDone }) {
     if (error) { setBusy(false); return notify?.('Erro ao criar: ' + error.message, 'error') }
 
     const rows = validSigners.map((s, i) => ({ request_id: req.id, name: s.name.trim() || null, email: s.email.trim() || null, order_index: i }))
-    await supabase.from('signature_signers').insert(rows)
+    const { data: insertedSigners } = await supabase.from('signature_signers').insert(rows).select('*')
     await supabase.from('signature_events').insert({ request_id: req.id, tenant_id: tenantId, event: 'created' })
     logAudit({ action: 'create', resource_type: 'signature_requests', resource_id: req.id, new_data: { title: payload.title } }, tenantId)
 
+    // dispara convites por e-mail (se houver provedor conectado)
+    const withEmail = (insertedSigners || []).filter((s) => s.email)
+    if (withEmail.length) {
+      const res = await sendInvites(payload.title, payload.message, insertedSigners || [])
+      if (res.sent > 0) {
+        await supabase.from('signature_requests').update({ status: 'sent' }).eq('id', req.id)
+        await supabase.from('signature_events').insert({ request_id: req.id, tenant_id: tenantId, event: 'sent' })
+        notify?.(`Solicitação criada — ${res.sent} convite(s) enviado(s) por e-mail`, 'success')
+      } else if (res.notConfigured) {
+        notify?.('Solicitação criada. Conecte um provedor de e-mail para enviar automático — por ora, copie os links.', 'info')
+      } else {
+        notify?.('Solicitação criada. Não consegui enviar por e-mail; copie os links.', 'info')
+      }
+    } else {
+      notify?.('Solicitação criada. Compartilhe os links (signatários sem e-mail).', 'success')
+    }
+
     const { data: full } = await supabase.from('signature_requests').select('*, signers:signature_signers(*)').eq('id', req.id).single()
-    setBusy(false); notify?.('Solicitação criada. Compartilhe os links.', 'success'); onDone(full)
+    setBusy(false); onDone(full)
   }
 
   return (
@@ -226,10 +268,19 @@ function RequestDetail({ req: initial, tenantId, mayEdit, notify, onBack }) {
   const s = ST[req.status] || ST.draft
 
   const copyLink = (token) => { navigator.clipboard?.writeText(signLink(token)); notify?.('Link copiado', 'success') }
-  const markSent = async () => {
-    await supabase.from('signature_requests').update({ status: 'sent', updated_at: new Date().toISOString() }).eq('id', req.id)
-    await supabase.from('signature_events').insert({ request_id: req.id, tenant_id: tenantId, event: 'sent' })
-    notify?.('Marcado como enviado', 'success'); load()
+  const [sending, setSending] = useState(false)
+  const resendEmail = async () => {
+    const pend = signers.filter((s) => s.email && s.status !== 'signed')
+    if (pend.length === 0) return notify?.('Sem signatários pendentes com e-mail. Use "Copiar link".', 'info')
+    setSending(true)
+    const res = await sendInvites(req.title, req.message, signers)
+    setSending(false)
+    if (res.sent > 0) {
+      await supabase.from('signature_requests').update({ status: req.status === 'draft' ? 'sent' : req.status, updated_at: new Date().toISOString() }).eq('id', req.id)
+      await supabase.from('signature_events').insert({ request_id: req.id, tenant_id: tenantId, event: 'sent' })
+      notify?.(`${res.sent} e-mail(s) enviado(s)`, 'success'); load()
+    } else if (res.notConfigured) notify?.('Nenhum provedor de e-mail conectado. Copie os links manualmente.', 'info')
+    else notify?.('Não consegui enviar. Verifique o provedor de e-mail.', 'error')
   }
   const cancel = async () => {
     await supabase.from('signature_requests').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', req.id)
@@ -258,7 +309,7 @@ function RequestDetail({ req: initial, tenantId, mayEdit, notify, onBack }) {
         </div>
         {mayEdit && (
           <div className="flex items-center gap-2">
-            {req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={markSent} className="text-xs px-3 py-2 rounded-xl bg-admin-champ/15 text-admin-champ">Marcar enviado</button>}
+            {req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={resendEmail} disabled={sending} className="text-xs px-3 py-2 rounded-xl bg-admin-champ/15 text-admin-champ disabled:opacity-50">{sending ? 'Enviando…' : 'Enviar por e-mail'}</button>}
             {req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={cancel} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-rose">Cancelar</button>}
             <button onClick={() => setConfirmDel(true)} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-rose"><Icon name="trash" className="w-3.5 h-3.5" /></button>
           </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassDate } from './ui'
 import { uploadToVault, vaultSignedUrl, removeFromVault } from '../../lib/storage'
 import { logAudit } from '../../lib/audit'
 
@@ -129,8 +129,8 @@ export function DocumentVault({ notify }) {
           <GlassSelect value={fSubj} onChange={setFSubj} options={[{ value: '', label: 'Todos' }, ...subjectsOfFilter.map((s) => ({ value: s.id, label: s.name }))]} />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">De</label><input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} className={inputCls} /></div>
-          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Até</label><input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} className={inputCls} /></div>
+          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">De</label><GlassDate value={fFrom} onChange={setFFrom} /></div>
+          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Até</label><GlassDate value={fTo} onChange={setFTo} /></div>
         </div>
         {hasFilters && <div className="md:col-span-5"><button onClick={clearFilters} className="text-admin-muted/60 hover:text-admin-text text-xs flex items-center gap-1"><Icon name="x" className="w-3 h-3" />Limpar filtros</button></div>}
       </div>
@@ -238,7 +238,7 @@ function UploadModal({ cats, subjects, tenantId, notify, onClose, onDone }) {
             <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Assunto</label><GlassSelect value={subjId} onChange={setSubjId} options={[{ value: '', label: '— nenhum —' }, ...subjOpts.map((s) => ({ value: s.id, label: s.name }))]} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Data do documento</label><input type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} className={inputCls} /></div>
+            <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Data do documento</label><GlassDate value={docDate} onChange={setDocDate} /></div>
             <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Tags (vírgula)</label><input value={tags} onChange={(e) => setTags(e.target.value)} className={inputCls} placeholder="contrato, 2026" /></div>
           </div>
         </div>
