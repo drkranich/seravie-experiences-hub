@@ -902,8 +902,8 @@ export function POSPanel({ notify }) {
                     <button onClick={() => setQty(i.product_id, i.qty + 1)} className="w-6 h-6 rounded-lg bg-white/[0.05] text-admin-text hover:bg-white/[0.1] flex items-center justify-center text-sm">+</button>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-admin-muted/40 text-[10px]">desc</span>
-                    <input type="number" value={i.discount || ''} onChange={(e) => setItemDiscount(i.product_id, e.target.value)} placeholder="0" className="w-14 glass-input rounded-lg px-2 py-1 text-xs text-admin-text outline-none text-right" />
+                    <span className="text-admin-rose/50 text-[10px]">desc</span>
+                    <input type="number" value={i.discount || ''} onChange={(e) => setItemDiscount(i.product_id, e.target.value)} placeholder="0" className="w-14 rounded-lg px-2 py-1 text-xs text-admin-text outline-none text-right bg-admin-rose/[0.06] border border-admin-rose/15 focus:border-admin-rose/30" />
                     <p className="text-admin-gold text-sm w-16 text-right">{brl(lineTotal(i))}</p>
                   </div>
                 </div>
@@ -934,9 +934,9 @@ export function POSPanel({ notify }) {
           <div className="border-t border-white/[0.06] p-4 space-y-2.5 max-h-[52vh] overflow-y-auto">
             <div className="flex items-center justify-between text-sm"><span className="text-admin-muted/60">Subtotal</span><span className="text-admin-text">{brl(subtotal)}</span></div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-admin-muted/60 text-sm">Desconto geral</span>
-              <div className="relative w-28"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-admin-muted/40 text-xs">R$</span>
-                <input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0,00" className="w-full glass-input rounded-lg pl-7 pr-2 py-1.5 text-sm text-admin-text outline-none text-right" /></div>
+              <span className="text-admin-rose/70 text-sm flex items-center gap-1"><Icon name="x" className="w-3 h-3" />Desconto geral</span>
+              <div className="relative w-28"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-admin-rose/50 text-xs">− R$</span>
+                <input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0,00" className="w-full rounded-lg pl-10 pr-2 py-1.5 text-sm text-admin-text outline-none text-right bg-admin-rose/[0.06] border border-admin-rose/20 focus:border-admin-rose/40" /></div>
             </div>
             {/* Cupom */}
             {hasWidget('coupon') && (appliedCoupon ? (
@@ -971,30 +971,33 @@ export function POSPanel({ notify }) {
               </div>
             )}
 
-            {/* Formas rápidas — o operador não perde tempo em menus */}
-            <div className="grid grid-cols-4 gap-1.5">
-              {QUICK_METHODS.map((m) => (
-                <button key={m.value} onClick={() => { if (total <= 0) return; setPayments((p) => [...p, { method: m.value, amount: remaining > 0.001 ? remaining : total }]) }} disabled={total <= 0} className="flex flex-col items-center gap-1 py-2 rounded-lg bg-white/[0.03] hover:bg-admin-champ/10 text-admin-muted/70 hover:text-admin-champ transition-colors disabled:opacity-30">
-                  <Icon name={m.icon} className="w-3.5 h-3.5" />
-                  <span className="text-[10px]">{m.label}</span>
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              <button onClick={() => setPixQr({ amount: remaining > 0.001 ? remaining : total })} disabled={total <= 0} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30">PIX QR</button>
-              <button onClick={() => setGiftModal('redeem')} disabled={total <= 0} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30">Vale-presente</button>
-              {hasWidget('loyalty') && <button onClick={() => customer?.id ? redeemPoints((loyalty?.points || 0)) : notify('Selecione um cliente para usar pontos', 'error')} disabled={total <= 0 || !(loyalty?.points > 0)} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30" title={loyalty?.points ? `${loyalty.points} pontos (vale ${brl((loyalty.points) * POINT_VALUE)})` : 'Sem pontos'}>Pontos {loyalty?.points ? `(${loyalty.points})` : ''}</button>}
-            </div>
-
-            {/* Adicionar pagamento manual (misto) */}
-            <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
-              <GlassSelect value={payMethod} onChange={setPayMethod} options={PAYMENT_METHODS} />
-              <div className="relative w-28"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-admin-muted/40 text-xs">R$</span>
-                <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={remaining > 0 ? remaining.toFixed(2) : '0,00'} className="w-full glass-input rounded-lg pl-7 pr-2 py-2 text-sm text-admin-text outline-none" /></div>
-            </div>
-            <div className={`grid ${hasWidget('stripe') ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-              <button onClick={addPayment} disabled={total <= 0} className="py-2 rounded-lg text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-40">+ pagamento</button>
-              {hasWidget('stripe') && <button onClick={chargeStripe} disabled={total <= 0 || busy} className="py-2 rounded-lg text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-40">Cobrar Stripe</button>}
+            {/* ÁREA DE PAGAMENTO — destacada e separada do desconto */}
+            <div className="rounded-xl bg-admin-champ/[0.05] border border-admin-champ/15 p-2.5 space-y-2 mt-1">
+              <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 flex items-center gap-1.5 px-0.5"><Icon name="tag" className="w-3 h-3" />Pagamento{remaining > 0.001 && total > 0 ? ` · faltam ${brl(remaining)}` : ''}</p>
+              {/* Formas rápidas — o operador não perde tempo em menus */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {QUICK_METHODS.map((m) => (
+                  <button key={m.value} onClick={() => { if (total <= 0) return; setPayments((p) => [...p, { method: m.value, amount: remaining > 0.001 ? remaining : total }]) }} disabled={total <= 0} className="flex flex-col items-center gap-1 py-2 rounded-lg bg-white/[0.04] hover:bg-admin-champ/15 text-admin-muted/70 hover:text-admin-champ transition-colors disabled:opacity-30">
+                    <Icon name={m.icon} className="w-3.5 h-3.5" />
+                    <span className="text-[10px]">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button onClick={() => setPixQr({ amount: remaining > 0.001 ? remaining : total })} disabled={total <= 0} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30">PIX QR</button>
+                <button onClick={() => setGiftModal('redeem')} disabled={total <= 0} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30">Vale-presente</button>
+                {hasWidget('loyalty') && <button onClick={() => customer?.id ? redeemPoints((loyalty?.points || 0)) : notify('Selecione um cliente para usar pontos', 'error')} disabled={total <= 0 || !(loyalty?.points > 0)} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30" title={loyalty?.points ? `${loyalty.points} pontos (vale ${brl((loyalty.points) * POINT_VALUE)})` : 'Sem pontos'}>Pontos {loyalty?.points ? `(${loyalty.points})` : ''}</button>}
+              </div>
+              {/* Adicionar pagamento manual (misto) — valor em destaque champ */}
+              <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                <GlassSelect value={payMethod} onChange={setPayMethod} options={PAYMENT_METHODS} />
+                <div className="relative w-32"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-admin-champ/70 text-xs font-medium">R$</span>
+                  <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={remaining > 0 ? remaining.toFixed(2) : '0,00'} className="w-full rounded-lg pl-7 pr-2 py-2 text-sm text-admin-champ font-medium outline-none text-right bg-admin-champ/10 border border-admin-champ/25 focus:border-admin-champ/50 placeholder-admin-champ/30" /></div>
+              </div>
+              <div className={`grid ${hasWidget('stripe') ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                <button onClick={addPayment} disabled={total <= 0} className="py-2 rounded-lg text-xs text-admin-champ bg-admin-champ/15 hover:bg-admin-champ/25 transition-colors disabled:opacity-40">+ adicionar pagamento</button>
+                {hasWidget('stripe') && <button onClick={chargeStripe} disabled={total <= 0 || busy} className="py-2 rounded-lg text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-40">Cobrar Stripe</button>}
+              </div>
             </div>
 
             <input value={saleNotes} onChange={(e) => setSaleNotes(e.target.value)} placeholder="Observações da venda…" className="w-full glass-input rounded-lg px-3 py-2 text-xs text-admin-text outline-none" />
