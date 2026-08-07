@@ -526,8 +526,8 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
     await supabase.from('quotes').update({ status }).eq('id', editing.id)
     setEditing((q) => ({ ...q, status })); reload(); notify('Status atualizado', 'success')
     if (status === 'accepted' && editing.deal_id) {
-      await supabase.from('deals').update({ stage: 'won', status: 'won', value: calc.total, closed_at: new Date().toISOString() }).eq('id', editing.deal_id)
-      await supabase.from('deal_activities').insert({ tenant_id: tenantId, deal_id: editing.deal_id, type: 'quote', title: 'Orçamento aprovado', body: `${editing.number} — ${brl(calc.total)}` }).catch(() => {})
+      try { await supabase.from('deals').update({ stage: 'won', status: 'won', value: calc.total, closed_at: new Date().toISOString() }).eq('id', editing.deal_id) } catch (_) { /* noop */ }
+      try { await supabase.from('deal_activities').insert({ tenant_id: tenantId, deal_id: editing.deal_id, type: 'quote', title: 'Orçamento aprovado', body: `${editing.number} — ${brl(calc.total)}` }) } catch (_) { /* noop */ }
     }
   }
   const exportQuotePdf = () => {
