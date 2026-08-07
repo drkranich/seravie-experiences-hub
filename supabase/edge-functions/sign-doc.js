@@ -69,12 +69,21 @@ Deno.serve(async (req) => {
   await admin.from('signature_requests').update({ status: newStatus, updated_at: nowIso, completed_at: done ? nowIso : null }).eq('id', reqRow.id)
   if (done) {
     await admin.from('signature_events').insert({ request_id: reqRow.id, tenant_id: reqRow.tenant_id, event: 'completed', ip })
+    // Gera o PDF final carimbado (documento + manifesto).
+    try { await stampDoc(reqRow.id) } catch (_) { /* não bloqueia a assinatura */ }
     // Notificação de conclusão ao dono/criador (via provedor de e-mail do tenant).
     try { await notifyCompletion(admin, reqRow) } catch (_) { /* não bloqueia a assinatura */ }
   }
 
   return json({ ok: true, status: newStatus })
 })
+
+// chama a stamp-doc internamente (autorização por service role)
+async function stampDoc(requestId) {
+  const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/stamp-doc`
+  const svc = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${svc}`, apikey: svc, 'x-internal-secret': svc }, body: JSON.stringify({ request_id: requestId }) })
+}
 
 // ---- notificação de conclusão + envio via provedor do tenant ----
 async function notifyCompletion(admin, reqRow) {

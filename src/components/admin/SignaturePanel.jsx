@@ -300,6 +300,21 @@ function RequestDetail({ req: initial, tenantId, mayEdit, notify, onBack }) {
     notify?.('Solicitação excluída', 'success'); onBack()
   }
 
+  const [stamping, setStamping] = useState(false)
+  const downloadSigned = async () => {
+    if (!req.signed_storage_path) return
+    const { url, error } = await vaultSignedUrl(req.signed_storage_path, 3600)
+    if (error) return notify?.('Erro ao abrir o PDF', 'error')
+    window.open(url, '_blank', 'noopener')
+  }
+  const generateStamped = async () => {
+    setStamping(true)
+    const { data, error } = await supabase.functions.invoke('stamp-doc', { body: { request_id: req.id } })
+    setStamping(false)
+    if (error || data?.error) return notify?.('Erro ao gerar PDF: ' + (data?.detail || data?.error || error?.message || ''), 'error')
+    notify?.('PDF assinado gerado', 'success'); load()
+  }
+
   const allSigned = signers.length > 0 && signers.every((x) => x.status === 'signed')
 
   return (
@@ -310,6 +325,8 @@ function RequestDetail({ req: initial, tenantId, mayEdit, notify, onBack }) {
           <span className={`text-[9px] px-2 py-0.5 rounded-lg ${s[1]}`}>{s[0]}</span>
         </div>
         <div className="flex items-center gap-2">
+          {req.signed_storage_path && <button onClick={downloadSigned} className="text-xs px-3 py-2 rounded-xl bg-admin-sage/15 text-admin-sage flex items-center gap-1"><Icon name="download" className="w-3.5 h-3.5" />PDF assinado</button>}
+          {mayEdit && req.status === 'completed' && <button onClick={generateStamped} disabled={stamping} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ disabled:opacity-50">{stamping ? 'Gerando…' : (req.signed_storage_path ? 'Regerar' : 'Gerar PDF')}</button>}
           {req.verification_code && <a href={`${window.location.origin}/validar/${req.verification_code}`} target="_blank" rel="noreferrer" className="text-xs px-3 py-2 rounded-xl bg-admin-sage/15 text-admin-sage flex items-center gap-1"><Icon name="check" className="w-3.5 h-3.5" />Comprovante</a>}
           {mayEdit && req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={resendEmail} disabled={sending} className="text-xs px-3 py-2 rounded-xl bg-admin-champ/15 text-admin-champ disabled:opacity-50">{sending ? 'Enviando…' : 'Enviar por e-mail'}</button>}
           {mayEdit && req.status !== 'cancelled' && req.status !== 'completed' && <button onClick={cancel} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-rose">Cancelar</button>}
