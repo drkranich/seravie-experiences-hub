@@ -10,6 +10,7 @@ import { FlowStore } from './pages/FlowStore'
 import { ClientExperience } from './pages/ClientExperience'
 import { FlowExperience } from './pages/FlowExperience'
 import { DocumentView } from './pages/DocumentView'
+import { SignDocument } from './pages/SignDocument'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { RecoverPassword } from './pages/RecoverPassword'
 
@@ -59,6 +60,9 @@ export default function App() {
 
   // Seravie Document Studio — proposta "viva" pública (/p/<slug>)
   if (pub('p')) return <DocumentView />
+
+  // Assinatura pública de documento (/sign/<token>)
+  if (pub('sign')) return <SignDocument />
 
   // Aceite de convite de equipe (precedência: funciona logado ou não)
   if (pub('convite')) return <AcceptInvite />

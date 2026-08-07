@@ -6,6 +6,7 @@ import { FlowImageField } from './FlowImageField'
 import { logAudit } from '../../lib/audit'
 import { ResourceTabs } from './ResourcePanel'
 import { DocumentVault } from './DocumentVault'
+import { SignaturePanel } from './SignaturePanel'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const STATUS = { draft: ['Rascunho', 'bg-admin-gold/10 text-admin-gold'], sent: ['Enviado', 'bg-admin-champ/10 text-admin-champ'], viewed: ['Visto', 'bg-admin-champ/10 text-admin-champ'], accepted: ['Aceito', 'bg-admin-sage/10 text-admin-sage'], signed: ['Assinado', 'bg-admin-sage/15 text-admin-sage'], rejected: ['Recusado', 'bg-admin-rose/10 text-admin-rose'] }
@@ -237,6 +238,7 @@ export function DocumentStudio({ notify }) {
     <ResourceTabs title="Seravie Document Studio" subtitle="propostas, contratos e o cofre de documentos da empresa"
       tabs={[
         { key: 'proposals', label: 'Propostas & Contratos', render: () => <ProposalsStudio notify={notify} /> },
+        { key: 'signatures', label: 'Assinaturas', render: () => <SignaturePanel notify={notify} /> },
         { key: 'vault', label: 'Cofre de Documentos', render: () => <DocumentVault notify={notify} /> },
       ]}
     />
