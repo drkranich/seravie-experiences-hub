@@ -28,6 +28,7 @@ const QUICK_METHODS = [
 ]
 const genGiftCode = () => 'GIFT-' + Math.random().toString(36).slice(2, 6).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase()
 const brl = (n) => `R$ ${(Number(n) || 0).toFixed(2)}`
+const brl0 = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
 const num = (v) => (parseFloat(v) || 0)
 
 export function POSPanel({ notify }) {
