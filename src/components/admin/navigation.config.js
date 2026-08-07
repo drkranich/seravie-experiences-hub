@@ -40,13 +40,13 @@ export const CORE_SECTIONS = [
       { key: 'loyalty', label: 'Fidelidade', icon: 'star', route: 'loyalty' },
       { key: 'client_exp', label: 'Experiências do Cliente', icon: 'spark', route: 'client_exp' },
       { key: 'receivables', label: 'Recebíveis', icon: 'chart', route: 'receivables' },
-      { key: 'ecommerce', label: 'E-commerce', icon: 'cart', route: 'ecommerce', pages: [
-        { key: 'ec.storefront', label: 'Vitrine', route: 'ecommerce' },
-        { key: 'ec.channels', label: 'Canais de Venda (Marketplaces)', route: 'ecommerce' },
-        { key: 'ec.orders', label: 'Pedidos Online', route: 'ecommerce' },
+      { key: 'ecommerce', label: 'Seravie Commerce Hub', icon: 'cart', route: 'ecommerce', pages: [
+        { key: 'ec.dashboard', label: 'Dashboard', route: 'ecommerce' },
+        { key: 'ec.catalog', label: 'Catálogo (multi-tipo)', route: 'ecommerce' },
+        { key: 'ec.marketplace', label: 'Marketplace', route: 'ecommerce' },
+        { key: 'ec.store', label: 'Loja & Pedidos', route: 'ecommerce' },
         { key: 'ec.shipping', label: 'Frete · Melhor Envio', route: 'ecommerce' },
         { key: 'ec.coupons', label: 'Cupons', route: 'coupons' },
-        { key: 'ec.settings', label: 'Configurações da Loja', route: 'ecommerce' },
       ]},
       { key: 'agenda', label: 'Agenda', icon: 'calendar', route: 'agenda' },
       { key: 'marketing', label: 'Marketing', icon: 'star', route: 'marketing', pages: [
