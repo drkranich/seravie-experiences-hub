@@ -54,9 +54,17 @@ export function RolesPanel({ notify }) {
     notify(editing ? 'Perfil atualizado' : 'Perfil criado', 'success'); setModal(false); setEditing(null); load()
   }
   const remove = async (r) => {
-    const { error } = await supabase.from('roles').delete().eq('id', r.id)
     setConfirmDel(null)
-    if (error) return notify('Erro ao excluir', 'error')
+    if (r.is_system) return notify('Perfis de sistema não podem ser excluídos', 'info')
+    // .select() retorna as linhas realmente afetadas — se a RLS bloquear, vem vazio (sem erro).
+    const { data, error } = await supabase.from('roles').delete().eq('id', r.id).select('id')
+    if (error) {
+      const msg = /foreign key|violates|referenced/i.test(error.message || '')
+        ? 'Este perfil está em uso por usuários. Reatribua-os antes de excluir.'
+        : 'Erro ao excluir: ' + error.message
+      return notify(msg, 'error')
+    }
+    if (!data || data.length === 0) return notify('Sem permissão para excluir este perfil', 'error')
     logAudit({ action: 'delete', resource_type: 'roles', resource_id: r.id, old_data: r }, tenantId)
     notify('Perfil excluído', 'success'); load()
   }
