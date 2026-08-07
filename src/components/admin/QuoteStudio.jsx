@@ -55,6 +55,32 @@ const SCEN_PRESET = [
   { key: 'signature', name: 'Signature', tone: 'gold' },
 ]
 
+// ---------------- BIBLIOTECA DE MODELOS (por segmento) ----------------
+const it = (name, kind, qty, unit_cost, unit_price) => ({ name, kind, qty, unit_cost, unit_price, discount: 0, discount_type: 'percent', tax_rate: 0 })
+const TEMPLATES = [
+  { key: 'arquitetura', name: 'Arquitetura & Interiores', icon: 'layout', desc: 'Projeto, execução e acompanhamento',
+    engine: { commission_pct: 0, extra_tax_pct: 6, freight: 0, packaging: 0, target_margin: 40 },
+    items: [it('Projeto arquitetônico', 'project', 1, 0, 12000), it('Projeto de interiores', 'project', 1, 0, 8000), it('Acompanhamento de obra', 'service', 3, 0, 2500), it('Renderização 3D', 'service', 5, 0, 600)] },
+  { key: 'consultoria', name: 'Consultoria', icon: 'chart', desc: 'Diagnóstico, plano e execução',
+    engine: { commission_pct: 10, extra_tax_pct: 8, freight: 0, packaging: 0, target_margin: 50 },
+    items: [it('Diagnóstico inicial', 'consulting', 1, 0, 3500), it('Plano estratégico', 'consulting', 1, 0, 6000), it('Consultoria mensal', 'subscription', 3, 0, 2800), it('Workshop de time', 'workshop', 1, 0, 2200)] },
+  { key: 'cosmeticos', name: 'Cosméticos & Beleza', icon: 'star', desc: 'Linha de produtos + kit',
+    engine: { commission_pct: 5, extra_tax_pct: 12, freight: 60, packaging: 40, target_margin: 55 },
+    items: [it('Sérum facial', 'product', 10, 28, 89), it('Protetor solar', 'product', 10, 22, 69), it('Kit facial completo', 'kit', 5, 90, 249), it('Frete', 'shipping', 1, 0, 0)] },
+  { key: 'hotel', name: 'Hotelaria & Hospedagem', icon: 'building', desc: 'Diárias, experiências e eventos',
+    engine: { commission_pct: 0, extra_tax_pct: 10, freight: 0, packaging: 0, target_margin: 45 },
+    items: [it('Diária suíte', 'hosting', 3, 220, 680), it('Café da manhã', 'service', 6, 30, 75), it('Experiência spa', 'experience', 2, 120, 380), it('Late check-out', 'fee', 1, 0, 150)] },
+  { key: 'eventos', name: 'Eventos', icon: 'calendar', desc: 'Produção completa do evento',
+    engine: { commission_pct: 8, extra_tax_pct: 10, freight: 400, packaging: 0, target_margin: 42 },
+    items: [it('Locação do espaço', 'booking', 1, 3000, 6500), it('Buffet (por pessoa)', 'service', 80, 45, 120), it('Decoração', 'service', 1, 2500, 6000), it('Equipe de apoio', 'service', 6, 180, 400)] },
+  { key: 'marketing', name: 'Marketing & Social', icon: 'spark', desc: 'Gestão, tráfego e conteúdo',
+    engine: { commission_pct: 10, extra_tax_pct: 8, freight: 0, packaging: 0, target_margin: 50 },
+    items: [it('Gestão de redes (mensal)', 'subscription', 3, 0, 2500), it('Tráfego pago (gestão)', 'service', 3, 0, 1800), it('Produção de conteúdo', 'service', 12, 0, 350), it('Ensaio fotográfico', 'service', 1, 400, 1500)] },
+  { key: 'marketplace', name: 'Marketplace / Varejo', icon: 'cart', desc: 'Setup + comissão + logística',
+    engine: { commission_pct: 15, extra_tax_pct: 12, freight: 120, packaging: 30, target_margin: 35 },
+    items: [it('Produto principal', 'product', 50, 40, 99), it('Kit combo', 'combo', 20, 90, 199), it('Taxa de marketplace', 'fee', 1, 0, 0), it('Frete', 'shipping', 1, 0, 0)] },
+]
+
 export function QuoteStudio({ notify }) {
   const { profile, canEdit } = useTenant()
   const tenantId = profile?.tenant_id
@@ -85,13 +111,17 @@ export function QuoteStudio({ notify }) {
     const { data } = await supabase.from('deals').select('id, title, contact_id, value').neq('status', 'lost').order('created_at', { ascending: false }).limit(100)
     setDeals(data || [])
   }
-  const createQuote = async (deal) => {
+  const createQuote = async (deal, tpl) => {
     const number = (await supabase.rpc('next_quote_number', { p_tenant: tenantId })).data
-    const payload = { tenant_id: tenantId, title: deal ? deal.title : 'Novo orçamento', number, status: 'draft', deal_id: deal?.id || null, contact_id: deal?.contact_id || null, created_by: profile?.user_id }
+    const title = tpl ? tpl.name : (deal ? deal.title : 'Novo orçamento')
+    const metadata = tpl ? { engine: { ...tpl.engine }, template: tpl.key } : {}
+    const payload = { tenant_id: tenantId, title, number, status: 'draft', deal_id: deal?.id || null, contact_id: deal?.contact_id || null, created_by: profile?.user_id, metadata }
     const { data, error } = await supabase.from('quotes').insert(payload).select('*, contact:contacts(name), deal:deals(title)').single()
     if (error) return notify('Erro ao criar: ' + error.message, 'error')
-    setCreating(false); load(); openQuote(data); setItems([emptyItem()]); setDirty(true)
-    notify('Orçamento criado', 'success')
+    setCreating(false)
+    const startItems = tpl ? tpl.items.map((x) => ({ ...emptyItem(), ...x })) : [emptyItem()]
+    load(); setEditing(data); setItems(startItems); setDirty(true)
+    notify(tpl ? `Modelo "${tpl.name}" aplicado` : 'Orçamento criado', 'success')
   }
 
   if (editing) return <QuoteEditor {...{ editing, setEditing, items, setItems, dirty, setDirty, mayEdit, tenantId, profile, notify, reload: load }} />
@@ -121,7 +151,21 @@ export function QuoteStudio({ notify }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setCreating(false)}>
           <div className="glass-pop rounded-2xl p-7 w-full max-w-md max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4"><h2 className="font-serif text-2xl text-admin-text">Novo orçamento</h2><button onClick={() => setCreating(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
-            <button onClick={() => createQuote(null)} className="w-full glass-soft rounded-xl px-4 py-3 text-left hover:bg-white/[0.04] mb-3"><p className="text-admin-text text-sm">Em branco</p><p className="text-admin-muted/40 text-xs">Começar do zero</p></button>
+            <button onClick={() => createQuote(null)} className="w-full glass-soft rounded-xl px-4 py-3 text-left hover:bg-white/[0.04] mb-4"><p className="text-admin-text text-sm">Em branco</p><p className="text-admin-muted/40 text-xs">Começar do zero</p></button>
+
+            <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-2">Modelos por segmento</p>
+            <div className="grid grid-cols-2 gap-1.5 mb-4">
+              {TEMPLATES.map((t) => (
+                <button key={t.key} onClick={() => createQuote(null, t)} className="glass-soft rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.04] group">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="w-6 h-6 rounded-lg bg-admin-champ/10 flex items-center justify-center text-admin-champ group-hover:bg-admin-champ/20"><Icon name={t.icon} className="w-3.5 h-3.5" /></span>
+                    <p className="text-admin-text text-xs font-medium leading-tight">{t.name}</p>
+                  </div>
+                  <p className="text-admin-muted/40 text-[10px] leading-tight">{t.desc}</p>
+                </button>
+              ))}
+            </div>
+
             <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-2">A partir de um negócio</p>
             {deals.length === 0 ? <p className="text-admin-muted/40 text-xs">Nenhum negócio no pipeline.</p> : (
               <div className="space-y-1.5">
@@ -305,7 +349,6 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
   const setItem = (i, patch) => { setItems((xs) => xs.map((r, j) => j === i ? { ...r, ...patch } : r)); setDirty(true) }
   const addItem = (kind) => { setItems((xs) => [...xs, { ...emptyItem(), kind: kind || 'product' }]); setDirty(true) }
   const removeItem = (i) => { setItems((xs) => xs.filter((_, j) => j !== i)); setDirty(true) }
-  const [addOpen, setAddOpen] = useState(false)
 
   // IA: adicionar item sugerido e ajustar preços à margem-alvo
   const addSuggested = (c) => { setItems((xs) => [...xs, { ...emptyItem(), name: c.name, unit_price: Number(c.suggested_price) || 0 }]); setDirty(true); notify?.(`"${c.name}" adicionado`, 'success') }
@@ -407,14 +450,7 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
           <div className="glass rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] uppercase tracking-wider text-admin-champ/70">Itens ({items.length})</p>
-              {mayEdit && <div className="relative">
-                <button onClick={() => setAddOpen((o) => !o)} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 flex items-center gap-1"><Icon name="plus" className="w-3 h-3" />Adicionar</button>
-                {addOpen && (
-                  <div className="absolute right-0 mt-1 z-20 glass-pop rounded-xl p-2 grid grid-cols-2 gap-1 w-64" onMouseLeave={() => setAddOpen(false)}>
-                    {Object.entries(KIND).map(([k, l]) => <button key={k} onClick={() => { addItem(k); setAddOpen(false) }} className="text-[11px] px-2 py-1.5 rounded-lg text-admin-muted/80 hover:text-admin-champ hover:bg-admin-champ/10 text-left">{l}</button>)}
-                  </div>
-                )}
-              </div>}
+              {mayEdit && <AddItemMenu onAdd={(k) => addItem(k)} />}
             </div>
             {items.length === 0 ? <p className="text-admin-muted/30 text-sm text-center py-8">Adicione itens ao orçamento.</p> : (
               <div className="space-y-3">
@@ -624,6 +660,27 @@ function MenuItem({ icon, title, desc, onClick }) {
       <Icon name={icon} className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
       <div className="min-w-0"><p className="text-admin-text text-xs font-medium whitespace-nowrap">{title}</p><p className="text-admin-muted/40 text-[10px] whitespace-nowrap">{desc}</p></div>
     </button>
+  )
+}
+// menu de tipos de item (posição fixa, sem truncar)
+function AddItemMenu({ onAdd }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const ref = useRef(null)
+  const toggle = () => { const r = ref.current?.getBoundingClientRect(); if (r) setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) }); setOpen((o) => !o) }
+  useEffect(() => { if (!open) return; const c = () => setOpen(false); window.addEventListener('scroll', c, true); window.addEventListener('resize', c); return () => { window.removeEventListener('scroll', c, true); window.removeEventListener('resize', c) } }, [open])
+  return (
+    <>
+      <button ref={ref} onClick={toggle} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 flex items-center gap-1"><Icon name="plus" className="w-3 h-3" />Adicionar</button>
+      {open && pos && (
+        <>
+          <div className="fixed inset-0 z-[59]" onClick={() => setOpen(false)} />
+          <div className="fixed z-[60] glass-pop rounded-xl p-2 grid grid-cols-2 gap-1 w-72" style={{ top: pos.top, right: pos.right }}>
+            {Object.entries(KIND).map(([k, l]) => <button key={k} onClick={() => { onAdd(k); setOpen(false) }} className="text-[11px] px-2 py-1.5 rounded-lg text-admin-muted/80 hover:text-admin-champ hover:bg-admin-champ/10 text-left whitespace-nowrap">{l}</button>)}
+          </div>
+        </>
+      )}
+    </>
   )
 }
 

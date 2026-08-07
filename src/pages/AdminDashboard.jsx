@@ -161,7 +161,6 @@ export function AdminDashboard({ onExit }) {
     audit: <AuditLogPanel notify={notify} />,
     plans: <PlansAdmin notify={notify} />,
     service_pricing: <ServicesAdmin notify={notify} />,
-    standards: <FranchiseStandards mode="admin" notify={notify} />,
     meu_espaco: <FranchiseStandards mode="tenant" notify={notify} />,
     subscription: <SubscriptionPanel notify={notify} />,
     receivables: <ReceivablesPanel notify={notify} />,
