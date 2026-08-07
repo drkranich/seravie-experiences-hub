@@ -66,6 +66,10 @@ export function POSPanel({ notify }) {
   const [showReports, setShowReports] = useState(false)
   const [showLeads, setShowLeads] = useState(false)
   const [showDash, setShowDash] = useState(false)
+  const [showAgenda, setShowAgenda] = useState(false)
+  const [showOS, setShowOS] = useState(false)
+  const [showRooms, setShowRooms] = useState(false)
+  const [selfCheckout, setSelfCheckout] = useState(false)
 
   // ---- Múltiplas vendas abertas (abas) + mesas ----
   const [parked, setParked] = useState([]) // vendas em aberto na memória da sessão
@@ -274,6 +278,12 @@ export function POSPanel({ notify }) {
     return [...c, { product_id: p.id, name: p.name, price: Number(p.price), qty: 1, discount: 0, stock: p.stock, source: p._src || 'products', image: (p.images && p.images[0]) || null, note: '' }]
   })
   const setItemNote = (id, note) => setCart((c) => c.map((i) => i.product_id === id ? { ...i, note } : i))
+  // Carrega itens de uma OS / conta de quarto no carrinho para faturar
+  const loadFromLineItems = (items, custName, contactId) => {
+    const mapped = (items || []).map((it) => ({ product_id: it.product_id || ('svc-' + Math.random().toString(36).slice(2, 8)), name: it.name, price: Number(it.price) || 0, qty: Number(it.qty) || 1, discount: 0, stock: null, source: 'service', note: it.note || '' }))
+    setCart(mapped)
+    if (custName) setCustomer({ id: contactId || null, name: custName })
+  }
   const setQty = (id, qty) => setCart((c) => c.flatMap((i) => {
     if (i.product_id !== id) return [i]
     const q = Math.max(0, qty)
@@ -671,6 +681,10 @@ export function POSPanel({ notify }) {
           )}
           {hasWidget('comandas') && <button onClick={() => setShowHolds(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Comandas {holds.length > 0 && `(${holds.length})`}</button>}
           {hasWidget('kds') && <button onClick={() => { window.location.hash = '#admin'; setTimeout(() => notify('Abra o Seravie Cuisine no menu para acompanhar a cozinha', 'info'), 100) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Cozinha (KDS)</button>}
+          {hasWidget('agenda') && <button onClick={() => setShowAgenda(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Agenda</button>}
+          {hasWidget('service_orders') && <button onClick={() => setShowOS(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Ordens de serviço</button>}
+          {hasWidget('hospedagem') && <button onClick={() => setShowRooms(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Hospedagem</button>}
+          {hasWidget('self_checkout') && <button onClick={() => setSelfCheckout(true)} className="px-3 py-2 rounded-xl text-xs text-admin-sage bg-admin-sage/10 hover:bg-admin-sage/20 transition-colors">Modo cliente</button>}
           <button onClick={() => setGiftModal('sell')} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Vender vale</button>
           <button onClick={() => setShowDash(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Dashboard</button>
           <button onClick={() => setShowLeads(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Leads</button>
@@ -1060,6 +1074,16 @@ export function POSPanel({ notify }) {
       {showLeads && <LeadsModal notify={notify} onClose={() => setShowLeads(false)} />}
 
       {showDash && <ProductDashboard products={products} notify={notify} onClose={() => setShowDash(false)} />}
+
+      {showAgenda && <AgendaModal tenantId={tenantId} contacts={contacts} customer={customer} notify={notify} onClose={() => setShowAgenda(false)} />}
+
+      {showOS && <ServiceOrdersModal tenantId={tenantId} userId={user?.id} products={products} customer={customer} notify={notify}
+        onBill={(os) => { setShowOS(false); loadFromLineItems(os.items, os.customer_name, os.contact_id); notify(`OS #${os.number} carregada no carrinho para faturar`, 'success') }} onClose={() => setShowOS(false)} />}
+
+      {showRooms && <RoomTabsModal tenantId={tenantId} userId={user?.id} products={products} notify={notify}
+        onBill={(room) => { setShowRooms(false); loadFromLineItems(room.items, room.guest_name, room.contact_id); notify(`Consumo do ${room.room_label} carregado para cobrança`, 'success') }} onClose={() => setShowRooms(false)} />}
+
+      {selfCheckout && <SelfCheckout products={products} cart={cart} addToCart={addToCart} setQty={setQty} removeItem={removeItem} subtotal={subtotal} onExit={() => setSelfCheckout(false)} />}
     </div>
   )
 }
@@ -1644,6 +1668,299 @@ function ProductModal({ initial, categories, busy, onSave, onDelete, onClose }) 
         <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
       </div>
     </Modal>
+  )
+}
+
+// ---------- Widget Agenda (beleza/saúde) ----------
+function AgendaModal({ tenantId, contacts, customer, notify, onClose }) {
+  const hoje = new Date().toISOString().slice(0, 10)
+  const [day, setDay] = useState(hoje)
+  const [list, setList] = useState(null)
+  const [form, setForm] = useState({ customer_name: customer?.name || '', service: '', professional: '', time: '', notes: '' })
+  const setF = (patch) => setForm((x) => ({ ...x, ...patch }))
+  const inputCls = 'w-full glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+  const load = async () => {
+    setList(null)
+    const { data } = await supabase.from('appointments').select('*').eq('date', day).order('time')
+    setList(data || [])
+  }
+  useEffect(() => { load() }, [day])
+  const save = async () => {
+    if (!form.service.trim()) return notify('Informe o serviço', 'error')
+    const { error } = await supabase.from('appointments').insert({
+      tenant_id: tenantId, contact_id: customer?.id || null, customer_name: form.customer_name.trim() || customer?.name || null,
+      service: form.service.trim(), professional: form.professional.trim() || null, date: day, time: form.time || null, status: 'scheduled', notes: form.notes.trim() || null,
+    })
+    if (error) return notify('Erro ao agendar: ' + error.message, 'error')
+    setForm({ customer_name: '', service: '', professional: '', time: '', notes: '' }); load(); notify('Horário agendado', 'success')
+  }
+  const setStatus = async (id, status) => { await supabase.from('appointments').update({ status }).eq('id', id); load() }
+  const STc = { scheduled: 'text-admin-champ', confirmed: 'text-admin-sage', done: 'text-admin-sage', cancelled: 'text-admin-rose', 'no-show': 'text-admin-rose' }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Serviços</p><h2 className="font-serif text-2xl text-admin-text">Agenda</h2></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_260px] gap-5 overflow-hidden">
+          <div className="overflow-y-auto">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-40"><GlassDate value={day} onChange={setDay} /></div>
+              <span className="text-admin-muted/40 text-xs">{(list || []).length} agendamento(s)</span>
+            </div>
+            {list === null ? <p className="text-admin-muted/30 text-sm py-8 text-center">Carregando…</p>
+              : list.length === 0 ? <p className="text-admin-muted/40 text-sm py-8 text-center">Nenhum agendamento neste dia.</p>
+              : (
+                <div className="space-y-2">
+                  {list.map((a) => (
+                    <div key={a.id} className="glass-soft rounded-xl p-3 flex items-center gap-3">
+                      <span className="text-admin-champ text-sm font-medium tabular-nums w-12">{a.time || '—'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-admin-text text-sm truncate">{a.service}</p>
+                        <p className="text-admin-muted/40 text-[11px] truncate">{[a.customer_name, a.professional].filter(Boolean).join(' · ') || '—'}</p>
+                      </div>
+                      <span className={`text-[10px] ${STc[a.status] || 'text-admin-muted/50'}`}>{a.status}</span>
+                      {a.status !== 'done' && <button onClick={() => setStatus(a.id, 'done')} className="text-admin-sage/70 hover:text-admin-sage"><Icon name="check" className="w-4 h-4" /></button>}
+                      {a.status !== 'cancelled' && <button onClick={() => setStatus(a.id, 'cancelled')} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="x" className="w-3.5 h-3.5" /></button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+          <div className="glass rounded-2xl p-4">
+            <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Novo agendamento</p>
+            <div className="space-y-2.5">
+              <input value={form.customer_name} onChange={(e) => setF({ customer_name: e.target.value })} placeholder="Cliente" className={inputCls} />
+              <input value={form.service} onChange={(e) => setF({ service: e.target.value })} placeholder="Serviço *" className={inputCls} />
+              <input value={form.professional} onChange={(e) => setF({ professional: e.target.value })} placeholder="Profissional" className={inputCls} />
+              <input value={form.time} onChange={(e) => setF({ time: e.target.value })} placeholder="Horário (ex: 14:30)" className={inputCls} />
+              <textarea value={form.notes} onChange={(e) => setF({ notes: e.target.value })} rows={2} placeholder="Observação" className={`${inputCls} resize-none`} />
+              <button onClick={save} className="w-full btn-gradient rounded-xl py-2.5 text-sm font-medium">Agendar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------- Widget Ordem de Serviço (automotivo) ----------
+function ServiceOrdersModal({ tenantId, userId, products, customer, notify, onBill, onClose }) {
+  const [list, setList] = useState(null)
+  const [editing, setEditing] = useState(null) // OS aberta para edição/criação
+  const load = async () => { setList(null); const { data } = await supabase.from('service_orders').select('*').neq('status', 'delivered').order('created_at', { ascending: false }); setList(data || []) }
+  useEffect(() => { load() }, [])
+  const totalOf = (items) => (items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0)
+  const newOS = () => setEditing({ customer_name: customer?.name || '', contact_id: customer?.id || null, object_label: '', items: [{ name: '', kind: 'part', qty: 1, price: 0 }], notes: '', status: 'open' })
+  const saveOS = async () => {
+    const items = (editing.items || []).filter((i) => i.name?.trim())
+    const payload = { tenant_id: tenantId, contact_id: editing.contact_id || null, customer_name: editing.customer_name?.trim() || null, object_label: editing.object_label?.trim() || null, status: editing.status, items, notes: editing.notes?.trim() || null, total: totalOf(items), created_by: userId, updated_at: new Date().toISOString() }
+    let error
+    if (editing.id) ({ error } = await supabase.from('service_orders').update(payload).eq('id', editing.id))
+    else ({ error } = await supabase.from('service_orders').insert(payload))
+    if (error) return notify('Erro ao salvar OS: ' + error.message, 'error')
+    setEditing(null); load(); notify('Ordem de serviço salva', 'success')
+  }
+  const STAT = { open: ['Aberta', 'text-admin-gold'], in_progress: ['Em execução', 'text-admin-champ'], ready: ['Pronta', 'text-admin-sage'], delivered: ['Entregue', 'text-admin-muted/50'] }
+  const inputCls = 'w-full glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Serviços</p><h2 className="font-serif text-2xl text-admin-text">Ordens de serviço</h2></div>
+          <div className="flex items-center gap-2">
+            {!editing && <button onClick={newOS} className="flex items-center gap-1.5 bg-admin-champ/15 text-admin-champ px-3 py-2 rounded-xl text-sm hover:bg-admin-champ/25"><Icon name="plus" className="w-4 h-4" />Nova OS</button>}
+            <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+          </div>
+        </div>
+        {editing ? (
+          <div className="overflow-y-auto space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <input value={editing.customer_name} onChange={(e) => setEditing((o) => ({ ...o, customer_name: e.target.value }))} placeholder="Cliente" className={inputCls} />
+              <input value={editing.object_label} onChange={(e) => setEditing((o) => ({ ...o, object_label: e.target.value }))} placeholder="Veículo / objeto (ex: Gol 2018 ABC-1234)" className={inputCls} />
+            </div>
+            <div className="w-48"><GlassSelect value={editing.status} onChange={(v) => setEditing((o) => ({ ...o, status: v }))} options={Object.entries(STAT).map(([value, x]) => ({ value, label: x[0] }))} /></div>
+            <p className="text-[10px] uppercase tracking-wider text-admin-muted/40">Peças & mão de obra</p>
+            <div className="space-y-2">
+              {(editing.items || []).map((it, i) => (
+                <div key={i} className="flex gap-2">
+                  <input value={it.name} onChange={(e) => setEditing((o) => ({ ...o, items: o.items.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))} placeholder="Descrição" className="flex-1 glass-input rounded-lg px-3 py-2 text-sm text-admin-text outline-none" />
+                  <div className="w-24"><GlassSelect value={it.kind} onChange={(v) => setEditing((o) => ({ ...o, items: o.items.map((x, j) => j === i ? { ...x, kind: v } : x) }))} options={[{ value: 'part', label: 'Peça' }, { value: 'labor', label: 'M. obra' }]} /></div>
+                  <input type="number" value={it.qty} onChange={(e) => setEditing((o) => ({ ...o, items: o.items.map((x, j) => j === i ? { ...x, qty: e.target.value } : x) }))} className="w-14 glass-input rounded-lg px-2 py-2 text-sm text-admin-text outline-none text-center" />
+                  <input type="number" value={it.price} onChange={(e) => setEditing((o) => ({ ...o, items: o.items.map((x, j) => j === i ? { ...x, price: e.target.value } : x) }))} placeholder="R$" className="w-20 glass-input rounded-lg px-2 py-2 text-sm text-admin-text outline-none text-right" />
+                  <button onClick={() => setEditing((o) => ({ ...o, items: o.items.filter((_, j) => j !== i) }))} className="text-admin-muted/40 hover:text-admin-rose px-1"><Icon name="x" className="w-4 h-4" /></button>
+                </div>
+              ))}
+              <button onClick={() => setEditing((o) => ({ ...o, items: [...o.items, { name: '', kind: 'part', qty: 1, price: 0 }] }))} className="text-admin-champ text-xs flex items-center gap-1"><Icon name="plus" className="w-3 h-3" />item</button>
+            </div>
+            <textarea value={editing.notes} onChange={(e) => setEditing((o) => ({ ...o, notes: e.target.value }))} rows={2} placeholder="Observações" className={`${inputCls} resize-none`} />
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-admin-gold text-lg">{brl(totalOf(editing.items))}</span>
+              <div className="flex gap-2">
+                <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl text-sm text-admin-muted">Voltar</button>
+                <button onClick={saveOS} className="btn-gradient rounded-xl px-5 py-2 text-sm font-medium">Salvar OS</button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-y-auto">
+            {list === null ? <p className="text-admin-muted/30 text-sm py-10 text-center">Carregando…</p>
+              : list.length === 0 ? <p className="text-admin-muted/40 text-sm py-10 text-center">Nenhuma OS aberta. Crie a primeira.</p>
+              : (
+                <div className="space-y-2">
+                  {list.map((os) => (
+                    <div key={os.id} className="glass-soft rounded-xl p-3 flex items-center gap-3">
+                      <span className="text-admin-muted/40 text-xs tabular-nums">#{os.number}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-admin-text text-sm truncate">{os.object_label || os.customer_name || 'OS'}</p>
+                        <p className="text-admin-muted/40 text-[11px] truncate">{os.customer_name || '—'} · {(os.items || []).length} item(s)</p>
+                      </div>
+                      <span className={`text-[10px] ${(STAT[os.status] || [])[1] || 'text-admin-muted/50'}`}>{(STAT[os.status] || [])[0] || os.status}</span>
+                      <span className="text-admin-gold text-sm">{brl(os.total)}</span>
+                      <button onClick={() => setEditing(os)} className="text-admin-champ/70 hover:text-admin-champ text-xs">editar</button>
+                      <button onClick={() => onBill(os)} className="text-admin-sage text-xs" title="Faturar no PDV">faturar</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Widget Hospedagem (consumo na conta do quarto) ----------
+function RoomTabsModal({ tenantId, userId, products, notify, onBill, onClose }) {
+  const [list, setList] = useState(null)
+  const [active, setActive] = useState(null) // conta aberta
+  const [newRoom, setNewRoom] = useState({ room_label: '', guest_name: '' })
+  const [add, setAdd] = useState({ name: '', qty: 1, price: '' })
+  const load = async () => { setList(null); const { data } = await supabase.from('pos_room_tabs').select('*').eq('status', 'open').order('created_at', { ascending: false }); setList(data || []); if (active) { const upd = (data || []).find((r) => r.id === active.id); if (upd) setActive(upd) } }
+  useEffect(() => { load() }, [])
+  const totalOf = (items) => (items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0)
+  const openRoom = async () => {
+    if (!newRoom.room_label.trim()) return notify('Informe o quarto', 'error')
+    const { error } = await supabase.from('pos_room_tabs').insert({ tenant_id: tenantId, room_label: newRoom.room_label.trim(), guest_name: newRoom.guest_name.trim() || null, status: 'open', items: [], total: 0, created_by: userId })
+    if (error) return notify('Erro: ' + error.message, 'error')
+    setNewRoom({ room_label: '', guest_name: '' }); load(); notify('Conta de quarto aberta', 'success')
+  }
+  const addConsumo = async () => {
+    if (!active || !add.name.trim()) return notify('Escolha o item', 'error')
+    const item = { name: add.name.trim(), qty: Number(add.qty) || 1, price: Number(add.price) || 0, at: new Date().toISOString() }
+    const items = [...(active.items || []), item]
+    const { error } = await supabase.from('pos_room_tabs').update({ items, total: totalOf(items), updated_at: new Date().toISOString() }).eq('id', active.id)
+    if (error) return notify('Erro ao lançar', 'error')
+    setAdd({ name: '', qty: 1, price: '' }); load(); notify('Consumo lançado', 'success')
+  }
+  const pickProduct = (p) => setAdd({ name: p.name, qty: 1, price: p.price })
+  const inputCls = 'w-full glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Hotelaria</p><h2 className="font-serif text-2xl text-admin-text">Consumo na hospedagem</h2></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        <div className="grid lg:grid-cols-[240px_1fr] gap-5 overflow-hidden">
+          <div className="overflow-y-auto">
+            <div className="glass rounded-2xl p-3 mb-3">
+              <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-2">Abrir conta</p>
+              <input value={newRoom.room_label} onChange={(e) => setNewRoom((r) => ({ ...r, room_label: e.target.value }))} placeholder="Quarto / chalé *" className={`${inputCls} mb-2`} />
+              <input value={newRoom.guest_name} onChange={(e) => setNewRoom((r) => ({ ...r, guest_name: e.target.value }))} placeholder="Hóspede" className={`${inputCls} mb-2`} />
+              <button onClick={openRoom} className="w-full bg-admin-champ/15 text-admin-champ rounded-xl py-2 text-sm hover:bg-admin-champ/25">Abrir</button>
+            </div>
+            <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">Contas abertas</p>
+            {list === null ? <p className="text-admin-muted/30 text-xs">Carregando…</p>
+              : list.length === 0 ? <p className="text-admin-muted/40 text-xs">Nenhuma.</p>
+              : list.map((r) => (
+                <button key={r.id} onClick={() => setActive(r)} className={`w-full text-left glass-soft rounded-xl p-2.5 mb-1.5 flex items-center justify-between ${active?.id === r.id ? 'ring-1 ring-admin-champ/40' : ''}`}>
+                  <div className="min-w-0"><p className="text-admin-text text-sm truncate">{r.room_label}</p><p className="text-admin-muted/40 text-[10px] truncate">{r.guest_name || '—'}</p></div>
+                  <span className="text-admin-gold text-xs shrink-0">{brl0(r.total)}</span>
+                </button>
+              ))}
+          </div>
+          <div className="overflow-y-auto">
+            {!active ? <p className="text-admin-muted/40 text-sm py-16 text-center">Selecione uma conta para lançar consumo.</p> : (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <div><p className="text-admin-text text-lg">{active.room_label}</p><p className="text-admin-muted/40 text-xs">{active.guest_name || 'Hóspede'}</p></div>
+                  <span className="text-admin-gold text-xl font-medium">{brl(active.total)}</span>
+                </div>
+                <div className="space-y-1 mb-3 max-h-40 overflow-y-auto">
+                  {(active.items || []).length === 0 ? <p className="text-admin-muted/30 text-xs py-3 text-center">Sem consumo ainda.</p>
+                    : active.items.map((it, i) => <div key={i} className="flex justify-between text-xs glass-soft rounded-lg px-3 py-1.5"><span className="text-admin-muted/70">{it.qty}× {it.name}</span><span className="text-admin-text">{brl(it.qty * it.price)}</span></div>)}
+                </div>
+                <div className="glass rounded-2xl p-3 mb-3">
+                  <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-2">Lançar consumo</p>
+                  <div className="flex gap-2 mb-2">
+                    <input value={add.name} onChange={(e) => setAdd((a) => ({ ...a, name: e.target.value }))} placeholder="Item" className="flex-1 glass-input rounded-lg px-3 py-2 text-sm text-admin-text outline-none" />
+                    <input type="number" value={add.qty} onChange={(e) => setAdd((a) => ({ ...a, qty: e.target.value }))} className="w-14 glass-input rounded-lg px-2 py-2 text-sm text-admin-text outline-none text-center" />
+                    <input type="number" value={add.price} onChange={(e) => setAdd((a) => ({ ...a, price: e.target.value }))} placeholder="R$" className="w-20 glass-input rounded-lg px-2 py-2 text-sm text-admin-text outline-none text-right" />
+                    <button onClick={addConsumo} className="bg-admin-champ/15 text-admin-champ rounded-lg px-3 text-sm hover:bg-admin-champ/25">+</button>
+                  </div>
+                  {products.length > 0 && <div className="flex gap-1.5 overflow-x-auto pb-1">{products.slice(0, 8).map((p) => <button key={p.id} onClick={() => pickProduct(p)} className="shrink-0 text-[11px] px-2 py-1 rounded-lg bg-white/[0.04] text-admin-muted/70 hover:text-admin-champ whitespace-nowrap">{p.name}</button>)}</div>}
+                </div>
+                <button onClick={() => onBill(active)} disabled={!(active.items || []).length} className="w-full btn-gradient rounded-xl py-2.5 text-sm font-medium disabled:opacity-40">Cobrar no check-out ({brl(active.total)})</button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------- Self-checkout (modo cliente / tablet) ----------
+function SelfCheckout({ products, cart, addToCart, setQty, removeItem, subtotal, onExit }) {
+  const [cat, setCat] = useState('')
+  const cats = [...new Set(products.map((p) => p.category_id).filter(Boolean))]
+  const shown = products.filter((p) => (!cat || p.category_id === cat) && (p.stock == null || p.stock > 0))
+  const count = cart.reduce((s, i) => s + i.qty, 0)
+  return (
+    <div className="fixed inset-0 z-[60] bg-admin-bg flex flex-col">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+        <div><p className="text-[11px] tracking-[0.2em] uppercase text-admin-champ/70">Seravie POS</p><h1 className="font-serif text-3xl text-admin-text">Autoatendimento</h1></div>
+        <button onClick={onExit} className="text-admin-muted/50 hover:text-admin-text text-sm flex items-center gap-1.5"><Icon name="x" className="w-5 h-5" />Sair do modo cliente</button>
+      </div>
+      <div className="flex-1 flex min-h-0">
+        <div className="flex-1 overflow-y-auto p-6">
+          {products.length === 0 ? <p className="text-admin-muted/40 text-center py-20">Nenhum produto disponível.</p> : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {shown.map((p) => (
+                <button key={p.id} onClick={() => addToCart(p)} className="glass rounded-2xl overflow-hidden text-left hover:border-admin-champ/40 border border-transparent transition-all active:scale-95">
+                  <div className="aspect-square bg-white/[0.03] flex items-center justify-center overflow-hidden">
+                    {(p.images && p.images[0]) ? <img src={p.images[0]} alt="" className="w-full h-full object-cover" /> : <Icon name="cart" className="w-10 h-10 text-admin-champ/20" />}
+                  </div>
+                  <div className="p-4"><p className="text-admin-text text-base font-medium leading-tight mb-1">{p.name}</p><p className="text-admin-gold text-lg">{brl(p.price)}</p></div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="w-[360px] shrink-0 border-l border-white/[0.06] bg-admin-side/20 flex flex-col">
+          <p className="px-6 py-4 text-admin-text text-lg font-medium border-b border-white/[0.06]">Sua sacola ({count})</p>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {cart.length === 0 ? <p className="text-admin-muted/40 text-center py-16">Toque nos produtos para adicionar.</p> : cart.map((i) => (
+              <div key={i.product_id} className="glass rounded-xl p-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0"><p className="text-admin-text text-sm truncate">{i.name}</p><p className="text-admin-gold text-sm">{brl(i.price * i.qty)}</p></div>
+                <button onClick={() => setQty(i.product_id, i.qty - 1)} className="w-9 h-9 rounded-lg bg-white/[0.05] text-admin-text text-lg">−</button>
+                <span className="text-admin-text w-6 text-center">{i.qty}</span>
+                <button onClick={() => setQty(i.product_id, i.qty + 1)} className="w-9 h-9 rounded-lg bg-white/[0.05] text-admin-text text-lg">+</button>
+              </div>
+            ))}
+          </div>
+          <div className="p-6 border-t border-white/[0.06]">
+            <div className="flex items-center justify-between mb-3"><span className="text-admin-text text-lg">Total</span><span className="text-admin-champ text-2xl font-medium">{brl(subtotal)}</span></div>
+            <button onClick={onExit} className="w-full btn-gradient rounded-xl py-4 text-base font-medium">Chamar atendente para pagar</button>
+            <p className="text-admin-muted/40 text-[11px] text-center mt-2">Um atendente finaliza o pagamento.</p>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

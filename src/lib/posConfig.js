@@ -13,6 +13,10 @@ export const POS_WIDGETS = [
   { key: 'kds', label: 'Enviar para a cozinha (KDS)', desc: 'Atalho para o Seravie Cuisine', icon: 'flame', group: 'Operação' },
   { key: 'stripe', label: 'Cobrança online (Stripe)', desc: 'Gerar link de pagamento para o cliente', icon: 'chart', group: 'Pagamento' },
   { key: 'loyalty', label: 'Fidelidade', desc: 'Acúmulo de pontos por venda', icon: 'star', group: 'Cliente' },
+  { key: 'agenda', label: 'Agenda de serviços', desc: 'Agendar horário e profissional junto à venda (beleza/saúde)', icon: 'calendar', group: 'Serviços' },
+  { key: 'service_orders', label: 'Ordem de serviço', desc: 'OS com objeto, peças e mão de obra (automotivo/assistência)', icon: 'layers', group: 'Serviços' },
+  { key: 'hospedagem', label: 'Consumo na hospedagem', desc: 'Lançar consumo na conta do quarto/hóspede (hotel/pousada)', icon: 'building', group: 'Serviços' },
+  { key: 'self_checkout', label: 'Self-checkout / tablet', desc: 'Modo autoatendimento com botões grandes para o cliente', icon: 'grid', group: 'Operação' },
 ]
 export const POS_WIDGET_MAP = Object.fromEntries(POS_WIDGETS.map((w) => [w.key, w]))
 
@@ -20,12 +24,12 @@ export const POS_WIDGET_MAP = Object.fromEntries(POS_WIDGETS.map((w) => [w.key, 
 export const POS_PROFILES = {
   retail: { label: 'Varejo', icon: 'cart', widgets: ['barcode', 'product_admin', 'coupon', 'stripe', 'loyalty'] },
   food: { label: 'Alimentação', icon: 'flame', widgets: ['comandas', 'item_notes', 'kds', 'coupon', 'product_admin', 'loyalty'] },
-  hospitality: { label: 'Hotelaria', icon: 'building', widgets: ['coupon', 'product_admin', 'stripe', 'loyalty'] },
-  beauty: { label: 'Beleza & Bem-estar', icon: 'heart', widgets: ['coupon', 'product_admin', 'loyalty'] },
-  automotive: { label: 'Automotivo', icon: 'layers', widgets: ['product_admin', 'stripe'] },
-  healthcare: { label: 'Saúde', icon: 'heart', widgets: ['product_admin', 'stripe'] },
-  professional: { label: 'Serviços & Consultoria', icon: 'book', widgets: ['product_admin', 'stripe'] },
-  experience: { label: 'Seravie Experiences', icon: 'spark', widgets: ['barcode', 'product_admin', 'coupon', 'item_notes', 'comandas', 'kds', 'stripe', 'loyalty'] },
+  hospitality: { label: 'Hotelaria', icon: 'building', widgets: ['coupon', 'product_admin', 'stripe', 'loyalty', 'hospedagem'] },
+  beauty: { label: 'Beleza & Bem-estar', icon: 'heart', widgets: ['coupon', 'product_admin', 'loyalty', 'agenda'] },
+  automotive: { label: 'Automotivo', icon: 'layers', widgets: ['product_admin', 'stripe', 'service_orders'] },
+  healthcare: { label: 'Saúde', icon: 'heart', widgets: ['product_admin', 'stripe', 'agenda'] },
+  professional: { label: 'Serviços & Consultoria', icon: 'book', widgets: ['product_admin', 'stripe', 'agenda'] },
+  experience: { label: 'Seravie Experiences', icon: 'spark', widgets: ['barcode', 'product_admin', 'coupon', 'item_notes', 'comandas', 'kds', 'stripe', 'loyalty', 'agenda'] },
 }
 
 // ---- SEGMENTOS (o que aparece no onboarding "qual é o seu segmento?") ----
