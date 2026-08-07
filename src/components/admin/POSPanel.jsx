@@ -5,15 +5,28 @@ import { useAuth } from '../../hooks/useAuth'
 import { Icon, GlassSelect } from './ui'
 import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MAP, defaultWidgetsForSegment } from '../../lib/posConfig'
 import { uploadTo } from '../../lib/storage'
+import { exportPdf, exportCsv } from '../../lib/export'
 
 const PAYMENT_METHODS = [
   { value: 'dinheiro', label: 'Dinheiro' },
   { value: 'pix', label: 'Pix' },
   { value: 'credito', label: 'Cartão de crédito' },
   { value: 'debito', label: 'Cartão de débito' },
+  { value: 'giftcard', label: 'Vale-presente' },
+  { value: 'pontos', label: 'Pontos de fidelidade' },
   { value: 'stripe', label: 'Stripe (online)' },
+  { value: 'apple_pay', label: 'Apple Pay' },
+  { value: 'google_pay', label: 'Google Pay' },
 ]
 const PM_LABEL = Object.fromEntries(PAYMENT_METHODS.map((p) => [p.value, p.label]))
+// atalhos rápidos por botão (o operador passa horas aqui)
+const QUICK_METHODS = [
+  { value: 'dinheiro', label: 'Dinheiro', icon: 'tag' },
+  { value: 'pix', label: 'PIX', icon: 'spark' },
+  { value: 'credito', label: 'Crédito', icon: 'chart' },
+  { value: 'debito', label: 'Débito', icon: 'chart' },
+]
+const genGiftCode = () => 'GIFT-' + Math.random().toString(36).slice(2, 6).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase()
 const brl = (n) => `R$ ${(Number(n) || 0).toFixed(2)}`
 const num = (v) => (parseFloat(v) || 0)
 
@@ -41,9 +54,16 @@ export function POSPanel({ notify }) {
   const [customer, setCustomer] = useState(null) // { id, name } | null
   const [custQuery, setCustQuery] = useState('')
 
-  const [payments, setPayments] = useState([]) // [{ method, amount }]
+  const [payments, setPayments] = useState([]) // [{ method, amount, gift_card_id?, points? }]
   const [payMethod, setPayMethod] = useState('dinheiro')
   const [payAmount, setPayAmount] = useState('')
+
+  // ---- Pagamentos avançados ----
+  const [giftModal, setGiftModal] = useState(null) // 'redeem' | 'sell'
+  const [loyalty, setLoyalty] = useState(null) // conta de fidelidade do cliente selecionado
+  const [pixQr, setPixQr] = useState(null) // { amount }
+  const [showReports, setShowReports] = useState(false)
+  const POINT_VALUE = 0.05 // R$ por ponto no resgate (5% de volta)
 
   const [openingAmount, setOpeningAmount] = useState('')
   const [busy, setBusy] = useState(false)
@@ -252,6 +272,47 @@ export function POSPanel({ notify }) {
   const setItemDiscount = (id, d) => setCart((c) => c.map((i) => i.product_id === id ? { ...i, discount: Math.max(0, num(d)) } : i))
   const removeItem = (id) => setCart((c) => c.filter((i) => i.product_id !== id))
 
+  // Carrega a conta de fidelidade do cliente selecionado (para resgate de pontos)
+  useEffect(() => {
+    if (!customer?.id) { setLoyalty(null); return }
+    supabase.from('loyalty_accounts').select('*').eq('contact_id', customer.id).maybeSingle().then(({ data }) => setLoyalty(data || null))
+  }, [customer?.id])
+
+  // ---------- Gift card (vale-presente) ----------
+  const redeemGiftCard = async (code) => {
+    const c = (code || '').trim().toUpperCase()
+    if (!c) return
+    const { data: gc } = await supabase.from('gift_cards').select('*').eq('code', c).eq('status', 'active').maybeSingle()
+    if (!gc) { notify('Vale-presente inválido ou já usado', 'error'); return }
+    if (Number(gc.balance) <= 0) { notify('Vale-presente sem saldo', 'error'); return }
+    if (gc.expires_at && new Date(gc.expires_at) < new Date()) { notify('Vale-presente expirado', 'error'); return }
+    const use = Math.min(Number(gc.balance), remaining > 0.001 ? remaining : total)
+    if (use <= 0) { notify('Nada a pagar', 'error'); return }
+    setPayments((p) => [...p, { method: 'giftcard', amount: use, gift_card_id: gc.id, gift_code: gc.code }])
+    setGiftModal(null)
+    notify(`Vale ${gc.code} aplicado (${brl(use)})`, 'success')
+  }
+  // adiciona ao carrinho a "venda" de um vale-presente (vira gift card ao finalizar)
+  const sellGiftCard = (amount) => {
+    const v = num(amount)
+    if (v <= 0) { notify('Informe um valor', 'error'); return }
+    setCart((c) => [...c, { product_id: 'gift-' + Math.random().toString(36).slice(2, 8), name: `Vale-presente ${brl(v)}`, price: v, qty: 1, discount: 0, stock: null, source: 'giftcard', gift_sale: true, note: '' }])
+    setGiftModal(null)
+    notify('Vale-presente adicionado à venda', 'success')
+  }
+
+  // ---------- Resgate de pontos ----------
+  const redeemPoints = (pts) => {
+    const available = loyalty?.points || 0
+    const useP = Math.min(parseInt(pts) || 0, available)
+    if (useP <= 0) { notify('Pontos insuficientes', 'error'); return }
+    const value = Math.min(useP * POINT_VALUE, remaining > 0.001 ? remaining : total)
+    if (value <= 0) { notify('Nada a pagar', 'error'); return }
+    const pointsUsed = Math.ceil(value / POINT_VALUE)
+    setPayments((p) => [...p, { method: 'pontos', amount: value, points: pointsUsed }])
+    notify(`${pointsUsed} pontos resgatados (${brl(value)})`, 'success')
+  }
+
   // ---------- Leitor de código de barras (HID / keyboard wedge) ----------
   const handleScan = (raw) => {
     const code = String(raw).trim()
@@ -293,6 +354,19 @@ export function POSPanel({ notify }) {
   const remaining = Math.max(0, total - paidTotal)
   const change = Math.max(0, paidTotal - total)
   const canFinalize = cart.length > 0 && remaining <= 0.001
+  const willEarnPoints = customer?.id ? Math.floor(total) : 0
+
+  // Cross-sell: produtos das mesmas categorias dos itens do carrinho, ainda não adicionados
+  const suggestions = useMemo(() => {
+    if (!hasWidget('loyalty') && cart.length === 0) return []
+    if (cart.length === 0) return []
+    const inCart = new Set(cart.map((i) => i.product_id))
+    const cats = new Set(cart.map((i) => products.find((p) => p.id === i.product_id)?.category_id).filter(Boolean))
+    let pool = products.filter((p) => !inCart.has(p.id) && p._src !== 'craft' && (p.stock == null || p.stock > 0))
+    const sameCat = pool.filter((p) => p.category_id && cats.has(p.category_id))
+    const rest = pool.filter((p) => !sameCat.includes(p))
+    return [...sameCat, ...rest].slice(0, 3)
+  }, [cart, products])
 
   const addPayment = () => {
     const amt = payAmount === '' ? remaining : num(payAmount)
@@ -410,6 +484,33 @@ export function POSPanel({ notify }) {
     if (appliedCoupon?.id) {
       try { await supabase.from('coupons').update({ used_count: (appliedCoupon.used_count || 0) + 1 }).eq('id', appliedCoupon.id) } catch { /* noop */ }
     }
+    // ---- Vale-presente: emitir os vendidos e debitar os resgatados ----
+    try {
+      // vendidos (itens do carrinho marcados como gift_sale)
+      for (const gi of cart.filter((i) => i.gift_sale)) {
+        const code = genGiftCode()
+        const { data: gc } = await supabase.from('gift_cards').insert({ tenant_id: tenantId, code, initial_amount: gi.price, balance: gi.price, status: 'active', contact_id: customer?.id || null, issued_order_id: order.id }).select('id').single()
+        if (gc) await supabase.from('gift_card_txns').insert({ tenant_id: tenantId, gift_card_id: gc.id, type: 'issue', amount: gi.price, balance_after: gi.price, order_id: order.id })
+      }
+      // resgatados (pagamentos giftcard)
+      for (const gp of pays.filter((p) => p.method === 'giftcard' && p.gift_card_id)) {
+        const { data: gc } = await supabase.from('gift_cards').select('balance').eq('id', gp.gift_card_id).maybeSingle()
+        const bal = Math.max(0, Number(gc?.balance || 0) - num(gp.amount))
+        await supabase.from('gift_cards').update({ balance: bal, status: bal <= 0.001 ? 'used' : 'active', updated_at: new Date().toISOString() }).eq('id', gp.gift_card_id)
+        await supabase.from('gift_card_txns').insert({ tenant_id: tenantId, gift_card_id: gp.gift_card_id, type: 'redeem', amount: -num(gp.amount), balance_after: bal, order_id: order.id })
+      }
+    } catch { /* best-effort */ }
+    // ---- Resgate de pontos de fidelidade ----
+    const pointsRedeemed = pays.filter((p) => p.method === 'pontos').reduce((s, p) => s + (Number(p.points) || 0), 0)
+    if (pointsRedeemed > 0 && customer?.id) {
+      try {
+        const { data: acc } = await supabase.from('loyalty_accounts').select('*').eq('contact_id', customer.id).maybeSingle()
+        if (acc) {
+          await supabase.from('loyalty_accounts').update({ points: Math.max(0, (acc.points || 0) - pointsRedeemed) }).eq('id', acc.id)
+          await supabase.from('loyalty_transactions').insert({ tenant_id: tenantId, account_id: acc.id, type: 'redeem', points: -pointsRedeemed, description: `Resgate na venda PDV #${order.number}`, reference_id: order.id })
+        }
+      } catch { /* best-effort */ }
+    }
     // Emissão fiscal (NFC-e) — pronto para plugar: chama a edge function; se o
     // gateway não estiver configurado, registra pendente sem travar a venda.
     let fiscalNote = null
@@ -513,6 +614,8 @@ export function POSPanel({ notify }) {
           )}
           {hasWidget('comandas') && <button onClick={() => setShowHolds(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Comandas {holds.length > 0 && `(${holds.length})`}</button>}
           {hasWidget('kds') && <button onClick={() => { window.location.hash = '#admin'; setTimeout(() => notify('Abra o Seravie Cuisine no menu para acompanhar a cozinha', 'info'), 100) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Cozinha (KDS)</button>}
+          <button onClick={() => setGiftModal('sell')} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Vender vale</button>
+          <button onClick={() => setShowReports(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Relatórios</button>
           <button onClick={() => setShowDay(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Resumo do dia</button>
           <button onClick={() => { setMoveModal('deposit'); setMoveForm({ amount: '', description: '' }) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Suprimento</button>
           <button onClick={() => { setMoveModal('withdrawal'); setMoveForm({ amount: '', description: '' }) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Sangria</button>
@@ -670,6 +773,24 @@ export function POSPanel({ notify }) {
                 {hasWidget('item_notes') && <input value={i.note || ''} onChange={(e) => setItemNote(i.product_id, e.target.value)} placeholder="+ observação (ex: sem açúcar, leite vegetal…)" className="w-full mt-2 bg-transparent border-t border-white/[0.05] pt-1.5 text-[11px] text-admin-text placeholder-admin-muted/25 outline-none" />}
               </div>
             ))}
+
+            {/* Cross-sell / upsell */}
+            {suggestions.length > 0 && (
+              <div className="pt-1">
+                <p className="text-[10px] uppercase tracking-wider text-admin-champ/60 mb-1.5 px-1 flex items-center gap-1.5"><Icon name="spark" className="w-3 h-3" />Quem levou isso também levou</p>
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                  {suggestions.map((p) => (
+                    <button key={p.id} onClick={() => addToCart(p)} className="shrink-0 w-24 glass-soft rounded-xl p-2 text-left hover:bg-white/[0.05] transition-colors">
+                      <div className="w-full h-14 rounded-lg bg-white/[0.04] overflow-hidden mb-1.5 flex items-center justify-center">
+                        {(p.images && p.images[0]) ? <img src={p.images[0]} alt="" className="w-full h-full object-cover" /> : <Icon name="cart" className="w-4 h-4 text-admin-champ/25" />}
+                      </div>
+                      <p className="text-admin-text text-[11px] leading-tight line-clamp-2">{p.name}</p>
+                      <p className="text-admin-gold text-[11px] mt-0.5">{brl(p.price)}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Pagamento */}
@@ -692,14 +813,17 @@ export function POSPanel({ notify }) {
                 <button onClick={applyCoupon} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">Aplicar</button>
               </div>
             ))}
-            <div className="flex items-center justify-between"><span className="text-admin-text font-medium">Total</span><span className="text-admin-champ text-xl font-medium">{brl(total)}</span></div>
+            <div className="flex items-center justify-between">
+              <div><span className="text-admin-text font-medium">Total</span>{willEarnPoints > 0 && hasWidget('loyalty') && <span className="block text-[10px] text-admin-champ/60">★ ganha {willEarnPoints} pontos</span>}</div>
+              <span className="text-admin-champ text-xl font-medium">{brl(total)}</span>
+            </div>
 
             {/* Pagamentos adicionados */}
             {payments.length > 0 && (
               <div className="space-y-1">
                 {payments.map((p, idx) => (
                   <div key={idx} className="flex items-center justify-between glass-soft rounded-lg px-3 py-1.5 text-xs">
-                    <span className="text-admin-muted/70">{PM_LABEL[p.method]}</span>
+                    <span className="text-admin-muted/70">{PM_LABEL[p.method]}{p.gift_code ? ` · ${p.gift_code}` : ''}{p.points ? ` · ${p.points} pts` : ''}</span>
                     <div className="flex items-center gap-2"><span className="text-admin-text">{brl(p.amount)}</span><button onClick={() => removePayment(idx)} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="x" className="w-3 h-3" /></button></div>
                   </div>
                 ))}
@@ -710,7 +834,22 @@ export function POSPanel({ notify }) {
               </div>
             )}
 
-            {/* Adicionar pagamento */}
+            {/* Formas rápidas — o operador não perde tempo em menus */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {QUICK_METHODS.map((m) => (
+                <button key={m.value} onClick={() => { if (total <= 0) return; setPayments((p) => [...p, { method: m.value, amount: remaining > 0.001 ? remaining : total }]) }} disabled={total <= 0} className="flex flex-col items-center gap-1 py-2 rounded-lg bg-white/[0.03] hover:bg-admin-champ/10 text-admin-muted/70 hover:text-admin-champ transition-colors disabled:opacity-30">
+                  <Icon name={m.icon} className="w-3.5 h-3.5" />
+                  <span className="text-[10px]">{m.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <button onClick={() => setPixQr({ amount: remaining > 0.001 ? remaining : total })} disabled={total <= 0} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30">PIX QR</button>
+              <button onClick={() => setGiftModal('redeem')} disabled={total <= 0} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30">Vale-presente</button>
+              {hasWidget('loyalty') && <button onClick={() => customer?.id ? redeemPoints((loyalty?.points || 0)) : notify('Selecione um cliente para usar pontos', 'error')} disabled={total <= 0 || !(loyalty?.points > 0)} className="py-1.5 rounded-lg text-[11px] text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-30" title={loyalty?.points ? `${loyalty.points} pontos (vale ${brl((loyalty.points) * POINT_VALUE)})` : 'Sem pontos'}>Pontos {loyalty?.points ? `(${loyalty.points})` : ''}</button>}
+            </div>
+
+            {/* Adicionar pagamento manual (misto) */}
             <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
               <GlassSelect value={payMethod} onChange={setPayMethod} options={PAYMENT_METHODS} />
               <div className="relative w-28"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-admin-muted/40 text-xs">R$</span>
@@ -833,7 +972,160 @@ export function POSPanel({ notify }) {
       {showConfig && <PosConfigDrawer profile={posProfile} onToggle={toggleWidget} onReSegment={() => { setShowConfig(false); setShowOnboarding(true) }} onClose={() => setShowConfig(false)} />}
 
       {productModal && <ProductModal initial={productModal} categories={categories} busy={busy} onSave={saveProduct} onDelete={productModal.id ? () => deleteProduct(productModal) : null} onClose={() => setProductModal(null)} />}
+
+      {giftModal && <GiftCardModal mode={giftModal} onRedeem={redeemGiftCard} onSell={sellGiftCard} onClose={() => setGiftModal(null)} />}
+
+      {pixQr && <PixQrModal amount={pixQr.amount} onConfirm={() => { setPayments((p) => [...p, { method: 'pix', amount: pixQr.amount }]); setPixQr(null); notify('PIX confirmado', 'success') }} onClose={() => setPixQr(null)} />}
+
+      {showReports && <ReportsModal tenantName={profile?.tenant_name} notify={notify} onClose={() => setShowReports(false)} />}
     </div>
+  )
+}
+
+// ---------- Central de relatórios (PDF/CSV com filtros) ----------
+const REPORT_TYPES = [
+  { key: 'vendas', label: 'Vendas detalhadas', desc: 'Cada venda: nº, data, cliente, forma, total' },
+  { key: 'produtos', label: 'Produtos mais vendidos', desc: 'Ranking por quantidade e receita' },
+  { key: 'formas', label: 'Por forma de pagamento', desc: 'Total recebido por forma' },
+  { key: 'dias', label: 'Resumo por dia', desc: 'Vendas, receita e ticket por dia' },
+]
+function ReportsModal({ tenantName, notify, onClose }) {
+  const hoje = new Date().toISOString().slice(0, 10)
+  const trintaDias = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const [type, setType] = useState('vendas')
+  const [from, setFrom] = useState(trintaDias)
+  const [to, setTo] = useState(hoje)
+  const [method, setMethod] = useState('')
+  const [running, setRunning] = useState(false)
+  const inputCls = 'w-full glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+
+  const buildRows = async () => {
+    let q = supabase.from('orders').select('number,total,items,payments,payment_method,created_at,customer_name').eq('channel', 'pdv')
+    if (from) q = q.gte('created_at', from + 'T00:00:00')
+    if (to) q = q.lte('created_at', to + 'T23:59:59')
+    const { data } = await q.order('created_at')
+    let orders = data || []
+    if (method) orders = orders.filter((o) => o.payment_method === method || (o.payments || []).some((p) => p.method === method))
+    if (type === 'vendas') {
+      return orders.map((o) => ({
+        numero: '#' + o.number, data: new Date(o.created_at).toLocaleString('pt-BR'), cliente: o.customer_name || 'Consumidor final',
+        forma: (o.payments || []).map((p) => PM_LABEL[p.method] || p.method).join(' + ') || (PM_LABEL[o.payment_method] || o.payment_method || '—'),
+        total: brl(o.total),
+      }))
+    }
+    if (type === 'produtos') {
+      const agg = {}
+      orders.forEach((o) => (Array.isArray(o.items) ? o.items : []).forEach((it) => {
+        const k = (it.name || '').trim(); if (!k) return
+        const a = agg[k] || (agg[k] = { produto: k, qtd: 0, receita: 0 })
+        a.qtd += Number(it.qty) || 0; a.receita += Number(it.subtotal ?? (it.qty * it.price)) || 0
+      }))
+      return Object.values(agg).sort((x, y) => y.receita - x.receita).map((r) => ({ produto: r.produto, qtd: r.qtd, receita: brl(r.receita) }))
+    }
+    if (type === 'formas') {
+      const agg = {}
+      orders.forEach((o) => {
+        const pays = (o.payments && o.payments.length) ? o.payments : [{ method: o.payment_method, amount: o.total }]
+        pays.forEach((p) => { const k = PM_LABEL[p.method] || p.method || '—'; const a = agg[k] || (agg[k] = { forma: k, qtd: 0, total: 0 }); a.qtd += 1; a.total += Number(p.amount) || 0 })
+      })
+      return Object.values(agg).sort((x, y) => y.total - x.total).map((r) => ({ forma: r.forma, transacoes: r.qtd, total: brl(r.total) }))
+    }
+    // dias
+    const agg = {}
+    orders.forEach((o) => { const d = new Date(o.created_at).toLocaleDateString('pt-BR'); const a = agg[d] || (agg[d] = { data: d, vendas: 0, receita: 0 }); a.vendas += 1; a.receita += Number(o.total) || 0 })
+    return Object.values(agg).map((r) => ({ data: r.data, vendas: r.vendas, receita: brl(r.receita), ticket: brl(r.vendas ? r.receita / r.vendas : 0) }))
+  }
+
+  const generate = async (format) => {
+    setRunning(true)
+    const rows = await buildRows()
+    setRunning(false)
+    if (!rows.length) { notify('Nenhum dado no período/filtro selecionado', 'error'); return }
+    const title = REPORT_TYPES.find((t) => t.key === type)?.label || 'Relatório'
+    const sub = `Seravie POS · ${from} a ${to}${method ? ' · ' + (PM_LABEL[method] || method) : ''}`
+    if (format === 'pdf') exportPdf(title, rows, sub)
+    else exportCsv(`${type}-${from}-a-${to}.csv`, rows)
+  }
+
+  return (
+    <Modal title="Relatórios do Seravie POS" onClose={onClose}>
+      <div className="space-y-4">
+        <div>
+          <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Tipo de relatório</label>
+          <div className="grid grid-cols-2 gap-2">
+            {REPORT_TYPES.map((t) => (
+              <button key={t.key} onClick={() => setType(t.key)} className={`text-left rounded-xl px-3 py-2.5 border transition-colors ${type === t.key ? 'bg-admin-champ/15 border-admin-champ/30' : 'glass-soft border-transparent hover:bg-white/[0.04]'}`}>
+                <p className="text-admin-text text-xs font-medium">{t.label}</p>
+                <p className="text-admin-muted/40 text-[10px] leading-tight">{t.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">De</label>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} /></div>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Até</label>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} /></div>
+        </div>
+        <div>
+          <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Forma de pagamento (opcional)</label>
+          <GlassSelect value={method} onChange={setMethod} options={[{ value: '', label: 'Todas as formas' }, ...PAYMENT_METHODS]} />
+        </div>
+      </div>
+      <div className="flex gap-3 mt-6">
+        <button onClick={() => generate('pdf')} disabled={running} className="flex-1 btn-gradient rounded-xl py-2.5 text-sm font-medium disabled:opacity-50">{running ? 'Gerando…' : 'Gerar PDF'}</button>
+        <button onClick={() => generate('csv')} disabled={running} className="px-4 py-2.5 rounded-xl text-sm text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors disabled:opacity-50">CSV</button>
+        <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm text-admin-muted">Fechar</button>
+      </div>
+    </Modal>
+  )
+}
+
+// ---------- Vale-presente: vender / resgatar ----------
+function GiftCardModal({ mode, onRedeem, onSell, onClose }) {
+  const [code, setCode] = useState('')
+  const [amount, setAmount] = useState('')
+  const sell = mode === 'sell'
+  return (
+    <Modal title={sell ? 'Vender vale-presente' : 'Resgatar vale-presente'} onClose={onClose}>
+      {sell ? (
+        <>
+          <p className="text-admin-muted/50 text-xs mb-4">Escolha o valor. Um código único será gerado ao finalizar a venda e poderá ser usado como pagamento em compras futuras.</p>
+          <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Valor do vale (R$)</label>
+          <div className="relative mb-3"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-admin-muted/40 text-sm">R$</span>
+            <input autoFocus type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" className="w-full glass-input rounded-xl pl-10 pr-4 py-3 text-lg text-admin-text outline-none" /></div>
+          <div className="flex flex-wrap gap-1.5 mb-5">
+            {[50, 100, 150, 200, 300].map((v) => <button key={v} onClick={() => setAmount(String(v))} className="px-3 py-1.5 rounded-lg text-xs bg-white/[0.04] text-admin-muted/70 hover:text-admin-champ hover:bg-admin-champ/10">R$ {v}</button>)}
+          </div>
+          <button onClick={() => onSell(amount)} className="w-full btn-gradient rounded-xl py-2.5 text-sm font-medium">Adicionar à venda</button>
+        </>
+      ) : (
+        <>
+          <p className="text-admin-muted/50 text-xs mb-4">Digite o código do vale-presente. O saldo disponível será aplicado como pagamento.</p>
+          <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Código do vale</label>
+          <input autoFocus value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} onKeyDown={(e) => { if (e.key === 'Enter') onRedeem(code) }} placeholder="GIFT-XXXXXXXX" className="w-full glass-input rounded-xl px-4 py-3 text-sm text-admin-text outline-none uppercase mb-5" />
+          <button onClick={() => onRedeem(code)} className="w-full btn-gradient rounded-xl py-2.5 text-sm font-medium">Aplicar vale</button>
+        </>
+      )}
+    </Modal>
+  )
+}
+
+// ---------- PIX com QR na tela ----------
+function PixQrModal({ amount, onConfirm, onClose }) {
+  // QR de demonstração com o valor; integração com PSP de PIX pluga aqui.
+  const payload = `PIX|SERAVIE|${amount.toFixed(2)}`
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(payload)}`
+  return (
+    <Modal title="Pagamento via PIX" onClose={onClose}>
+      <p className="text-admin-muted/60 text-sm mb-4 text-center">Aponte a câmera do cliente para o QR e confirme o recebimento de <span className="text-admin-champ font-medium">{brl(amount)}</span>.</p>
+      <div className="flex justify-center mb-4"><img src={qrUrl} alt="QR PIX" className="rounded-xl bg-white p-2" width={200} height={200} /></div>
+      <p className="text-admin-muted/40 text-[11px] text-center mb-5">Para conciliação automática, conecte um provedor de PIX (Mercado Pago, PagSeguro, Gerencianet) nas configurações. Por ora, confirme manualmente após o cliente pagar.</p>
+      <div className="flex gap-3">
+        <button onClick={onConfirm} className="flex-1 btn-gradient rounded-xl py-2.5 text-sm font-medium">Confirmar recebimento</button>
+        <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+      </div>
+    </Modal>
   )
 }
 
