@@ -62,8 +62,6 @@ import { FlowPanel } from '../components/admin/FlowPanel'
 import { QuoteStudio } from '../components/admin/QuoteStudio'
 import { DocumentStudio } from '../components/admin/DocumentStudio'
 import { KDSPanel } from '../components/admin/KDSPanel'
-import { TablesPanel } from '../components/admin/TablesPanel'
-import { DeliveryHubPanel } from '../components/admin/DeliveryHubPanel'
 import { FiscalPanel } from '../components/admin/FiscalPanel'
 import { LoyaltyPanel } from '../components/admin/LoyaltyPanel'
 import { ClientExperiencesPanel } from '../components/admin/ClientExperiencesPanel'
@@ -191,8 +189,6 @@ export function AdminDashboard({ onExit }) {
     quotes: <QuoteStudio notify={notify} />,
     documents: <DocumentStudio notify={notify} />,
     kds: <KDSPanel notify={notify} />,
-    tables: <TablesPanel notify={notify} />,
-    delivery_hub: <DeliveryHubPanel notify={notify} />,
     fiscal: <FiscalPanel notify={notify} />,
     loyalty: <LoyaltyPanel notify={notify} />,
     client_exp: <ClientExperiencesPanel notify={notify} />,

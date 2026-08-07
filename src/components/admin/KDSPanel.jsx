@@ -13,6 +13,8 @@ import { KdsTeam } from './kds/KdsTeam'
 import { KdsMenu } from './kds/KdsMenu'
 import { KdsQueues } from './kds/KdsQueues'
 import { KdsPDV } from './kds/KdsPDV'
+import { TablesPanel } from './TablesPanel'
+import { DeliveryHubPanel } from './DeliveryHubPanel'
 
 // Painel de configuração de sons por evento (popover).
 function SoundPanel({ sound, setSound, onClose }) {
@@ -92,6 +94,8 @@ export function KDSPanel({ notify }) {
   const tabs = [
     { key: 'dashboard', label: 'Dashboard', icon: 'chart' },
     { key: 'pdv', label: 'PDV', icon: 'cart' },
+    { key: 'tables', label: 'Mesas & Comandas', icon: 'layout' },
+    { key: 'delivery', label: 'Hub Delivery', icon: 'truck' },
     { key: 'production', label: 'Produção', icon: 'flame' },
     { key: 'queues', label: 'Filas', icon: 'layers' },
     { key: 'map', label: 'Mapa da Cozinha', icon: 'map' },
@@ -110,8 +114,8 @@ export function KDSPanel({ notify }) {
       {/* Cabeçalho do módulo */}
       <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
         <div>
-          <h1 className="font-serif text-4xl text-admin-text">KDS · Kitchen Flow</h1>
-          <p className="text-admin-muted/60 text-sm mt-1">produção em tempo real · movido pelo Experience Flow Engine</p>
+          <h1 className="font-serif text-4xl text-admin-text">Seravie Cuisine</h1>
+          <p className="text-admin-muted/60 text-sm mt-1">KDS · produção em tempo real · movido pelo Experience Flow Engine</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setTouch((v) => !v)} title="Modo touch (botões grandes)" className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${touch ? 'border-admin-champ/25 text-admin-champ bg-admin-champ/10' : 'border-white/10 text-admin-muted/50'}`}>
@@ -138,6 +142,8 @@ export function KDSPanel({ notify }) {
 
       {tab === 'dashboard' && <KdsDashboard kind={kind} />}
       {tab === 'pdv' && <KdsPDV kind={kind} notify={notify} />}
+      {tab === 'tables' && <TablesPanel notify={notify} />}
+      {tab === 'delivery' && <DeliveryHubPanel notify={notify} />}
       {tab === 'production' && (
         <div>
           <div className="flex items-center justify-between mb-4 flex-wrap gap-3">

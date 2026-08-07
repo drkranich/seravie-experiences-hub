@@ -62,7 +62,7 @@ const KITCHEN_STAGES = [
 export const FLOW_PRESETS = {
   kitchen: {
     key: 'kitchen',
-    label: 'Kitchen Flow',
+    label: 'Seravie Cuisine',
     unitSingular: 'pedido',
     unitPlural: 'pedidos',
     stages: KITCHEN_STAGES,
