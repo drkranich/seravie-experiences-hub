@@ -6,6 +6,15 @@ import { ResourcePanel, ResourceTabs } from './ResourcePanel'
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const CH_STATUS = { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido', waived: 'Isento' }
 
+// Níveis de franquia e verticais principais (amarram o contrato ao padrão físico).
+const FR_LEVELS = { 'fr-regional': 'Regional (Compacto/Quiosque)', 'fr-master': 'Master (Loja Completa)', 'fr-nacional': 'Nacional (Flagship)' }
+const FR_VERTICALS = {
+  coffee: 'Coffee Experience', chocolate: 'Chocolate Experience', spa: 'Spa Experience', wine: 'Wine Experience',
+  beauty: 'Beauty Experience', bakery: 'Bakery Experience', brewery: 'Brewery Experience', gourmet: 'Gourmet Retail Experience',
+  gift: 'Gift Experience', floriculture: 'Floriculture Experience', perfumaria: 'Perfumaria Experience', saboaria: 'Saboaria Experience',
+  events: 'Events Experience', tourism: 'Tourism Experience',
+}
+
 // ---------- Contratos de franquia ----------
 function ContractsTab({ notify }) {
   return (
@@ -13,6 +22,8 @@ function ContractsTab({ notify }) {
       fields={[
         { key: 'unit_name', label: 'Unidade', type: 'text', primary: true, required: true, full: true },
         { key: 'franchisee_name', label: 'Franqueado', type: 'text' },
+        { key: 'offering_slug', label: 'Nível da franquia', type: 'select', options: FR_LEVELS, filter: true },
+        { key: 'vertical_slug', label: 'Vertical principal', type: 'select', options: FR_VERTICALS, filter: true },
         { key: 'royalty_pct', label: 'Royalty (%)', type: 'number', required: true },
         { key: 'marketing_fund_pct', label: 'Fundo de marketing (%)', type: 'number' },
         { key: 'fixed_fee', label: 'Taxa fixa mensal (R$)', type: 'currency' },

@@ -84,22 +84,29 @@ export function FranchiseStandards({ mode = 'admin', notify }) {
   const [kits, setKits] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(null)
-  // seleção do franqueado
+  // seleção do franqueado (fallback manual) + contrato amarrado
   const [level, setLevel] = useState('')
   const [vertical, setVertical] = useState('')
+  const [contract, setContract] = useState(null)
 
   useEffect(() => {
     (async () => {
-      const [{ data: s }, { data: k }] = await Promise.all([
+      const reqs = [
         supabase.from('franchise_space_standards').select('*').eq('is_active', true).order('sort_order'),
         supabase.from('franchise_vertical_kits').select('*').eq('is_active', true).order('vertical_name'),
-      ])
+      ]
+      // no modo franqueado, busca o contrato ativo do tenant (RLS já filtra por tenant)
+      if (mode === 'tenant') reqs.push(supabase.from('franchise_contracts').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle())
+      const [{ data: s }, { data: k }, ct] = await Promise.all(reqs)
       setStds(s || []); setKits(k || [])
-      if (s && s.length) setLevel(s[0].offering_slug)
-      if (k && k.length) setVertical(k[0].vertical_slug)
+      const c = ct?.data || null
+      setContract(c)
+      // se o contrato define nível/vertical, usa-os; senão cai no primeiro (fallback)
+      if (c?.offering_slug) setLevel(c.offering_slug); else if (s && s.length) setLevel(s[0].offering_slug)
+      if (c?.vertical_slug) setVertical(c.vertical_slug); else if (k && k.length) setVertical(k[0].vertical_slug)
       setLoading(false)
     })()
-  }, [])
+  }, [mode])
 
   const kitBySlug = useMemo(() => Object.fromEntries(kits.map((k) => [k.vertical_slug, k])), [kits])
   const setArea = (id, field, val) => setStds((xs) => xs.map((s) => s.id === id ? { ...s, [field]: val } : s))
@@ -117,25 +124,46 @@ export function FranchiseStandards({ mode = 'admin', notify }) {
     const std = stds.find((s) => s.offering_slug === level)
     const kit = kitBySlug[vertical]
     const selCls = 'glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+    // contrato amarrado: nível + vertical vêm do contrato do franqueado
+    const linked = contract && contract.offering_slug
     return (
       <div>
-        <div className="glass-soft rounded-xl px-4 py-3 mb-5 text-xs text-admin-muted/60 leading-relaxed">
-          Consulte o padrão físico da sua franquia Seravie. Escolha o seu nível e a vertical principal da sua loja para ver a metragem, o layout, o mobiliário, os equipamentos e o kit de produtos originais que a Seravie entrega na implantação. A metragem é respeitada como via de regra.
-        </div>
-        <div className="flex flex-wrap gap-3 mb-5">
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Nível da franquia</label>
-            <select value={level} onChange={(e) => setLevel(e.target.value)} className={selCls}>
-              {stds.map((s) => <option key={s.offering_slug} value={s.offering_slug}>{s.level_name} · {s.format_name}</option>)}
-            </select>
+        {linked ? (
+          <div className="glass rounded-2xl p-5 mb-5 flex items-start gap-4 flex-wrap">
+            <div className="w-10 h-10 rounded-xl bg-admin-champ/15 flex items-center justify-center shrink-0"><Icon name="building" className="w-5 h-5 text-admin-champ" /></div>
+            <div className="flex-1 min-w-[200px]">
+              <p className="text-admin-text font-medium">{contract.unit_name || contract.franchisee_name || 'Sua franquia Seravie'}</p>
+              <p className="text-admin-muted/50 text-xs mt-0.5">
+                {std ? `${std.level_name} · ${std.format_name}` : contract.offering_slug}
+                {kit ? ` · ${kit.vertical_name}` : ''}
+                {contract.royalty_pct > 0 ? ` · royalty ${Number(contract.royalty_pct)}%` : ''}
+              </p>
+              <p className="text-admin-sage/70 text-[11px] mt-1">Padrão vinculado ao seu contrato de franquia.</p>
+            </div>
           </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Vertical principal</label>
-            <select value={vertical} onChange={(e) => setVertical(e.target.value)} className={selCls}>
-              {kits.map((k) => <option key={k.vertical_slug} value={k.vertical_slug}>{k.vertical_name}</option>)}
-            </select>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="glass-soft rounded-xl px-4 py-3 mb-5 text-xs text-admin-muted/60 leading-relaxed">
+              {contract
+                ? 'Seu contrato ainda não tem o nível/vertical definidos pela franqueadora. Enquanto isso, consulte os padrões abaixo escolhendo o formato desejado.'
+                : 'Consulte o padrão físico da franquia Seravie. Escolha o nível e a vertical principal para ver a metragem, o layout, o mobiliário, os equipamentos e o kit de produtos originais que a Seravie entrega na implantação. A metragem é respeitada como via de regra.'}
+            </div>
+            <div className="flex flex-wrap gap-3 mb-5">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Nível da franquia</label>
+                <select value={level} onChange={(e) => setLevel(e.target.value)} className={selCls}>
+                  {stds.map((s) => <option key={s.offering_slug} value={s.offering_slug}>{s.level_name} · {s.format_name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1">Vertical principal</label>
+                <select value={vertical} onChange={(e) => setVertical(e.target.value)} className={selCls}>
+                  {kits.map((k) => <option key={k.vertical_slug} value={k.vertical_slug}>{k.vertical_name}</option>)}
+                </select>
+              </div>
+            </div>
+          </>
+        )}
         <div className="max-w-xl">
           {std ? <LevelCard std={std} kit={kit} editable={false} /> : <p className="text-admin-muted/40 text-sm">Padrão não encontrado.</p>}
         </div>
