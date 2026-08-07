@@ -18,23 +18,47 @@ export const PERMISSION_GROUPS = (() => {
 })()
 
 export const ALL_PERM_KEYS = PERMISSION_GROUPS.flatMap((g) => [g.key, ...g.pages.map((p) => p.key)])
+const ALL_PERM_KEY_SET = new Set(ALL_PERM_KEYS)
 
 // Níveis: none < view < edit < manage. Só "manage" pode EXCLUIR.
 export const LEVEL_ORDER = ['none', 'view', 'edit', 'manage']
 
+// Um perm avulso ('view:x' | 'edit:x' | 'manage:x') -> { level, key }. '*' é tratado à parte.
+const parsePerm = (p) => {
+  const i = String(p).indexOf(':')
+  if (i < 0) return null
+  const level = p.slice(0, i)
+  const key = p.slice(i + 1)
+  if (!LEVEL_ORDER.includes(level)) return null
+  return { level, key }
+}
+
 // perms (array 'view:<k>' | 'edit:<k>' | 'manage:<k>' | '*') -> mapa de níveis por chave.
+// Preserva chaves LEGADAS (fora da navegação) para que não sejam apagadas ao salvar.
 export const permsToLevels = (perms) => {
   const arr = Array.isArray(perms) ? perms : []
   const star = arr.includes('*')
   const lv = {}
+  // chaves conhecidas (derivadas da navegação)
   ALL_PERM_KEYS.forEach((k) => {
     if (star || arr.includes(`manage:${k}`)) lv[k] = 'manage'
     else if (arr.includes(`edit:${k}`)) lv[k] = 'edit'
     else if (arr.includes(`view:${k}`)) lv[k] = 'view'
     else lv[k] = 'none'
   })
+  // chaves legadas presentes nas perms mas ausentes da navegação — mantém o maior nível
+  if (!star) {
+    arr.forEach((p) => {
+      const parsed = parsePerm(p)
+      if (!parsed || ALL_PERM_KEY_SET.has(parsed.key)) return
+      const cur = lv[parsed.key] || 'none'
+      if (LEVEL_ORDER.indexOf(parsed.level) > LEVEL_ORDER.indexOf(cur)) lv[parsed.key] = parsed.level
+    })
+  }
   return lv
 }
+// Chaves que estão no mapa de níveis mas NÃO pertencem à navegação (legadas/customizadas).
+export const legacyLevelKeys = (lv) => Object.keys(lv || {}).filter((k) => !ALL_PERM_KEY_SET.has(k))
 // mapa de níveis -> perms (array). Só grava chaves com acesso.
 export const levelsToPerms = (lv) => {
   const out = []
@@ -57,12 +81,14 @@ function moduleSummary(g, levels) {
  * Matriz de permissões por página. `levels` é o mapa { chave: 'none'|'view'|'manage' }.
  * onChange recebe o novo mapa. Módulo aplica em bloco; expandir ajusta página a página.
  */
-export function PermissionMatrix({ levels, onChange }) {
+export function PermissionMatrix({ levels, onChange, readOnly = false }) {
   const [open, setOpen] = useState({})
   const groupsByGroup = PERMISSION_GROUPS.reduce((acc, g) => { (acc[g.group] = acc[g.group] || []).push(g); return acc }, {})
+  const legacy = legacyLevelKeys(levels).filter((k) => (levels[k] && levels[k] !== 'none'))
 
-  const setKey = (k, val) => onChange({ ...levels, [k]: val })
+  const setKey = (k, val) => { if (!readOnly) onChange({ ...levels, [k]: val }) }
   const cycleModule = (g) => {
+    if (readOnly) return
     const cur = moduleSummary(g, levels)
     const base = cur === 'partial' ? 'view' : nextLevel(cur) // none→view→edit→manage→none
     const upd = { ...levels, [g.key]: base }
@@ -71,7 +97,18 @@ export function PermissionMatrix({ levels, onChange }) {
   }
 
   return (
-    <div className="glass-soft rounded-xl p-2 max-h-[22rem] overflow-y-auto space-y-3">
+    <div className={`glass-soft rounded-xl p-2 max-h-[22rem] overflow-y-auto space-y-3 ${readOnly ? 'opacity-70 pointer-events-none' : ''}`}>
+      {legacy.length > 0 && (
+        <div className="rounded-lg bg-admin-gold/[0.06] border border-admin-gold/20 px-2.5 py-2">
+          <p className="text-[9px] uppercase tracking-wider text-admin-gold/80 mb-1">Permissões herdadas (fora dos módulos atuais)</p>
+          <div className="flex flex-wrap gap-1.5">
+            {legacy.map((k) => (
+              <span key={k} className="text-[10px] px-2 py-0.5 rounded-lg bg-admin-gold/10 text-admin-gold/90">{levels[k]}:{k}</span>
+            ))}
+          </div>
+          <p className="text-[10px] text-admin-muted/50 mt-1.5">Mantidas ao salvar. Ajuste o acesso pelos módulos abaixo.</p>
+        </div>
+      )}
       {Object.entries(groupsByGroup).map(([groupName, mods]) => (
         <div key={groupName}>
           <p className="text-[9px] uppercase tracking-wider text-admin-muted/40 px-2 mb-1">{groupName}</p>

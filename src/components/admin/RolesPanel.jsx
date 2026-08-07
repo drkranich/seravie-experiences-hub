@@ -40,7 +40,9 @@ export function RolesPanel({ notify }) {
   const openNew = () => { setEditing(null); setForm({ name: '', slug: '', description: '', levels: permsToLevels([]) }); setModal(true) }
   const openEdit = (r) => { setEditing(r); setForm({ name: r.name, slug: r.slug, description: r.description || '', levels: permsToLevels(r.permissions) }); setModal(true) }
 
+  const isSystemEditing = !!(editing && editing.is_system)
   const save = async () => {
+    if (isSystemEditing) return notify('Perfis de sistema não podem ser editados', 'info')
     if (!form.name.trim()) return notify('Nome obrigatório', 'error')
     const permissions = levelsToPerms(form.levels)
     const payload = { name: form.name, slug: form.slug || slugify(form.name), description: form.description, permissions }
@@ -79,7 +81,7 @@ export function RolesPanel({ notify }) {
 
       <div className="glass-soft rounded-xl px-4 py-3 mb-6 flex items-start gap-3">
         <Icon name="eye" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
-        <p className="text-admin-muted/60 text-xs leading-relaxed">Controle por página (cada página é um setor): <span className="text-admin-champ">Ver</span> (leitura), <span className="text-admin-gold">Editar</span> (criar/editar) ou <span className="text-admin-sage">Gerenciar</span> (inclui <span className="text-admin-rose">excluir</span>). Colaboradores só excluem se você conceder "Gerenciar". Administradores enxergam tudo.</p>
+        <p className="text-admin-muted/60 text-xs leading-relaxed">Controle por página (cada página é um setor): <span className="text-admin-champ">Ver</span> (leitura), <span className="text-admin-gold">Editar</span> (criar/editar) ou <span className="text-admin-sage">Gerenciar</span> (inclui <span className="text-admin-rose">excluir</span>). Colaboradores só excluem se você conceder "Gerenciar". Administradores enxergam tudo. Perfis marcados como <span className="text-admin-gold">sistema</span> são padrão e só podem ser visualizados — crie um <span className="text-admin-champ">Novo perfil</span> para personalizar.</p>
       </div>
 
       {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p>
@@ -96,8 +98,8 @@ export function RolesPanel({ notify }) {
                 {r.description && <p className="text-admin-muted/50 text-xs mb-2">{r.description}</p>}
                 <p className="text-admin-champ/60 text-xs">{Array.isArray(r.permissions) && r.permissions.includes('*') ? 'Acesso total' : `${countPerms(r.permissions)} permissões`}</p>
                 <div className="flex gap-1 mt-3 pt-3 border-t border-white/[0.05] opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
-                  {r.slug !== 'super_admin' && <button onClick={() => setConfirmDel(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05] transition-colors ml-auto" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>}
+                  <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title={r.is_system ? 'Ver permissões' : 'Editar'}><Icon name={r.is_system ? 'eye' : 'pen'} className="w-3.5 h-3.5" /></button>
+                  {r.slug !== 'super_admin' && !r.is_system && <button onClick={() => setConfirmDel(r)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05] transition-colors ml-auto" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>}
                 </div>
               </div>
             ))}
@@ -107,17 +109,26 @@ export function RolesPanel({ notify }) {
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="glass-pop rounded-2xl p-7 w-full max-w-lg overflow-visible max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">{editing ? 'Editar perfil' : 'Novo perfil'}</h2><button onClick={() => setModal(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            <div className="flex items-center justify-between mb-6"><h2 className="font-serif text-2xl text-admin-text">{isSystemEditing ? 'Perfil de sistema' : editing ? 'Editar perfil' : 'Novo perfil'}</h2><button onClick={() => setModal(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+            {isSystemEditing && (
+              <div className="glass-soft rounded-xl px-4 py-3 mb-5 flex items-start gap-3 bg-admin-gold/[0.05] border border-admin-gold/20">
+                <Icon name="star" className="w-4 h-4 text-admin-gold/80 mt-0.5 shrink-0" />
+                <p className="text-admin-muted/70 text-xs leading-relaxed">Este é um perfil <span className="text-admin-gold">de sistema</span> e não pode ser alterado — é apenas visualização. Para criar um controle de acesso personalizado, use <span className="text-admin-champ">Novo perfil</span> e defina as permissões módulo a módulo.</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3 mb-5">
-              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome *</label><input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value, slug: editing ? f.slug : slugify(e.target.value) }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
-              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Slug</label><input value={form.slug} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
-              <div className="col-span-2"><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Descrição</label><input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
+              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome *</label><input value={form.name} disabled={isSystemEditing} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value, slug: editing ? f.slug : slugify(e.target.value) }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none disabled:opacity-50" /></div>
+              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Slug</label><input value={form.slug} disabled={isSystemEditing} onChange={(e) => setForm((f) => ({ ...f, slug: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none disabled:opacity-50" /></div>
+              <div className="col-span-2"><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Descrição</label><input value={form.description} disabled={isSystemEditing} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none disabled:opacity-50" /></div>
             </div>
 
             <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-2">Permissões por página <span className="text-admin-muted/40 normal-case tracking-normal">(módulo aplica em bloco; expanda para ajustar setor a setor)</span></p>
-            <PermissionMatrix levels={form.levels} onChange={(lv) => setForm((f) => ({ ...f, levels: lv }))} />
+            <PermissionMatrix levels={form.levels} readOnly={isSystemEditing} onChange={(lv) => setForm((f) => ({ ...f, levels: lv }))} />
 
-            <div className="flex gap-3 mt-6"><button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">{editing ? 'Salvar alterações' : 'Criar perfil'}</button><button onClick={() => setModal(false)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
+            <div className="flex gap-3 mt-6">
+              {!isSystemEditing && <button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">{editing ? 'Salvar alterações' : 'Criar perfil'}</button>}
+              <button onClick={() => setModal(false)} className={`${isSystemEditing ? 'flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ' : 'px-5 text-admin-muted'} py-2.5 rounded-xl text-sm transition-colors`}>{isSystemEditing ? 'Fechar' : 'Cancelar'}</button>
+            </div>
           </div>
         </div>
       )}
