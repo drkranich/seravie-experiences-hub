@@ -3,6 +3,7 @@ import { Icon } from './ui'
 import { CommerceDashboard } from './commerce/CommerceDashboard'
 import { CommerceCatalog } from './commerce/CommerceCatalog'
 import { CommerceMarketplace } from './commerce/CommerceMarketplace'
+import { CommerceShipping } from './commerce/CommerceShipping'
 import { StorePanel } from './StorePanel'
 
 // Seravie Commerce Hub — centro comercial unificado do ecossistema Seravie.
@@ -14,7 +15,8 @@ export function CommerceHub({ notify }) {
   const tabs = [
     { key: 'dashboard', label: 'Dashboard', icon: 'chart' },
     { key: 'catalog', label: 'Catálogo', icon: 'grid' },
-    { key: 'marketplace', label: 'Marketplace', icon: 'truck' },
+    { key: 'marketplace', label: 'Marketplace', icon: 'grid' },
+    { key: 'shipping', label: 'Logística', icon: 'truck' },
     { key: 'store', label: 'Loja & Pedidos', icon: 'cart' },
   ]
   return (
@@ -37,6 +39,7 @@ export function CommerceHub({ notify }) {
       {tab === 'dashboard' && <CommerceDashboard />}
       {tab === 'catalog' && <CommerceCatalog notify={notify} />}
       {tab === 'marketplace' && <CommerceMarketplace notify={notify} />}
+      {tab === 'shipping' && <CommerceShipping notify={notify} />}
       {tab === 'store' && <StorePanel notify={notify} />}
     </div>
   )
