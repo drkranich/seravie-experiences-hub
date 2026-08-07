@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, GlassDate } from './ui'
 import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MAP, defaultWidgetsForSegment } from '../../lib/posConfig'
 import { uploadTo } from '../../lib/storage'
 import { exportPdf, exportCsv } from '../../lib/export'
@@ -63,6 +63,15 @@ export function POSPanel({ notify }) {
   const [loyalty, setLoyalty] = useState(null) // conta de fidelidade do cliente selecionado
   const [pixQr, setPixQr] = useState(null) // { amount }
   const [showReports, setShowReports] = useState(false)
+  const [showLeads, setShowLeads] = useState(false)
+  const [showDash, setShowDash] = useState(false)
+
+  // ---- Múltiplas vendas abertas (abas) + mesas ----
+  const [parked, setParked] = useState([]) // vendas em aberto na memória da sessão
+  const [activeTableLabel, setActiveTableLabel] = useState(null)
+  const [saleLabel, setSaleLabel] = useState('')
+  const [tables, setTables] = useState([])
+  const [showTables, setShowTables] = useState(false)
   const POINT_VALUE = 0.05 // R$ por ponto no resgate (5% de volta)
 
   const [openingAmount, setOpeningAmount] = useState('')
@@ -151,6 +160,8 @@ export function POSPanel({ notify }) {
     setCategories(cats || [])
     const { data: cts } = await supabase.from('contacts').select('id, name').order('name').limit(500)
     setContacts(cts || [])
+    const { data: tbs } = await supabase.from('tables').select('id, label, area, seats, status').eq('active', true).order('sort_order')
+    setTables(tbs || [])
   }
   useEffect(() => { loadSession(); loadProducts(); loadAux(); loadProfile() }, [])
 
@@ -278,6 +289,23 @@ export function POSPanel({ notify }) {
     supabase.from('loyalty_accounts').select('*').eq('contact_id', customer.id).maybeSingle().then(({ data }) => setLoyalty(data || null))
   }, [customer?.id])
 
+  // Cadastra um novo cliente durante a venda (remarketing)
+  const createCustomer = async (form) => {
+    const name = (form.name || '').trim()
+    if (!name) { notify('Informe o nome do cliente', 'error'); return }
+    setBusy(true)
+    const { data, error } = await supabase.from('contacts').insert({
+      tenant_id: tenantId, type: 'customer', name, phone: form.phone?.trim() || null, email: form.email?.trim() || null,
+      birthdate: form.birthdate || null, notes: form.notes?.trim() || null, source: 'pdv', status: 'active',
+      metadata: form.address?.trim() ? { address: form.address.trim() } : {},
+    }).select('id, name').single()
+    setBusy(false)
+    if (error) { notify('Erro ao cadastrar cliente: ' + error.message, 'error'); return }
+    setCustomer({ id: data.id, name: data.name }); setShowCustomer(false)
+    setContacts((c) => [{ id: data.id, name: data.name }, ...c])
+    notify('Cliente cadastrado e vinculado à venda', 'success')
+  }
+
   // ---------- Gift card (vale-presente) ----------
   const redeemGiftCard = async (code) => {
     const c = (code || '').trim().toUpperCase()
@@ -388,7 +416,35 @@ export function POSPanel({ notify }) {
     setStripeLink({ url: data.url, amount: amt })
   }
 
-  const resetSale = () => { setCart([]); setDiscount(''); setPayments([]); setPayAmount(''); setSaleNotes(''); setCustomer(null); setCouponCode(''); setAppliedCoupon(null) }
+  const resetSale = () => { setCart([]); setDiscount(''); setPayments([]); setPayAmount(''); setSaleNotes(''); setCustomer(null); setCouponCode(''); setAppliedCoupon(null); setActiveTableLabel(null); setSaleLabel('') }
+
+  // ---------- Múltiplas vendas abertas (abas) ----------
+  const currentLabel = () => saleLabel || activeTableLabel || customer?.name || `Venda ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+  const snapshotSale = () => ({
+    id: Math.random().toString(36).slice(2, 9), label: currentLabel(), tableLabel: activeTableLabel,
+    cart, customer, discount, couponCode, appliedCoupon, saleNotes, payments,
+    total: cart.reduce((s, i) => s + lineTotal(i), 0),
+  })
+  const restoreSale = (s) => {
+    setCart(s.cart || []); setCustomer(s.customer || null); setDiscount(s.discount || ''); setCouponCode(s.couponCode || '')
+    setAppliedCoupon(s.appliedCoupon || null); setSaleNotes(s.saleNotes || ''); setPayments(s.payments || [])
+    setActiveTableLabel(s.tableLabel || null); setSaleLabel(s.label || '')
+  }
+  const newSale = () => { const snap = cart.length ? snapshotSale() : null; if (snap) setParked((p) => [...p, snap]); resetSale() }
+  const switchTo = (id) => {
+    const target = parked.find((p) => p.id === id); if (!target) return
+    const snap = cart.length ? snapshotSale() : null
+    setParked((prev) => [...prev.filter((p) => p.id !== id), ...(snap ? [snap] : [])])
+    restoreSale(target)
+  }
+  const openTable = (t) => {
+    setShowTables(false)
+    const existing = parked.find((p) => p.tableLabel === t.label)
+    if (existing) return switchTo(existing.id)
+    const snap = cart.length ? snapshotSale() : null
+    if (snap) setParked((p) => [...p, snap])
+    resetSale(); setActiveTableLabel(t.label); setSaleLabel(t.label)
+  }
 
   // Aplica um cupom validando código, validade, mínimo e limite de usos.
   const applyCoupon = async () => {
@@ -615,6 +671,8 @@ export function POSPanel({ notify }) {
           {hasWidget('comandas') && <button onClick={() => setShowHolds(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Comandas {holds.length > 0 && `(${holds.length})`}</button>}
           {hasWidget('kds') && <button onClick={() => { window.location.hash = '#admin'; setTimeout(() => notify('Abra o Seravie Cuisine no menu para acompanhar a cozinha', 'info'), 100) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Cozinha (KDS)</button>}
           <button onClick={() => setGiftModal('sell')} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Vender vale</button>
+          <button onClick={() => setShowDash(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Dashboard</button>
+          <button onClick={() => setShowLeads(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Leads</button>
           <button onClick={() => setShowReports(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Relatórios</button>
           <button onClick={() => setShowDay(true)} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Resumo do dia</button>
           <button onClick={() => { setMoveModal('deposit'); setMoveForm({ amount: '', description: '' }) }} className="px-3 py-2 rounded-xl text-xs text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">Suprimento</button>
@@ -727,6 +785,23 @@ export function POSPanel({ notify }) {
 
         {/* Carrinho */}
         <div className="w-[380px] shrink-0 flex flex-col bg-admin-side/20">
+          {/* Abas de vendas abertas (múltiplas vendas / mesas) */}
+          {hasWidget('comandas') && (
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/[0.06] overflow-x-auto">
+              <div className="shrink-0 flex items-center gap-1.5 rounded-lg pl-2.5 pr-2 py-1.5 bg-admin-champ/15 text-admin-champ text-xs">
+                <span className="max-w-[90px] truncate">{currentLabel()}</span>
+                {subtotal > 0 && <span className="text-admin-champ/60">{brl0(subtotal)}</span>}
+              </div>
+              {parked.map((p) => (
+                <button key={p.id} onClick={() => switchTo(p.id)} className="shrink-0 flex items-center gap-1.5 rounded-lg pl-2.5 pr-2 py-1.5 bg-white/[0.04] text-admin-muted/70 hover:text-admin-text hover:bg-white/[0.07] text-xs transition-colors">
+                  <span className="max-w-[90px] truncate">{p.label}</span>
+                  <span className="text-admin-gold/70">{brl0(p.total)}</span>
+                </button>
+              ))}
+              <button onClick={newSale} className="shrink-0 flex items-center gap-1 rounded-lg px-2 py-1.5 text-admin-champ hover:bg-admin-champ/10 text-xs" title="Abrir nova venda"><Icon name="plus" className="w-3 h-3" />Nova</button>
+              {tables.length > 0 && <button onClick={() => setShowTables(true)} className="shrink-0 flex items-center gap-1 rounded-lg px-2 py-1.5 text-admin-muted/70 hover:text-admin-champ hover:bg-white/[0.05] text-xs" title="Mapa de mesas"><Icon name="grid" className="w-3 h-3" />Mesas</button>}
+            </div>
+          )}
           {/* Cliente */}
           <button onClick={() => { setShowCustomer(true); setCustQuery('') }} className="px-5 py-3 border-b border-white/[0.06] flex items-center gap-3 hover:bg-white/[0.02] transition-colors text-left">
             <Icon name="user" className="w-4 h-4 text-admin-champ/60 shrink-0" />
@@ -871,7 +946,7 @@ export function POSPanel({ notify }) {
       </div>
 
       {/* Modais */}
-      {showCustomer && <CustomerModal query={custQuery} setQuery={setCustQuery} results={custResults} onPick={(c) => { setCustomer(c); setShowCustomer(false) }} onFree={(name) => { setCustomer({ id: null, name }); setShowCustomer(false) }} onClose={() => setShowCustomer(false)} />}
+      {showCustomer && <CustomerModal query={custQuery} setQuery={setCustQuery} results={custResults} busy={busy} onPick={(c) => { setCustomer(c); setShowCustomer(false) }} onFree={(name) => { setCustomer({ id: null, name }); setShowCustomer(false) }} onCreate={createCustomer} onClose={() => setShowCustomer(false)} />}
 
       {showHolds && (
         <Modal title="Comandas em espera" onClose={() => setShowHolds(false)}>
@@ -978,6 +1053,248 @@ export function POSPanel({ notify }) {
       {pixQr && <PixQrModal amount={pixQr.amount} onConfirm={() => { setPayments((p) => [...p, { method: 'pix', amount: pixQr.amount }]); setPixQr(null); notify('PIX confirmado', 'success') }} onClose={() => setPixQr(null)} />}
 
       {showReports && <ReportsModal tenantName={profile?.tenant_name} notify={notify} onClose={() => setShowReports(false)} />}
+
+      {showTables && <TableMap tables={tables} parked={parked} activeLabel={activeTableLabel} onOpen={openTable} onClose={() => setShowTables(false)} />}
+
+      {showLeads && <LeadsModal notify={notify} onClose={() => setShowLeads(false)} />}
+
+      {showDash && <ProductDashboard products={products} notify={notify} onClose={() => setShowDash(false)} />}
+    </div>
+  )
+}
+
+// ---------- Dashboard de desempenho de produtos ----------
+function ProductDashboard({ products, notify, onClose }) {
+  const hoje = new Date().toISOString().slice(0, 10)
+  const trintaDias = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const [from, setFrom] = useState(trintaDias)
+  const [to, setTo] = useState(hoje)
+  const [data, setData] = useState(null) // { top:[], bottom:[], idle:[], totals:{} }
+
+  const load = async () => {
+    setData(null)
+    let q = supabase.from('orders').select('items, created_at').eq('channel', 'pdv')
+    if (from) q = q.gte('created_at', from + 'T00:00:00')
+    if (to) q = q.lte('created_at', to + 'T23:59:59')
+    const { data: orders } = await q.limit(5000)
+    const agg = {}
+    ;(orders || []).forEach((o) => (Array.isArray(o.items) ? o.items : []).forEach((it) => {
+      const key = (it.product_id && String(it.product_id).length > 8) ? it.product_id : (it.name || '').trim()
+      if (!key) return
+      const a = agg[key] || (agg[key] = { name: it.name, qty: 0, revenue: 0, product_id: it.product_id })
+      a.qty += Number(it.qty) || 0
+      a.revenue += Number(it.subtotal ?? (it.qty * it.price)) || 0
+    }))
+    // enriquece com custo/estoque do catálogo e calcula lucro
+    const prodById = Object.fromEntries(products.map((p) => [p.id, p]))
+    const rows = Object.entries(agg).map(([key, a]) => {
+      const p = prodById[a.product_id] || products.find((x) => (x.name || '').trim() === a.name)
+      const cost = p ? Number(p.cost || 0) : 0
+      const profit = a.revenue - cost * a.qty
+      return { ...a, cost, profit, stock: p?.stock, catalogo: !!p }
+    })
+    const sold = rows.sort((x, y) => y.qty - x.qty)
+    const top = sold.slice(0, 8)
+    const bottom = [...rows].filter((r) => r.qty > 0).sort((x, y) => x.qty - y.qty).slice(0, 8)
+    // produtos do catálogo que NÃO venderam no período (parados / possível prejuízo em estoque)
+    const soldIds = new Set(rows.map((r) => r.product_id).filter(Boolean))
+    const soldNames = new Set(rows.map((r) => (r.name || '').trim()))
+    const idle = products.filter((p) => p._src !== 'craft' && !soldIds.has(p.id) && !soldNames.has((p.name || '').trim()))
+      .map((p) => ({ name: p.name, stock: p.stock, cost: Number(p.cost || 0), parado: (p.stock || 0) * Number(p.cost || 0) }))
+      .sort((a, b) => b.parado - a.parado).slice(0, 8)
+    const totals = { receita: rows.reduce((s, r) => s + r.revenue, 0), lucro: rows.reduce((s, r) => s + r.profit, 0), itens: rows.reduce((s, r) => s + r.qty, 0), skusVendidos: rows.length, parados: idle.length }
+    setData({ top, bottom, idle, totals })
+  }
+  useEffect(() => { load() }, [from, to])
+
+  const exportPdfReport = () => {
+    if (!data) return
+    const rows = [
+      ...data.top.map((r, i) => ({ ranking: `#${i + 1} mais vendido`, produto: r.name, qtd: r.qty, receita: brl(r.revenue), lucro: brl(r.profit) })),
+      ...data.idle.map((r) => ({ ranking: 'parado (sem venda)', produto: r.name, qtd: 0, receita: brl(0), lucro: `estoque ${r.stock ?? '—'}` })),
+    ]
+    if (!rows.length) return notify('Sem dados no período', 'error')
+    exportPdf('Desempenho de produtos — Seravie POS', rows, `${from} a ${to}`)
+  }
+
+  const Bar = ({ value, max, tone }) => <div className="h-1.5 rounded-full bg-white/[0.04] overflow-hidden"><div className={`h-full rounded-full ${tone}`} style={{ width: `${max > 0 ? Math.max(4, value / max * 100) : 0}%` }} /></div>
+  const maxTop = data ? Math.max(1, ...data.top.map((r) => r.qty)) : 1
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-4xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Desempenho</p><h2 className="font-serif text-2xl text-admin-text">Dashboard de produtos</h2></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        <div className="flex items-end gap-3 mb-4 flex-wrap">
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">De</label><div className="w-36"><GlassDate value={from} onChange={setFrom} /></div></div>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Até</label><div className="w-36"><GlassDate value={to} onChange={setTo} /></div></div>
+          <div className="mx-auto" />
+          <button onClick={exportPdfReport} className="btn-gradient rounded-xl px-4 py-2 text-sm font-medium">Exportar PDF</button>
+        </div>
+
+        {!data ? <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando…</p> : (
+          <div className="overflow-y-auto -mx-1 px-1 space-y-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="glass rounded-2xl p-4"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Receita</p><p className="text-admin-gold text-xl font-medium">{brl0(data.totals.receita)}</p></div>
+              <div className="glass rounded-2xl p-4"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Lucro estimado</p><p className={`text-xl font-medium ${data.totals.lucro >= 0 ? 'text-admin-sage' : 'text-admin-rose'}`}>{brl0(data.totals.lucro)}</p></div>
+              <div className="glass rounded-2xl p-4"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Itens vendidos</p><p className="text-admin-text text-xl font-medium">{data.totals.itens}</p></div>
+              <div className="glass rounded-2xl p-4"><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1">Produtos parados</p><p className="text-admin-rose text-xl font-medium">{data.totals.parados}</p></div>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-4">
+              {/* Mais vendidos */}
+              <div className="glass rounded-2xl p-5">
+                <p className="text-[11px] uppercase tracking-wider text-admin-sage/80 mb-3 flex items-center gap-1.5"><Icon name="chart" className="w-3.5 h-3.5" />Campeões de venda</p>
+                {data.top.length === 0 ? <p className="text-admin-muted/40 text-sm py-4 text-center">Sem vendas no período.</p> : (
+                  <div className="space-y-2.5">
+                    {data.top.map((r, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-admin-muted/30 text-xs w-4 tabular-nums">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-admin-text truncate mr-2">{r.name}</span><span className="text-admin-gold shrink-0">{r.qty}× · {brl0(r.revenue)}</span></div>
+                          <Bar value={r.qty} max={maxTop} tone="bg-admin-sage/60" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Menos vendidos / parados */}
+              <div className="glass rounded-2xl p-5">
+                <p className="text-[11px] uppercase tracking-wider text-admin-rose/80 mb-3 flex items-center gap-1.5"><Icon name="x" className="w-3.5 h-3.5" />Parados / possível prejuízo</p>
+                {data.idle.length === 0 && data.bottom.length === 0 ? <p className="text-admin-muted/40 text-sm py-4 text-center">Todos os produtos venderam. 🎉</p> : (
+                  <div className="space-y-2">
+                    {data.idle.length > 0 ? data.idle.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs glass-soft rounded-lg px-3 py-2">
+                        <span className="text-admin-text truncate mr-2">{r.name}</span>
+                        <span className="text-admin-rose shrink-0">{r.stock ?? 0} em estoque{r.parado > 0 ? ` · ${brl0(r.parado)} parado` : ''}</span>
+                      </div>
+                    )) : data.bottom.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs glass-soft rounded-lg px-3 py-2">
+                        <span className="text-admin-text truncate mr-2">{r.name}</span>
+                        <span className="text-admin-muted/50 shrink-0">só {r.qty}× vendido(s)</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-admin-muted/40 text-[11px] mt-3">"Parado" = produto do catálogo sem nenhuma venda no período. O valor em estoque × custo indica capital parado.</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Aba de leads compradores (remarketing) ----------
+function LeadsModal({ notify, onClose }) {
+  const [leads, setLeads] = useState(null)
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    (async () => {
+      // pedidos do PDV com cliente vinculado
+      const { data: orders } = await supabase.from('orders').select('contact_id, total, created_at').eq('channel', 'pdv').not('contact_id', 'is', null).limit(4000)
+      const byC = {}
+      ;(orders || []).forEach((o) => { const a = byC[o.contact_id] || (byC[o.contact_id] = { compras: 0, gasto: 0, ultima: null }); a.compras += 1; a.gasto += Number(o.total) || 0; if (!a.ultima || o.created_at > a.ultima) a.ultima = o.created_at })
+      const ids = Object.keys(byC)
+      if (!ids.length) { setLeads([]); return }
+      const { data: cts } = await supabase.from('contacts').select('id, name, phone, email, birthdate, notes, metadata, ltv').in('id', ids)
+      const rows = (cts || []).map((c) => ({ ...c, ...byC[c.id] })).sort((a, b) => (b.ultima || '').localeCompare(a.ultima || ''))
+      setLeads(rows)
+    })()
+  }, [])
+  const filtered = (leads || []).filter((l) => !q || `${l.name} ${l.phone || ''} ${l.email || ''}`.toLowerCase().includes(q.toLowerCase()))
+  const exportRows = () => filtered.map((l) => ({
+    nome: l.name, telefone: l.phone || '', email: l.email || '', endereco: l.metadata?.address || '',
+    aniversario: l.birthdate ? new Date(l.birthdate + 'T12:00:00').toLocaleDateString('pt-BR') : '',
+    compras: l.compras, gasto: brl(l.gasto), ultima_compra: l.ultima ? new Date(l.ultima).toLocaleDateString('pt-BR') : '',
+    observacao: l.notes || '',
+  }))
+  const genPdf = () => { const rows = exportRows(); if (!rows.length) return notify('Nenhum lead para exportar', 'error'); exportPdf('Leads compradores — Seravie POS', rows, 'Base de remarketing') }
+  const genCsv = () => { const rows = exportRows(); if (!rows.length) return notify('Nenhum lead para exportar', 'error'); exportCsv('leads-compradores.csv', rows) }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-1">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Remarketing</p><h2 className="font-serif text-2xl text-admin-text">Leads compradores</h2></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        <p className="text-admin-muted/40 text-xs mb-4">Clientes que já compraram no PDV. Use para campanhas, aniversários e ofertas.</p>
+        <div className="flex items-center gap-2 mb-3">
+          <div className="relative flex-1">
+            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nome, telefone ou e-mail…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2 text-sm text-admin-text outline-none" />
+          </div>
+          <button onClick={genPdf} className="shrink-0 btn-gradient rounded-xl px-4 py-2 text-sm font-medium">PDF</button>
+          <button onClick={genCsv} className="shrink-0 px-3 py-2 rounded-xl text-sm text-admin-champ bg-admin-champ/10 hover:bg-admin-champ/20 transition-colors">CSV</button>
+        </div>
+        <div className="overflow-y-auto -mx-1 px-1">
+          {leads === null ? <p className="text-admin-muted/30 text-sm py-10 text-center">Carregando leads…</p>
+            : filtered.length === 0 ? <p className="text-admin-muted/40 text-sm py-10 text-center">{(leads || []).length === 0 ? 'Ainda não há clientes cadastrados em vendas. Cadastre o comprador ao finalizar a venda.' : 'Nenhum lead encontrado.'}</p>
+            : (
+              <div className="space-y-2">
+                {filtered.map((l) => (
+                  <div key={l.id} className="glass-soft rounded-xl p-3 flex items-center gap-3">
+                    <span className="w-9 h-9 rounded-full bg-admin-champ/10 flex items-center justify-center text-admin-champ shrink-0 text-sm font-medium">{(l.name || '?')[0].toUpperCase()}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-admin-text text-sm truncate">{l.name}</p>
+                      <p className="text-admin-muted/50 text-[11px] truncate">{[l.phone, l.email].filter(Boolean).join(' · ') || 'sem contato'}{l.birthdate ? ` · 🎂 ${new Date(l.birthdate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : ''}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-admin-gold text-sm">{brl(l.gasto)}</p>
+                      <p className="text-admin-muted/40 text-[10px]">{l.compras} compra(s)</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
+        {filtered.length > 0 && <p className="text-admin-muted/40 text-[11px] mt-3">{filtered.length} lead(s)</p>}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Mapa visual de mesas / comandas ----------
+function TableMap({ tables, parked, activeLabel, onOpen, onClose }) {
+  const areas = [...new Set(tables.map((t) => t.area || 'Salão'))]
+  const saleFor = (label) => parked.find((p) => p.tableLabel === label)
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-3xl max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/70">Comandas</p><h2 className="font-serif text-2xl text-admin-text">Mapa de mesas</h2></div>
+          <button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+        </div>
+        {tables.length === 0 ? <p className="text-admin-muted/40 text-sm py-8 text-center">Nenhuma mesa cadastrada. Configure em Operações → Mesas.</p> : areas.map((area) => (
+          <div key={area} className="mb-5">
+            <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">{area}</p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+              {tables.filter((t) => (t.area || 'Salão') === area).map((t) => {
+                const sale = saleFor(t.label)
+                const active = activeLabel === t.label
+                const occupied = !!sale
+                return (
+                  <button key={t.id} onClick={() => onOpen(t)} className={`rounded-2xl p-3 text-left border transition-all ${active ? 'bg-admin-champ/20 border-admin-champ/50' : occupied ? 'bg-admin-gold/10 border-admin-gold/30 hover:border-admin-gold/50' : 'glass-soft border-transparent hover:border-admin-champ/30'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-sm font-medium ${occupied ? 'text-admin-gold' : 'text-admin-text'}`}>{t.label}</span>
+                      <span className={`w-2 h-2 rounded-full ${occupied ? 'bg-admin-gold' : 'bg-admin-sage'}`} />
+                    </div>
+                    {t.seats > 0 && <p className="text-admin-muted/40 text-[10px]">{t.seats} lugares</p>}
+                    <p className={`text-[11px] mt-1 ${occupied ? 'text-admin-gold' : 'text-admin-sage'}`}>{occupied ? brl(sale.total) : 'Livre'}</p>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+        <p className="text-admin-muted/40 text-[11px] mt-2">Toque numa mesa livre para abrir a comanda, ou numa ocupada para retomar. A venda ativa fica destacada.</p>
+      </div>
     </div>
   )
 }
@@ -1129,9 +1446,9 @@ function ReportsModal({ tenantName, notify, onClose }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">De</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} /></div>
+            <GlassDate value={from} onChange={(v) => setFrom(v)} /></div>
           <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Até</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} /></div>
+            <GlassDate value={to} onChange={(v) => setTo(v)} /></div>
         </div>
         <div>
           <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Forma de pagamento (opcional)</label>
@@ -1353,22 +1670,58 @@ function Modal({ title, onClose, children }) {
   )
 }
 
-function CustomerModal({ query, setQuery, results, onPick, onFree, onClose }) {
+function CustomerModal({ query, setQuery, results, onPick, onFree, onCreate, busy, onClose }) {
+  const [tab, setTab] = useState('search') // search | new
+  const [f, setF] = useState({ name: '', phone: '', email: '', address: '', birthdate: '', notes: '' })
+  const set = (patch) => setF((x) => ({ ...x, ...patch }))
+  const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   return (
     <Modal title="Cliente da venda" onClose={onClose}>
-      <div className="relative mb-3">
-        <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
-        <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar cliente…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text outline-none" />
-      </div>
-      <div className="space-y-1 mb-3 max-h-56 overflow-y-auto">
-        {results.map((c) => (
-          <button key={c.id} onClick={() => onPick({ id: c.id, name: c.name })} className="w-full text-left px-3 py-2 rounded-lg text-sm text-admin-text hover:bg-white/[0.05] transition-colors">{c.name}</button>
+      <div className="flex gap-1 bg-white/[0.03] p-1 rounded-xl mb-4">
+        {[['search', 'Buscar'], ['new', 'Cadastrar novo']].map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} className={`flex-1 py-2 rounded-lg text-sm transition-colors ${tab === k ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}>{l}</button>
         ))}
-        {query && results.length === 0 && (
-          <button onClick={() => onFree(query)} className="w-full text-left px-3 py-2 rounded-lg text-sm text-admin-champ hover:bg-white/[0.05] transition-colors">Usar "{query}" como nome avulso</button>
-        )}
       </div>
-      <button onClick={() => onFree(null)} className="text-admin-muted/50 hover:text-admin-text text-xs transition-colors">Consumidor final (sem cliente)</button>
+      {tab === 'search' ? (
+        <>
+          <div className="relative mb-3">
+            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
+            <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar cliente…" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text outline-none" />
+          </div>
+          <div className="space-y-1 mb-3 max-h-56 overflow-y-auto">
+            {results.map((c) => (
+              <button key={c.id} onClick={() => onPick({ id: c.id, name: c.name })} className="w-full text-left px-3 py-2 rounded-lg text-sm text-admin-text hover:bg-white/[0.05] transition-colors">{c.name}</button>
+            ))}
+            {query && results.length === 0 && (
+              <button onClick={() => { setF((x) => ({ ...x, name: query })); setTab('new') }} className="w-full text-left px-3 py-2 rounded-lg text-sm text-admin-champ hover:bg-white/[0.05] transition-colors">Cadastrar "{query}" como novo cliente →</button>
+            )}
+          </div>
+          <button onClick={() => onFree(null)} className="text-admin-muted/50 hover:text-admin-text text-xs transition-colors">Consumidor final (sem cliente)</button>
+        </>
+      ) : (
+        <>
+          <p className="text-admin-muted/40 text-xs mb-4">Cadastre o comprador para remarketing. Só o nome é obrigatório.</p>
+          <div className="space-y-3">
+            <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome *</label>
+              <input autoFocus value={f.name} onChange={(e) => set({ name: e.target.value })} className={inputCls} placeholder="Nome do cliente" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Telefone</label>
+                <input value={f.phone} onChange={(e) => set({ phone: e.target.value })} className={inputCls} placeholder="(00) 00000-0000" /></div>
+              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">E-mail</label>
+                <input value={f.email} onChange={(e) => set({ email: e.target.value })} className={inputCls} placeholder="email@exemplo.com" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Endereço</label>
+                <input value={f.address} onChange={(e) => set({ address: e.target.value })} className={inputCls} placeholder="Rua, nº, bairro" /></div>
+              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Aniversário</label>
+                <GlassDate value={f.birthdate} onChange={(v) => set({ birthdate: v })} /></div>
+            </div>
+            <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Observação</label>
+              <textarea value={f.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} className={`${inputCls} resize-none`} placeholder="Preferências, aniversário, como conheceu…" /></div>
+          </div>
+          <button onClick={() => onCreate(f)} disabled={busy} className="w-full btn-gradient rounded-xl py-2.5 text-sm font-medium mt-5 disabled:opacity-50">{busy ? 'Salvando…' : 'Cadastrar e usar na venda'}</button>
+        </>
+      )}
     </Modal>
   )
 }
