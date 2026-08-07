@@ -4,6 +4,8 @@ import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 import { FlowImageField } from './FlowImageField'
 import { logAudit } from '../../lib/audit'
+import { ResourceTabs } from './ResourcePanel'
+import { DocumentVault } from './DocumentVault'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const STATUS = { draft: ['Rascunho', 'bg-admin-gold/10 text-admin-gold'], sent: ['Enviado', 'bg-admin-champ/10 text-admin-champ'], viewed: ['Visto', 'bg-admin-champ/10 text-admin-champ'], accepted: ['Aceito', 'bg-admin-sage/10 text-admin-sage'], signed: ['Assinado', 'bg-admin-sage/15 text-admin-sage'], rejected: ['Recusado', 'bg-admin-rose/10 text-admin-rose'] }
@@ -29,7 +31,7 @@ const defaultBlocks = () => [
   { type: 'terms', title: 'Termos', text: 'Validade da proposta, formas de pagamento e condições.' },
 ]
 
-export function DocumentStudio({ notify }) {
+function ProposalsStudio({ notify }) {
   const { profile, canEdit } = useTenant()
   const tenantId = profile?.tenant_id
   const mayEdit = canEdit ? canEdit('finance') : true
@@ -97,6 +99,31 @@ export function DocumentStudio({ notify }) {
     notify('Fatura emitida e enviada ao cliente', 'success')
   }
 
+  const [vaulting, setVaulting] = useState(false)
+  const saveToVault = async () => {
+    setVaulting(true)
+    const link = publicUrl(editing.slug)
+    // procura categoria "Propostas" (cria se não existir) para organizar
+    let catId = null
+    const { data: existingCat } = await supabase.from('doc_categories').select('id').ilike('name', 'Propostas').limit(1).maybeSingle()
+    if (existingCat) catId = existingCat.id
+    else { const { data: nc } = await supabase.from('doc_categories').insert({ name: 'Propostas', color: 'sage', icon: 'book' }).select('id').single(); catId = nc?.id || null }
+    // evita duplicar: se já existe entrada dessa proposta, atualiza
+    const { data: existing } = await supabase.from('vault_documents').select('id').eq('source', 'proposal').contains('tags', [editing.id]).limit(1).maybeSingle()
+    const payload = {
+      title: editing.title || 'Proposta', description: `Proposta viva · ${link}`,
+      category_id: catId, source: 'proposal', file_name: (editing.title || 'proposta') + ' (link)', file_ext: 'link',
+      file_type: 'text/uri-list', storage_path: null, doc_date: new Date().toISOString().slice(0, 10),
+      tags: [editing.id, 'proposta'],
+    }
+    let error
+    if (existing) { const r = await supabase.from('vault_documents').update(payload).eq('id', existing.id); error = r.error }
+    else { const r = await supabase.from('vault_documents').insert(payload); error = r.error }
+    setVaulting(false)
+    if (error) return notify('Erro ao guardar no cofre: ' + error.message, 'error')
+    notify(existing ? 'Proposta atualizada no cofre' : 'Proposta guardada no cofre', 'success')
+  }
+
   const setBlock = (i, patch) => { setBlocks((xs) => xs.map((b, j) => j === i ? { ...b, ...patch } : b)); setDirty(true) }
   const addBlock = (type) => { setBlocks((xs) => [...xs, { type, ...(type === 'cover' ? { title: '{{title}}' } : {}) }]); setDirty(true) }
   const removeBlock = (i) => { setBlocks((xs) => xs.filter((_, j) => j !== i)); setSel(null); setDirty(true) }
@@ -108,7 +135,7 @@ export function DocumentStudio({ notify }) {
   if (!editing) return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div><h1 className="font-serif text-4xl text-admin-text">Document Studio</h1><p className="text-admin-muted/60 text-sm mt-1">Propostas e contratos premium — em PDF e página web viva com assinatura</p></div>
+        <div><h2 className="font-serif text-2xl text-admin-text">Propostas & Contratos</h2><p className="text-admin-muted/60 text-sm mt-1">documentos premium — em PDF e página web viva com assinatura</p></div>
         {mayEdit && <button onClick={openNew} className="flex items-center gap-2 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Nova proposta</button>}
       </div>
       {loading ? <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando…</p> : docs.length === 0 ? (
@@ -152,6 +179,7 @@ export function DocumentStudio({ notify }) {
           ) : mayEdit && ['accepted', 'signed'].includes(editing.status) && editing.quote_id && (
             <button onClick={issueInvoice} disabled={invoicing} className="text-xs px-4 py-2 rounded-xl bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 disabled:opacity-50">{invoicing ? 'Emitindo…' : 'Emitir fatura'}</button>
           )}
+          {mayEdit && <button onClick={saveToVault} disabled={vaulting} className="text-xs px-3 py-2 rounded-xl bg-white/[0.05] text-admin-muted/70 hover:text-admin-champ disabled:opacity-50">{vaulting ? 'Guardando…' : 'Guardar no cofre'}</button>}
           {mayEdit && dirty && <button onClick={save} className="text-xs px-4 py-2 rounded-xl bg-admin-sage/15 text-admin-sage hover:bg-admin-sage/25">Salvar</button>}
           {mayEdit && <button onClick={publish} className={`text-xs px-4 py-2 rounded-xl ${editing.public_enabled ? 'bg-admin-gold/15 text-admin-gold' : 'bg-admin-champ/15 text-admin-champ'}`}>{editing.public_enabled ? 'Despublicar' : 'Publicar link'}</button>}
         </div>
@@ -200,5 +228,17 @@ export function DocumentStudio({ notify }) {
         </div>
       </div>
     </div>
+  )
+}
+
+// Document Studio = Propostas & Contratos + Cofre de Documentos (em abas).
+export function DocumentStudio({ notify }) {
+  return (
+    <ResourceTabs title="Seravie Document Studio" subtitle="propostas, contratos e o cofre de documentos da empresa"
+      tabs={[
+        { key: 'proposals', label: 'Propostas & Contratos', render: () => <ProposalsStudio notify={notify} /> },
+        { key: 'vault', label: 'Cofre de Documentos', render: () => <DocumentVault notify={notify} /> },
+      ]}
+    />
   )
 }

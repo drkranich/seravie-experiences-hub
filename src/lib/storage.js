@@ -49,6 +49,39 @@ export async function uploadTo(file, { bucket = MEDIA_BUCKET, folder = '', accep
   return { path, url: data.publicUrl }
 }
 
+// ---------- Cofre de documentos (bucket privado 'vault') ----------
+export const VAULT_BUCKET = 'vault'
+
+// Envia qualquer tipo de arquivo ao cofre (PDF, Word, planilha, imagem...).
+export async function uploadToVault(file, { folder = '', maxMB = 50 } = {}) {
+  if (!file) return { error: 'Nenhum arquivo selecionado.' }
+  if (file.size > maxMB * 1024 * 1024) return { error: `Arquivo muito grande (máx. ${maxMB}MB).` }
+  const safe = (file.name || 'arquivo')
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9.]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+  const rand = Math.random().toString(36).slice(2, 8)
+  const path = `${folder ? folder.replace(/\/+$/, '') + '/' : ''}${Date.now()}-${rand}-${safe}`
+  const { error } = await supabase.storage.from(VAULT_BUCKET).upload(path, file, { cacheControl: '3600', upsert: false })
+  if (error) return { error: error.message }
+  return { path, name: file.name, type: file.type, size: file.size }
+}
+
+// URL temporária assinada para abrir/baixar um arquivo privado do cofre.
+export async function vaultSignedUrl(path, expiresIn = 3600) {
+  if (!path) return { error: 'Sem caminho.' }
+  const { data, error } = await supabase.storage.from(VAULT_BUCKET).createSignedUrl(path, expiresIn)
+  if (error) return { error: error.message }
+  return { url: data.signedUrl }
+}
+
+export async function removeFromVault(path) {
+  if (!path) return {}
+  const { error } = await supabase.storage.from(VAULT_BUCKET).remove([path])
+  return { error: error?.message }
+}
+
 export async function listFiles() {
   const { data, error } = await supabase.storage
     .from(MEDIA_BUCKET)
