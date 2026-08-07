@@ -989,6 +989,68 @@ const REPORT_TYPES = [
   { key: 'formas', label: 'Por forma de pagamento', desc: 'Total recebido por forma' },
   { key: 'dias', label: 'Resumo por dia', desc: 'Vendas, receita e ticket por dia' },
 ]
+// Calendário de vendas (glassmorphism) — mostra os dias com venda e seleciona o período
+const fmtYMD = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+function SalesCalendar({ from, to, onPick }) {
+  const [view, setView] = useState(from ? new Date(from + 'T12:00:00') : new Date())
+  const [stats, setStats] = useState({})
+  const y = view.getFullYear(), m = view.getMonth()
+  useEffect(() => {
+    const start = fmtYMD(new Date(y, m, 1)), end = fmtYMD(new Date(y, m + 1, 0))
+    supabase.from('orders').select('total,created_at').eq('channel', 'pdv')
+      .gte('created_at', start + 'T00:00:00').lte('created_at', end + 'T23:59:59')
+      .then(({ data }) => {
+        const agg = {}; (data || []).forEach((o) => { const d = String(o.created_at).slice(0, 10); const a = agg[d] || (agg[d] = { count: 0, revenue: 0 }); a.count += 1; a.revenue += Number(o.total) || 0 })
+        setStats(agg)
+      })
+  }, [y, m])
+  const firstDay = new Date(y, m, 1).getDay()
+  const days = new Date(y, m + 1, 0).getDate()
+  const cells = [...Array(firstDay).fill(null), ...Array.from({ length: days }, (_, i) => new Date(y, m, i + 1))]
+  const maxRev = Math.max(1, ...Object.values(stats).map((s) => s.revenue))
+  const monthTotal = Object.values(stats).reduce((s, x) => s + x.revenue, 0)
+  const monthCount = Object.values(stats).reduce((s, x) => s + x.count, 0)
+  const clickDay = (d) => { const ds = fmtYMD(d); if (from && to && from === to && ds >= from) onPick(from, ds); else onPick(ds, ds) }
+  const setWholeMonth = () => onPick(fmtYMD(new Date(y, m, 1)), fmtYMD(new Date(y, m + 1, 0)))
+
+  return (
+    <div className="glass-soft rounded-2xl p-3">
+      <div className="flex items-center justify-between mb-2">
+        <button type="button" onClick={setWholeMonth} className="text-admin-champ text-xs font-medium capitalize hover:underline" title="Selecionar o mês inteiro">{view.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</button>
+        <div className="flex gap-1">
+          <button type="button" onClick={() => setView(new Date(y, m - 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center text-sm">‹</button>
+          <button type="button" onClick={() => setView(new Date(y, m + 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center text-sm">›</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+        {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="text-center text-[9px] text-admin-muted/40 py-0.5">{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />
+          const ds = fmtYMD(d)
+          const st = stats[ds]
+          const inRange = from && to && ds >= from && ds <= to
+          const edge = ds === from || ds === to
+          const intensity = st ? 0.25 + 0.55 * (st.revenue / maxRev) : 0
+          return (
+            <button key={i} type="button" onClick={() => clickDay(d)} title={st ? `${st.count} venda(s) · ${brl(st.revenue)}` : 'Sem vendas'}
+              className={`relative h-9 rounded-lg text-[11px] transition-colors flex flex-col items-center justify-center ${edge ? 'bg-admin-champ text-admin-bg font-medium' : inRange ? 'bg-admin-champ/20 text-admin-text' : 'text-admin-text hover:bg-white/[0.06]'}`}
+              style={!edge && !inRange && st ? { background: `rgba(184,156,97,${intensity})` } : undefined}>
+              <span>{d.getDate()}</span>
+              {st && <span className={`absolute bottom-1 w-1 h-1 rounded-full ${edge ? 'bg-admin-bg' : 'bg-admin-champ'}`} />}
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.06] text-[11px]">
+        <span className="text-admin-muted/50">{monthCount} venda(s) no mês</span>
+        <span className="text-admin-champ">{brl(monthTotal)}</span>
+      </div>
+    </div>
+  )
+}
+
 function ReportsModal({ tenantName, notify, onClose }) {
   const hoje = new Date().toISOString().slice(0, 10)
   const trintaDias = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
@@ -1060,6 +1122,10 @@ function ReportsModal({ tenantName, notify, onClose }) {
               </button>
             ))}
           </div>
+        </div>
+        <div>
+          <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Período — toque num dia ou arraste pelo calendário</label>
+          <SalesCalendar from={from} to={to} onPick={(f, t) => { setFrom(f); setTo(t) }} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">De</label>
