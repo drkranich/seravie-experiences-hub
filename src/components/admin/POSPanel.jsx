@@ -22,6 +22,7 @@ export function POSPanel({ notify }) {
 
   const [session, setSession] = useState(null)
   const [movements, setMovements] = useState([])
+  const [orders, setOrders] = useState([])
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
   const [contacts, setContacts] = useState([])
@@ -69,7 +70,10 @@ export function POSPanel({ notify }) {
       setMovements(mv || [])
       const { data: hd } = await supabase.from('pos_holds').select('*').order('created_at', { ascending: false })
       setHolds(hd || [])
-    } else { setMovements([]); setHolds([]) }
+      const { data: ord } = await supabase.from('orders').select('id, total, items, contact_id, created_at')
+        .eq('cash_session_id', data.id).order('created_at', { ascending: false })
+      setOrders(ord || [])
+    } else { setMovements([]); setHolds([]); setOrders([]) }
     setLoading(false)
   }
   const loadProducts = async () => {
@@ -130,6 +134,23 @@ export function POSPanel({ notify }) {
     return { salesTotal, salesCount, cashSales, deposits, withdrawals, byMethod, expectedCash }
   }, [movements, session])
 
+  // KPIs vivos da barra superior — dados reais da sessão de caixa
+  const kpis = useMemo(() => {
+    const count = orders.length
+    const revenue = orders.reduce((s, o) => s + Number(o.total || 0), 0)
+    const ticket = count ? revenue / count : 0
+    const itemsSold = orders.reduce((s, o) => s + (Array.isArray(o.items) ? o.items.reduce((a, it) => a + (Number(it.qty) || 0), 0) : 0), 0)
+    const clients = new Set(orders.map((o) => o.contact_id).filter(Boolean)).size
+    // tempo médio entre vendas (minutos), a partir dos horários dos pedidos
+    let avgGap = 0
+    if (count >= 2) {
+      const ts = orders.map((o) => new Date(o.created_at).getTime()).sort((a, b) => a - b)
+      let sum = 0; for (let i = 1; i < ts.length; i++) sum += ts[i] - ts[i - 1]
+      avgGap = sum / (ts.length - 1) / 60000
+    }
+    return { count, revenue, ticket, itemsSold, clients, avgGap }
+  }, [orders])
+
   const closeCash = async () => {
     setBusy(true)
     const counted = num(countedAmount), expected = summary.expectedCash
@@ -150,8 +171,9 @@ export function POSPanel({ notify }) {
       if (p.stock != null && found.qty >= p.stock) { notify('Estoque insuficiente', 'error'); return c }
       return c.map((i) => i.product_id === p.id ? { ...i, qty: i.qty + 1 } : i)
     }
-    return [...c, { product_id: p.id, name: p.name, price: Number(p.price), qty: 1, discount: 0, stock: p.stock, source: p._src || 'products' }]
+    return [...c, { product_id: p.id, name: p.name, price: Number(p.price), qty: 1, discount: 0, stock: p.stock, source: p._src || 'products', image: (p.images && p.images[0]) || null, note: '' }]
   })
+  const setItemNote = (id, note) => setCart((c) => c.map((i) => i.product_id === id ? { ...i, note } : i))
   const setQty = (id, qty) => setCart((c) => c.flatMap((i) => {
     if (i.product_id !== id) return [i]
     const q = Math.max(0, qty)
@@ -245,7 +267,7 @@ export function POSPanel({ notify }) {
     const pays = payments.length ? payments : [{ method: payMethod, amount: total }]
     if (pays.reduce((s, p) => s + num(p.amount), 0) + 0.001 < total) { notify('Pagamento insuficiente', 'error'); return }
     setBusy(true)
-    const items = cart.map((i) => ({ product_id: i.product_id, name: i.name, price: i.price, qty: i.qty, discount: i.discount || 0, subtotal: lineTotal(i) }))
+    const items = cart.map((i) => ({ product_id: i.product_id, name: i.name, price: i.price, qty: i.qty, discount: i.discount || 0, subtotal: lineTotal(i), note: i.note || null }))
     const primary = pays.length === 1 ? pays[0].method : 'multiplo'
     const { data: order, error } = await supabase.from('orders').insert({
       tenant_id: tenantId, unit_id: profile?.unit_id || null,
@@ -336,6 +358,7 @@ export function POSPanel({ notify }) {
 
     setBusy(false)
     setMovements((m) => [...newMovs, ...m])
+    setOrders((o) => [{ id: order.id, total, items, contact_id: customer?.id || null, created_at: new Date().toISOString() }, ...o])
     setReceipt({ number: order.number, items, total, discount: discountValue, payments: pays, change, customer: customer?.name, notes: saleNotes, at: new Date(), points: earnedPoints, fiscal: fiscalNote })
     resetSale(); loadProducts()
     notify(`Venda #${order.number} registrada${earnedPoints ? ` · +${earnedPoints} pts` : ''}`, 'success')
@@ -385,7 +408,8 @@ export function POSPanel({ notify }) {
 
   if (!session) return (
     <div className="p-6 lg:p-10 max-w-md">
-      <h1 className="font-serif text-4xl text-admin-text mb-1">PDV</h1>
+      <p className="text-[11px] tracking-[0.2em] uppercase text-admin-champ/70 mb-1">Seravie POS</p>
+      <h1 className="font-serif text-4xl text-admin-text mb-1">Ponto de venda</h1>
       <p className="text-admin-muted/60 text-sm mb-8">Nenhum caixa aberto. Abra o caixa para iniciar as vendas.</p>
       <div className="glass rounded-2xl p-7">
         <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Valor de abertura (troco inicial)</label>
@@ -418,6 +442,18 @@ export function POSPanel({ notify }) {
         </div>
       </div>
 
+      {/* Barra viva de KPIs — a tela nunca abre "vazia" */}
+      <div className="grid grid-cols-4 lg:grid-cols-8 gap-px bg-white/[0.05] border-b border-white/[0.06]">
+        <PosKpi label="Vendas hoje" value={brl(kpis.revenue)} icon="chart" accent="champ" />
+        <PosKpi label="Pedidos" value={String(kpis.count)} icon="tag" accent="gold" />
+        <PosKpi label="Ticket médio" value={brl(kpis.ticket)} icon="chart" accent="sage" />
+        <PosKpi label="Itens" value={String(kpis.itemsSold)} icon="cart" accent="champ" />
+        <PosKpi label="Clientes" value={String(kpis.clients)} icon="user" accent="copper" />
+        <PosKpi label="Caixa" value={brl(summary.expectedCash)} icon="check" accent="sage" />
+        <PosKpi label="Operador" value={(profile?.full_name || user?.email?.split('@')[0] || 'Operador')} icon="user" accent="champ" small />
+        <PosKpi label="Tempo médio" value={kpis.avgGap > 0 ? `${kpis.avgGap.toFixed(0)}min` : '—'} icon="clock" accent="gold" />
+      </div>
+
       <div className="flex-1 flex min-h-0">
         {/* Produtos */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-white/[0.06]">
@@ -436,32 +472,58 @@ export function POSPanel({ notify }) {
               <span className="flex items-center gap-1.5 text-[10px] text-admin-sage bg-admin-sage/10 px-2.5 py-2 rounded-lg shrink-0" title="Leitor USB detectado como teclado — bipe para adicionar"><span className="w-1.5 h-1.5 rounded-full bg-admin-sage animate-pulse" />Leitor pronto</span>
             </div>
             {categories.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap">
-                <button onClick={() => setCatFilter('')} className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${!catFilter ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/60 hover:text-admin-text'}`}>Todos</button>
-                {categories.map((c) => (
-                  <button key={c.id} onClick={() => setCatFilter(c.id)} className={`px-3 py-1.5 rounded-lg text-xs transition-colors ${catFilter === c.id ? 'bg-admin-champ/15 text-admin-champ' : 'bg-white/[0.04] text-admin-muted/60 hover:text-admin-text'}`}>{c.name}</button>
-                ))}
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                <button onClick={() => setCatFilter('')} className={`shrink-0 px-4 py-2 rounded-xl text-xs transition-all border ${!catFilter ? 'bg-admin-champ/15 text-admin-champ border-admin-champ/30' : 'bg-white/[0.03] text-admin-muted/60 border-transparent hover:text-admin-text hover:border-white/10'}`}>
+                  <span className="block font-medium">Todos</span>
+                  <span className="block text-[10px] opacity-50">{products.length} itens</span>
+                </button>
+                {categories.map((c) => {
+                  const n = products.filter((p) => p.category_id === c.id).length
+                  const active = catFilter === c.id
+                  return (
+                    <button key={c.id} onClick={() => setCatFilter(active ? '' : c.id)} className={`shrink-0 px-4 py-2 rounded-xl text-xs transition-all border ${active ? 'bg-admin-champ/15 text-admin-champ border-admin-champ/30' : 'bg-white/[0.03] text-admin-muted/60 border-transparent hover:text-admin-text hover:border-white/10'}`}>
+                      <span className="block font-medium whitespace-nowrap">{c.name}</span>
+                      <span className="block text-[10px] opacity-50">{n} {n === 1 ? 'item' : 'itens'}</span>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             {filtered.length === 0 ? (
-              <div className="glass rounded-2xl p-10 text-center"><p className="text-admin-muted/40 text-sm">Nenhum produto. Cadastre em Catálogo.</p></div>
+              <div className="h-full flex flex-col items-center justify-center text-center px-6 py-16">
+                <div className="w-16 h-16 rounded-2xl bg-admin-champ/10 flex items-center justify-center mb-4"><Icon name="cart" className="w-7 h-7 text-admin-champ/50" /></div>
+                <p className="text-admin-text text-sm mb-1">{products.length === 0 ? 'Seu catálogo está vazio' : 'Nenhum produto encontrado'}</p>
+                <p className="text-admin-muted/40 text-xs max-w-xs">{products.length === 0 ? 'Cadastre produtos no Seravie Commerce Hub para vê-los aqui em cartões, com foto, preço e estoque.' : 'Ajuste a busca ou a categoria selecionada.'}</p>
+              </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                 {filtered.map((p) => {
                   const out = p.stock != null && p.stock <= 0
                   const low = !out && p.stock != null && p.min_stock != null && p.stock <= p.min_stock && p.min_stock > 0
+                  const img = (p.images && p.images[0]) || null
                   return (
-                    <div key={p.id} className={`glass rounded-xl p-4 border transition-all ${out ? 'opacity-50 border-transparent' : 'border-transparent hover:border-admin-champ/30 lift'}`}>
+                    <div key={p.id} className={`group glass rounded-2xl overflow-hidden border transition-all ${out ? 'opacity-50 border-transparent' : 'border-transparent hover:border-admin-champ/30 lift'}`}>
                       <button onClick={() => !out && addToCart(p)} disabled={out} className="text-left w-full">
-                        <p className="text-admin-text text-sm font-medium line-clamp-2 mb-2">{p.name}</p>
-                        <div className="flex items-center justify-between">
-                          <p className="text-admin-gold text-sm font-medium">{brl(p.price)}</p>
-                          {p.stock != null && <p className={`text-[11px] ${out ? 'text-admin-rose' : low ? 'text-admin-gold' : 'text-admin-muted/40'}`}>{out ? 'sem estoque' : `${p.stock} un`}</p>}
+                        <div className="aspect-[4/3] bg-white/[0.03] relative overflow-hidden">
+                          {img
+                            ? <img src={img} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            : <div className="w-full h-full flex items-center justify-center"><Icon name="cart" className="w-8 h-8 text-admin-champ/20" /></div>}
+                          {p.stock != null && (
+                            <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded-md backdrop-blur-sm ${out ? 'bg-admin-rose/25 text-admin-rose' : low ? 'bg-admin-gold/25 text-admin-gold' : 'bg-black/40 text-white/80'}`}>{out ? 'sem estoque' : `${p.stock} un`}</span>
+                          )}
+                          {!out && <span className="absolute inset-0 bg-admin-champ/0 group-hover:bg-admin-champ/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"><span className="w-9 h-9 rounded-full bg-admin-champ text-admin-bg flex items-center justify-center shadow-lg"><Icon name="plus" className="w-4 h-4" /></span></span>}
+                        </div>
+                        <div className="p-3">
+                          <p className="text-admin-text text-sm font-medium line-clamp-2 leading-tight mb-1 min-h-[2.4em]">{p.name}</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-admin-gold text-sm font-medium">{brl(p.price)}</p>
+                            {p.sku && <p className="text-[10px] text-admin-muted/30">{p.sku}</p>}
+                          </div>
                         </div>
                       </button>
-                      <button onClick={() => { setStockModal(p); setStockForm({ quantity: '', notes: '' }) }} className="mt-2 text-[10px] text-admin-muted/40 hover:text-admin-champ transition-colors">+ estoque</button>
+                      <button onClick={() => { setStockModal(p); setStockForm({ quantity: '', notes: '' }) }} className="w-full px-3 pb-2.5 -mt-1 text-[10px] text-admin-muted/30 hover:text-admin-champ transition-colors text-left">+ estoque</button>
                     </div>
                   )
                 })}
@@ -490,10 +552,18 @@ export function POSPanel({ notify }) {
               </div>
             )}
             {cart.map((i) => (
-              <div key={i.product_id} className="glass rounded-xl px-3 py-2.5">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <p className="text-admin-text text-sm flex-1 min-w-0">{i.name}</p>
-                  <button onClick={() => removeItem(i.product_id)} className="text-admin-muted/40 hover:text-admin-rose shrink-0"><Icon name="x" className="w-3.5 h-3.5" /></button>
+              <div key={i.product_id} className="glass rounded-xl p-2.5">
+                <div className="flex items-start gap-2.5 mb-2">
+                  <div className="w-11 h-11 rounded-lg bg-white/[0.04] overflow-hidden shrink-0 flex items-center justify-center">
+                    {i.image ? <img src={i.image} alt="" className="w-full h-full object-cover" /> : <Icon name="cart" className="w-4 h-4 text-admin-champ/25" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-admin-text text-sm leading-tight min-w-0">{i.name}</p>
+                      <button onClick={() => removeItem(i.product_id)} className="text-admin-muted/40 hover:text-admin-rose shrink-0"><Icon name="x" className="w-3.5 h-3.5" /></button>
+                    </div>
+                    <p className="text-admin-muted/40 text-[11px]">{brl(i.price)} un</p>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -507,6 +577,7 @@ export function POSPanel({ notify }) {
                     <p className="text-admin-gold text-sm w-16 text-right">{brl(lineTotal(i))}</p>
                   </div>
                 </div>
+                <input value={i.note || ''} onChange={(e) => setItemNote(i.product_id, e.target.value)} placeholder="+ observação (ex: sem açúcar, leite vegetal…)" className="w-full mt-2 bg-transparent border-t border-white/[0.05] pt-1.5 text-[11px] text-admin-text placeholder-admin-muted/25 outline-none" />
               </div>
             ))}
           </div>
@@ -673,6 +744,18 @@ export function POSPanel({ notify }) {
 }
 
 // ---------- Componentes auxiliares ----------
+function PosKpi({ label, value, icon, accent, small }) {
+  const tone = { champ: 'text-admin-champ', gold: 'text-admin-gold', sage: 'text-admin-sage', copper: 'text-admin-copper' }[accent] || 'text-admin-champ'
+  return (
+    <div className="bg-admin-side/40 px-3 py-2.5 flex items-center gap-2.5 min-w-0">
+      <div className={`w-7 h-7 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0 ${tone}`}><Icon name={icon} className="w-3.5 h-3.5" /></div>
+      <div className="min-w-0">
+        <p className="text-[9px] uppercase tracking-wider text-admin-muted/40 truncate">{label}</p>
+        <p className={`${small ? 'text-xs' : 'text-sm'} font-medium text-admin-text tabular-nums truncate leading-tight`}>{value}</p>
+      </div>
+    </div>
+  )
+}
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

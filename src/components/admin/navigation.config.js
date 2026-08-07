@@ -34,7 +34,7 @@ export const CORE_SECTIONS = [
         { key: 'hd.kb', label: 'Base de Conhecimento', route: 'knowledge' },
         { key: 'hd.audit', label: 'Auditoria', route: 'audit' },
       ]},
-      { key: 'pos', label: 'PDV', icon: 'tag', route: 'pos' },
+      { key: 'pos', label: 'Seravie POS', icon: 'tag', route: 'pos' },
       { key: 'kds', label: 'Seravie Cuisine', icon: 'flame', route: 'kds' },
       { key: 'fiscal', label: 'Emissão Fiscal', icon: 'check', route: 'fiscal' },
       { key: 'loyalty', label: 'Fidelidade', icon: 'star', route: 'loyalty' },
