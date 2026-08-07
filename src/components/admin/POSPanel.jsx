@@ -4,6 +4,7 @@ import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
 import { Icon, GlassSelect } from './ui'
 import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MAP, defaultWidgetsForSegment } from '../../lib/posConfig'
+import { uploadTo } from '../../lib/storage'
 
 const PAYMENT_METHODS = [
   { value: 'dinheiro', label: 'Dinheiro' },
@@ -88,10 +89,15 @@ export function POSPanel({ notify }) {
     setShowOnboarding(false)
     notify(`Perfil "${seg?.label}" configurado`, 'success')
   }
-  const toggleWidget = async (key) => {
-    const cur = posProfile?.widgets || []
-    const next = cur.includes(key) ? cur.filter((w) => w !== key) : [...cur, key]
-    await saveProfile({ widgets: next })
+  const toggleWidget = (key) => {
+    // update otimista funcional (evita perder toggles em cliques rápidos) + persiste
+    setPosProfile((prev) => {
+      const cur = prev?.widgets || []
+      const next = cur.includes(key) ? cur.filter((w) => w !== key) : [...cur, key]
+      const row = { ...(prev || { tenant_id: tenantId, profile: 'retail' }), widgets: next, tenant_id: tenantId, updated_at: new Date().toISOString() }
+      supabase.from('pos_profiles').upsert(row, { onConflict: 'tenant_id' }).then(({ error }) => { if (error) notify('Erro ao salvar widget', 'error') })
+      return { ...(prev || {}), widgets: next }
+    })
   }
 
   const loadSession = async () => {
@@ -902,8 +908,18 @@ function PosConfigDrawer({ profile, onToggle, onReSegment, onClose }) {
 // ---------- Cadastro rápido de produto ----------
 function ProductModal({ initial, categories, busy, onSave, onDelete, onClose }) {
   const [f, setF] = useState(initial)
+  const [uploading, setUploading] = useState(false)
+  const [upErr, setUpErr] = useState('')
   const set = (patch) => setF((x) => ({ ...x, ...patch }))
   const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  const onPickImage = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setUploading(true); setUpErr('')
+    const res = await uploadTo(file, { bucket: 'media', folder: 'produtos', accept: 'image', maxMB: 8 })
+    setUploading(false)
+    if (res.error) { setUpErr(res.error); return }
+    set({ image: res.url })
+  }
   return (
     <Modal title={f.id ? 'Editar produto' : 'Novo produto'} onClose={onClose}>
       <div className="space-y-3">
@@ -923,9 +939,28 @@ function ProductModal({ initial, categories, busy, onSave, onDelete, onClose }) 
         </div>
         <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Categoria</label>
           <GlassSelect value={f.category_id || ''} onChange={(v) => set({ category_id: v })} options={[{ value: '', label: 'Sem categoria' }, ...categories.map((c) => ({ value: c.id, label: c.name }))]} /></div>
-        <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Foto (URL)</label>
-          <input value={f.image} onChange={(e) => set({ image: e.target.value })} className={inputCls} placeholder="https://…" /></div>
-        {f.image && <img src={f.image} alt="" className="w-full h-32 object-cover rounded-xl" onError={(e) => { e.target.style.display = 'none' }} />}
+        <div>
+          <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Foto do produto</label>
+          {f.image
+            ? (
+              <div className="relative rounded-xl overflow-hidden group">
+                <img src={f.image} alt="" className="w-full h-36 object-cover" onError={(e) => { e.target.style.display = 'none' }} />
+                <button onClick={() => set({ image: '' })} className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 text-white flex items-center justify-center hover:bg-admin-rose/70" title="Remover foto"><Icon name="x" className="w-4 h-4" /></button>
+              </div>
+            )
+            : (
+              <label className={`flex flex-col items-center justify-center gap-1.5 h-28 rounded-xl border border-dashed border-white/15 cursor-pointer hover:border-admin-champ/40 hover:bg-white/[0.02] transition-colors ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                <Icon name="plus" className="w-5 h-5 text-admin-champ/60" />
+                <span className="text-admin-muted/50 text-xs">{uploading ? 'Enviando…' : 'Clique para enviar uma foto (JPG/PNG)'}</span>
+                <input type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+              </label>
+            )}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-admin-muted/30 text-[10px]">ou cole uma URL</span>
+            <input value={f.image || ''} onChange={(e) => set({ image: e.target.value })} className="flex-1 glass-input rounded-lg px-3 py-1.5 text-xs text-admin-text outline-none" placeholder="https://…" />
+          </div>
+          {upErr && <p className="text-admin-rose text-[11px] mt-1">{upErr}</p>}
+        </div>
       </div>
       <div className="flex items-center gap-3 mt-6">
         <button onClick={() => onSave(f)} disabled={busy} className="flex-1 btn-gradient rounded-xl py-2.5 text-sm font-medium disabled:opacity-50">{f.id ? 'Salvar' : 'Cadastrar'}</button>
