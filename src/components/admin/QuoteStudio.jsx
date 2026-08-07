@@ -27,6 +27,34 @@ const KIND = {
 }
 const emptyItem = () => ({ _new: true, name: '', kind: 'product', qty: 1, unit_cost: 0, unit_price: 0, discount: 0, discount_type: 'percent', tax_rate: 0 })
 
+// motor de cálculo (reutilizado no editor e no comparativo de cenários)
+function computeQuote(items, eng = {}) {
+  let sub = 0, disc = 0, tax = 0, cost = 0
+  ;(items || []).forEach((r) => {
+    const gross = (Number(r.qty) || 0) * (Number(r.unit_price) || 0)
+    const d = r.discount_type === 'amount' ? (Number(r.discount) || 0) : gross * (Number(r.discount) || 0) / 100
+    const net = Math.max(gross - d, 0)
+    tax += net * (Number(r.tax_rate) || 0) / 100
+    sub += gross; disc += d; cost += (Number(r.qty) || 0) * (Number(r.unit_cost) || 0)
+  })
+  const extras = (Number(eng.freight) || 0) + (Number(eng.packaging) || 0)
+  const commission = (sub - disc) * ((Number(eng.commission_pct) || 0) / 100)
+  const extraTax = (sub - disc) * ((Number(eng.extra_tax_pct) || 0) / 100)
+  const total = sub - disc + tax + extras
+  const fullCost = cost + extras + commission + extraTax
+  const profit = total - fullCost
+  const margin = total > 0 ? profit / total * 100 : 0
+  const tm = (Number(eng.target_margin) || 0) / 100
+  const idealPrice = tm < 1 && tm > 0 ? fullCost / (1 - tm) : total
+  return { sub, disc, tax, cost, extras, commission, extraTax, total, fullCost, profit, margin, markup: fullCost > 0 ? profit / fullCost * 100 : 0, idealPrice }
+}
+// nomes/estilos dos cenários
+const SCEN_PRESET = [
+  { key: 'economico', name: 'Econômico', tone: 'sage' },
+  { key: 'premium', name: 'Premium', tone: 'champ' },
+  { key: 'signature', name: 'Signature', tone: 'gold' },
+]
+
 export function QuoteStudio({ notify }) {
   const { profile, canEdit } = useTenant()
   const tenantId = profile?.tenant_id
@@ -220,27 +248,59 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
   const inst = editing.metadata?.installments || 1
   const setInst = (n) => { setEditing((q) => ({ ...q, metadata: { ...(q.metadata || {}), installments: n } })); setDirty(true) }
 
-  const calc = useMemo(() => {
-    let sub = 0, disc = 0, tax = 0, cost = 0
-    items.forEach((r) => {
-      const gross = (Number(r.qty) || 0) * (Number(r.unit_price) || 0)
-      const d = r.discount_type === 'amount' ? (Number(r.discount) || 0) : gross * (Number(r.discount) || 0) / 100
-      const net = Math.max(gross - d, 0)
-      tax += net * (Number(r.tax_rate) || 0) / 100
-      sub += gross; disc += d; cost += (Number(r.qty) || 0) * (Number(r.unit_cost) || 0)
-    })
-    const extras = (Number(eng.freight) || 0) + (Number(eng.packaging) || 0)
-    const commission = (sub - disc) * ((Number(eng.commission_pct) || 0) / 100)
-    const extraTax = (sub - disc) * ((Number(eng.extra_tax_pct) || 0) / 100)
-    const total = sub - disc + tax + extras
-    const fullCost = cost + extras + commission + extraTax
-    const profit = total - fullCost
-    const margin = total > 0 ? profit / total * 100 : 0
-    // preço ideal: custo total / (1 - margem-alvo)
-    const tm = (Number(eng.target_margin) || 0) / 100
-    const idealPrice = tm < 1 && tm > 0 ? fullCost / (1 - tm) : total
-    return { sub, disc, tax, cost, extras, commission, extraTax, total, fullCost, profit, margin, markup: fullCost > 0 ? profit / fullCost * 100 : 0, idealPrice }
-  }, [items, eng])
+  // ----- CENÁRIOS -----
+  // Cenários extras ficam em metadata.scenarios; o cenário ATIVO usa os `items` reais (quote_items).
+  const scenarios = editing.metadata?.scenarios || []
+  const activeScen = editing.metadata?.active_scenario || 'principal'
+  const scenList = [{ key: 'principal', name: 'Principal', tone: 'champ' }, ...scenarios.map((s) => ({ key: s.key, name: s.name, tone: s.tone || 'sage' }))]
+  const stashActive = (q) => {
+    // guarda os itens/engine atuais no cenário ativo (se não for principal, guarda em metadata)
+    if (activeScen === 'principal') return q
+    const scs = (q.metadata?.scenarios || []).map((s) => s.key === activeScen ? { ...s, items, engine: eng } : s)
+    return { ...q, metadata: { ...(q.metadata || {}), scenarios: scs } }
+  }
+  const switchScen = (key) => {
+    if (key === activeScen) return
+    // salva o cenário atual em memória e carrega o novo
+    let q = stashActive(editing)
+    if (key === 'principal') {
+      // itens principais ficam separados em metadata.principal (para não perder ao trocar)
+      const saved = q.metadata?.principal
+      q = { ...q, metadata: { ...(q.metadata || {}), active_scenario: 'principal' } }
+      setEditing(q); setItems(saved?.items || items); if (saved?.engine) q.metadata.engine = saved.engine
+    } else {
+      // ao sair do principal, preserva-o
+      if (activeScen === 'principal') q = { ...q, metadata: { ...(q.metadata || {}), principal: { items, engine: eng } } }
+      const sc = (q.metadata?.scenarios || []).find((s) => s.key === key)
+      q = { ...q, metadata: { ...(q.metadata || {}), active_scenario: key, engine: sc?.engine || eng } }
+      setEditing(q); setItems(sc?.items || [emptyItem()])
+    }
+    setDirty(true)
+  }
+  const addScenario = () => {
+    const used = new Set(scenarios.map((s) => s.key))
+    const preset = SCEN_PRESET.find((p) => !used.has(p.key)) || { key: 'cenario-' + (scenarios.length + 1), name: 'Cenário ' + (scenarios.length + 1), tone: 'copper' }
+    const q = stashActive(editing)
+    if (activeScen === 'principal') q.metadata = { ...(q.metadata || {}), principal: { items, engine: eng } }
+    const sc = { key: preset.key, name: preset.name, tone: preset.tone, items: items.map((x) => ({ ...x })), engine: { ...eng } }
+    setEditing({ ...q, metadata: { ...(q.metadata || {}), scenarios: [...scenarios, sc], active_scenario: preset.key } })
+    setItems(sc.items); setDirty(true); notify?.(`Cenário "${preset.name}" criado (cópia do atual)`, 'success')
+  }
+  const renameScen = (key, name) => setEditing((q) => ({ ...q, metadata: { ...(q.metadata || {}), scenarios: (q.metadata?.scenarios || []).map((s) => s.key === key ? { ...s, name } : s) } }))
+  const removeScen = (key) => {
+    const q = { ...editing, metadata: { ...(editing.metadata || {}), scenarios: (editing.metadata?.scenarios || []).filter((s) => s.key !== key) } }
+    if (activeScen === key) { q.metadata.active_scenario = 'principal'; setItems(q.metadata?.principal?.items || items) }
+    setEditing(q); setDirty(true)
+  }
+  const [compareOpen, setCompareOpen] = useState(false)
+  const allScenariosForCompare = useMemo(() => {
+    const principal = activeScen === 'principal' ? { items, engine: eng } : (editing.metadata?.principal || { items: [], engine: {} })
+    const list = [{ key: 'principal', name: 'Principal', tone: 'champ', ...principal }]
+    scenarios.forEach((s) => list.push(s.key === activeScen ? { ...s, items, engine: eng } : s))
+    return list.map((s) => ({ ...s, calc: computeQuote(s.items, s.engine) }))
+  }, [editing, items, eng, scenarios, activeScen])
+
+  const calc = useMemo(() => computeQuote(items, eng), [items, eng])
 
   const setItem = (i, patch) => { setItems((xs) => xs.map((r, j) => j === i ? { ...r, ...patch } : r)); setDirty(true) }
   const addItem = (kind) => { setItems((xs) => [...xs, { ...emptyItem(), kind: kind || 'product' }]); setDirty(true) }
@@ -255,7 +315,11 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
       discount_type: r.discount_type, tax_rate: Number(r.tax_rate) || 0, sort_order: k,
     }))
     if (rows.length) await supabase.from('quote_items').insert(rows)
-    await supabase.from('quotes').update({ title: editing.title, valid_until: editing.valid_until || null, notes: editing.notes || null, metadata: editing.metadata || {}, updated_at: new Date().toISOString() }).eq('id', editing.id)
+    // garante que o cenário ativo (itens/engine atuais) esteja gravado no metadata
+    let meta = { ...(editing.metadata || {}), engine: eng }
+    if (activeScen === 'principal') meta.principal = { items, engine: eng }
+    else meta.scenarios = (meta.scenarios || []).map((s) => s.key === activeScen ? { ...s, items, engine: eng } : s)
+    await supabase.from('quotes').update({ title: editing.title, valid_until: editing.valid_until || null, notes: editing.notes || null, metadata: meta, updated_at: new Date().toISOString() }).eq('id', editing.id)
     await supabase.rpc('recalc_quote', { p_quote: editing.id })
     logAudit({ action: 'update', resource_type: 'quotes', resource_id: editing.id, new_data: { items: rows.length } }, tenantId)
     setDirty(false); notify('Orçamento salvo', 'success')
@@ -286,8 +350,9 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
         <span className="text-admin-muted/40 text-xs tabular-nums px-1">{editing.number}</span>
         <span className={`text-[9px] px-2 py-0.5 rounded-lg ${st[1]}`}>{st[0]}</span>
         <div className="mx-auto" />
+        {scenList.length > 1 && <button onClick={() => setCompareOpen(true)} className={`${tbtn} text-admin-muted/70 hover:text-admin-champ hover:bg-white/[0.05]`}><Icon name="layers" className="w-3.5 h-3.5" />Comparar</button>}
         <button onClick={exportQuotePdf} className={`${tbtn} text-admin-muted/70 hover:text-admin-champ hover:bg-white/[0.05]`}><Icon name="chart" className="w-3.5 h-3.5" />PDF</button>
-        {mayEdit && <ConvertMenu editing={editing} calc={calc} items={items} tenantId={tenantId} notify={notify} onStatus={setStatus} />}
+        {mayEdit && <ConvertMenu editing={editing} calc={calc} items={items} scenarios={allScenariosForCompare} tenantId={tenantId} notify={notify} onStatus={setStatus} />}
         {mayEdit && dirty && <button onClick={save} className={`${tbtn} bg-admin-sage/20 text-admin-sage`}><Icon name="check" className="w-3.5 h-3.5" />Salvar</button>}
         {mayEdit && <div className="w-40"><GlassSelect value={editing.status} onChange={setStatus} options={Object.entries(STATUS).map(([value, x]) => ({ value, label: x[0] }))} /></div>}
       </div>
@@ -310,8 +375,24 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
 
         {/* CENTRO — itens */}
         <div className="overflow-y-auto pr-1">
+          {/* barra de cenários */}
+          <div className="glass rounded-2xl p-2 mb-3 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] uppercase tracking-wider text-admin-muted/40 px-1.5">Cenários</span>
+            {scenList.map((s) => {
+              const active = s.key === activeScen
+              const tone = { champ: 'text-admin-champ', sage: 'text-admin-sage', gold: 'text-admin-gold', copper: 'text-admin-copper' }[s.tone] || 'text-admin-champ'
+              return (
+                <div key={s.key} className={`flex items-center gap-1 rounded-lg pl-2.5 pr-1 py-1 ${active ? 'bg-white/[0.06]' : ''}`}>
+                  <button onClick={() => switchScen(s.key)} className={`text-xs ${active ? tone : 'text-admin-muted/70 hover:text-admin-text'}`}>{s.name}</button>
+                  {active && s.key !== 'principal' && mayEdit && <button onClick={() => removeScen(s.key)} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="x" className="w-3 h-3" /></button>}
+                </div>
+              )
+            })}
+            {mayEdit && scenList.length < 4 && <button onClick={addScenario} className="text-xs px-2 py-1 rounded-lg text-admin-champ hover:bg-admin-champ/10 flex items-center gap-1"><Icon name="plus" className="w-3 h-3" />Cenário</button>}
+          </div>
           <div className="glass rounded-2xl p-5 mb-3">
             <input value={editing.title} onChange={(e) => { setEditing((q) => ({ ...q, title: e.target.value })); setDirty(true) }} className="w-full bg-transparent text-admin-text font-serif text-2xl outline-none" placeholder="Título da proposta" />
+            {activeScen !== 'principal' && <p className="text-admin-muted/40 text-xs mt-1">Editando o cenário <span className="text-admin-champ">{scenList.find((s) => s.key === activeScen)?.name}</span>. O cenário Principal é o que vira proposta/fatura ao salvar.</p>}
           </div>
           <div className="glass rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
@@ -413,15 +494,53 @@ function QuoteEditor({ editing, setEditing, items, setItems, dirty, setDirty, ma
           </div>
         </div>
       </div>
+
+      {compareOpen && <CompareModal scenarios={allScenariosForCompare} onClose={() => setCompareOpen(false)} onPick={(key) => { setCompareOpen(false); switchScen(key) }} />}
+    </div>
+  )
+}
+
+// comparativo de cenários lado a lado (como o cliente verá)
+function CompareModal({ scenarios, onClose, onPick }) {
+  const list = scenarios.filter((s) => (s.items || []).some((i) => i.name))
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Comparar cenários</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        {list.length === 0 ? <p className="text-admin-muted/40 text-sm py-8 text-center">Adicione itens aos cenários para comparar.</p> : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {list.map((s) => {
+              const tone = { champ: 'text-admin-champ border-admin-champ/40', sage: 'text-admin-sage border-admin-sage/40', gold: 'text-admin-gold border-admin-gold/40', copper: 'text-admin-copper border-admin-copper/40' }[s.tone] || 'text-admin-champ border-admin-champ/40'
+              return (
+                <div key={s.key} className={`glass rounded-2xl p-5 border ${tone.split(' ')[1]}`}>
+                  <p className={`text-[11px] uppercase tracking-wider ${tone.split(' ')[0]} mb-1`}>{s.name}</p>
+                  <p className="font-serif text-3xl text-admin-text mb-3">{brl0(s.calc.total)}</p>
+                  <div className="space-y-1.5 mb-3">
+                    {(s.items || []).filter((i) => i.name).slice(0, 6).map((it, i) => (
+                      <div key={i} className="flex justify-between text-xs"><span className="text-admin-muted/60 truncate mr-2">{it.qty}× {it.name}</span><span className="text-admin-muted/50 shrink-0">{brl0(it.qty * it.unit_price)}</span></div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-admin-muted/40 border-t border-white/[0.06] pt-2">
+                    <span>margem {pct(s.calc.margin)}</span><span>lucro {brl0(s.calc.profit)}</span>
+                  </div>
+                  <button onClick={() => onPick(s.key)} className="w-full mt-3 text-xs py-2 rounded-xl bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25">Editar este</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <p className="text-admin-muted/40 text-[11px] mt-5">Na proposta pública, o cliente vê estes cenários lado a lado e escolhe um. O cenário Principal é o padrão.</p>
+      </div>
     </div>
   )
 }
 
 // menu "Converter em…"
-function ConvertMenu({ editing, calc, items, tenantId, notify, onStatus }) {
+function ConvertMenu({ editing, calc, items, scenarios, tenantId, notify, onStatus }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const tbtn = 'h-8 px-2.5 rounded-lg text-[12px] flex items-center gap-1.5 transition-colors'
+  const multiScen = (scenarios || []).filter((s) => (s.items || []).some((i) => i.name)).length > 1
 
   const toProposal = async () => {
     setBusy(true)
@@ -429,17 +548,24 @@ function ConvertMenu({ editing, calc, items, tenantId, notify, onStatus }) {
       { type: 'cover', eyebrow: 'Proposta Comercial', title: editing.title || '{{title}}', subtitle: 'Preparado para {{client}}' },
       { type: 'heading', text: 'Escopo' },
       { type: 'text', text: items.filter((i) => i.name).map((i) => `• ${i.name}`).join('\n') || 'Itens da proposta.' },
-      { type: 'quote_table', title: 'Investimento' },
-      { type: 'terms', title: 'Termos', text: 'Validade e condições conforme orçamento ' + editing.number + '.' },
     ]
+    // se houver cenários, o cliente escolhe entre eles; senão, tabela única
+    const scenData = multiScen ? scenarios.filter((s) => (s.items || []).some((i) => i.name)).map((s) => ({
+      key: s.key, name: s.name, tone: s.tone, total: s.calc.total,
+      items: (s.items || []).filter((i) => i.name).map((i) => ({ name: i.name, qty: i.qty, total: i.qty * i.unit_price })),
+    })) : null
+    if (scenData) blocks.push({ type: 'scenarios', title: 'Escolha sua opção' })
+    else blocks.push({ type: 'quote_table', title: 'Investimento' })
+    blocks.push({ type: 'terms', title: 'Termos', text: 'Validade e condições conforme orçamento ' + editing.number + '.' })
+
     const slug = (editing.title || 'proposta').toLowerCase().normalize('NFD').replace(/[^\w]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40) + '-' + Math.random().toString(36).slice(2, 7)
-    const { data, error } = await supabase.from('documents').insert({
+    const { error } = await supabase.from('documents').insert({
       tenant_id: tenantId, title: editing.title, slug, status: 'draft', quote_id: editing.id, contact_id: editing.contact_id,
-      blocks, data: { client: editing.contact?.name || '', items: items.filter((i) => i.name).map((i) => ({ name: i.name, qty: i.qty, total: (i.qty * i.unit_price) })), total: calc.total },
+      blocks, data: { client: editing.contact?.name || '', items: items.filter((i) => i.name).map((i) => ({ name: i.name, qty: i.qty, total: (i.qty * i.unit_price) })), total: calc.total, scenarios: scenData },
     }).select('id').single()
     setBusy(false); setOpen(false)
     if (error) return notify('Erro ao gerar proposta: ' + error.message, 'error')
-    notify('Proposta criada no Document Studio', 'success')
+    notify(multiScen ? 'Proposta com cenários criada no Document Studio' : 'Proposta criada no Document Studio', 'success')
   }
   const toInvoice = async () => {
     setBusy(true)

@@ -397,6 +397,24 @@ function PaperBlock({ b, theme, data }) {
       </div>
     </div>
   )
+  if (t === 'scenarios') {
+    const scs = data.scenarios || []
+    return (
+      <div style={{ margin: '32px 0' }}>
+        {b.title && <p style={{ fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', color: theme.accent, textAlign: 'center', marginBottom: 12 }}>{b.title}</p>}
+        {scs.length === 0 ? <p style={{ opacity: 0.4, fontSize: 13, textAlign: 'center' }}>Cenários do orçamento aparecem aqui (Econômico / Premium / Signature).</p>
+          : <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(3, scs.length)},1fr)`, gap: 14 }}>
+              {scs.map((s, i) => (
+                <div key={i} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 16, padding: 18 }}>
+                  <p style={{ color: theme.accent, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>{s.name}</p>
+                  <p className="font-serif" style={{ fontSize: 26 }}>{brl(s.total)}</p>
+                  <div style={{ marginTop: 8 }}>{(s.items || []).slice(0, 6).map((it, j) => <div key={j} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.65, padding: '2px 0' }}><span>{it.qty}× {it.name}</span><span>{brl(it.total)}</span></div>)}</div>
+                </div>
+              ))}
+            </div>}
+      </div>
+    )
+  }
   return null
 }
 const Row = ({ l, v }) => <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}><span>{l}</span><span>{v}</span></div>

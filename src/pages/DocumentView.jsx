@@ -15,6 +15,7 @@ export function DocumentView() {
   const [accepting, setAccepting] = useState(false)
   const [done, setDone] = useState(false)
   const [err, setErr] = useState('')
+  const [chosen, setChosen] = useState(null)
 
   useEffect(() => {
     (async () => {
@@ -28,12 +29,17 @@ export function DocumentView() {
 
   const theme = useMemo(() => ({ ...DEFAULT_THEME, ...(doc?.theme || {}) }), [doc])
   const blocks = Array.isArray(doc?.blocks) ? doc.blocks : []
-  const data = doc?.data || {}
+  const baseData = doc?.data || {}
+  // injeta a escolha de cenário (se houver) para os blocos reagirem
+  const hasScenarios = (baseData.scenarios || []).length > 0
+  const data = { ...baseData, __chosen: chosen?.key, onChoose: hasScenarios ? setChosen : undefined }
 
   const accept = async () => {
     if (signer.trim().length < 2) return setErr('Digite seu nome completo para assinar.')
+    if (hasScenarios && !chosen) return setErr('Escolha uma das opções acima antes de assinar.')
     setAccepting(true); setErr('')
-    const { data: r, error } = await supabase.rpc('document_accept', { p_slug: slug, p_signer: signer.trim(), p_meta: { ua: navigator.userAgent, at: new Date().toISOString() } })
+    const meta = { ua: navigator.userAgent, at: new Date().toISOString(), ...(chosen ? { scenario: chosen.key, scenario_name: chosen.name, scenario_total: chosen.total } : {}) }
+    const { data: r, error } = await supabase.rpc('document_accept', { p_slug: slug, p_signer: signer.trim(), p_meta: meta })
     setAccepting(false)
     if (error || r?.error) return setErr('Não foi possível registrar o aceite. Tente novamente.')
     setDone(true)
@@ -64,6 +70,12 @@ export function DocumentView() {
             <>
               <h3 className="font-serif text-2xl mb-1">Aceitar proposta</h3>
               <p className="opacity-60 text-sm mb-5">Ao assinar, você concorda com os termos apresentados acima.</p>
+              {hasScenarios && (
+                <div className="mb-4 px-4 py-3 rounded-2xl" style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${chosen ? theme.accent : 'rgba(255,255,255,0.12)'}` }}>
+                  <p className="text-xs opacity-60">Opção escolhida</p>
+                  <p className="text-lg">{chosen ? `${chosen.name} — ${brl(chosen.total)}` : 'Selecione uma opção acima'}</p>
+                </div>
+              )}
               <input value={signer} onChange={(e) => setSigner(e.target.value)} placeholder="Seu nome completo" className="w-full px-5 py-4 text-lg rounded-2xl outline-none mb-3" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: theme.text }} />
               {err && <p className="text-rose-300 text-sm mb-3">{err}</p>}
               <button onClick={accept} disabled={accepting} className="w-full py-4 text-[13px] tracking-widerx uppercase font-medium rounded-2xl transition-all disabled:opacity-50" style={{ background: theme.accent, color: theme.ink }}>{accepting ? 'Registrando…' : 'Assinar e aceitar'}</button>
@@ -212,6 +224,32 @@ function Block({ b, theme, data, glass }) {
         <div>
           {b.title && <p className="text-[11px] tracking-widerx uppercase mb-1" style={{ color: theme.accent }}>{b.title}</p>}
           <p className="text-sm opacity-80">{b.caption || 'Aponte a câmera para pagar ou acessar.'}</p>
+        </div>
+      </div>
+    )
+  }
+  if (t === 'scenarios') {
+    const scs = data.scenarios || []
+    if (!scs.length) return null
+    return (
+      <div className="my-8">
+        {b.title && <p className="text-[11px] tracking-widerx uppercase mb-3 text-center" style={{ color: theme.accent }}>{b.title}</p>}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {scs.map((s, i) => {
+            const chosen = data.__chosen === s.key
+            return (
+              <div key={i} style={{ ...glass, padding: 22, border: chosen ? `2px solid ${theme.accent}` : '1px solid rgba(255,255,255,0.09)' }}>
+                <p className="text-[11px] tracking-widerx uppercase mb-1" style={{ color: theme.accent }}>{s.name}</p>
+                <p className="font-serif text-3xl mb-3">{brl(s.total)}</p>
+                <div className="space-y-1.5 mb-4">
+                  {(s.items || []).slice(0, 8).map((it, j) => (
+                    <div key={j} className="flex justify-between text-xs opacity-70"><span className="truncate mr-2">{it.qty}× {it.name}</span><span className="opacity-60 shrink-0">{brl(it.total)}</span></div>
+                  ))}
+                </div>
+                {data.onChoose && <button onClick={() => data.onChoose(s)} className="w-full py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all" style={{ background: chosen ? theme.accent : 'rgba(255,255,255,0.06)', color: chosen ? theme.ink : theme.text }}>{chosen ? '✓ Escolhido' : 'Escolher esta opção'}</button>}
+              </div>
+            )
+          })}
         </div>
       </div>
     )
