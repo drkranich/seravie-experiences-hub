@@ -1908,7 +1908,7 @@ function ModuleMarketplace({ profile, onToggle, onTogglePack, onReSegment, onOpe
               {POS_PACKS.map((pack) => {
                 const on = isPackActive(pack, enabled)
                 return (
-                  <div key={pack.key} className={`rounded-2xl p-4 border transition-all ${on ? 'border-admin-champ/40 bg-admin-champ/[0.04]' : 'glass-soft border-transparent'}`}>
+                  <div key={pack.key} className={`rounded-2xl p-4 border transition-all flex flex-col h-full ${on ? 'border-admin-champ/40 bg-admin-champ/[0.04]' : 'glass-soft border-transparent'}`}>
                     <div className="flex items-start gap-3 mb-2">
                       <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tone(pack.color)}`}><Icon name={pack.icon} className="w-5 h-5" /></span>
                       <div className="flex-1 min-w-0">
@@ -1917,10 +1917,10 @@ function ModuleMarketplace({ profile, onToggle, onTogglePack, onReSegment, onOpe
                       </div>
                     </div>
                     <p className="text-admin-muted/60 text-xs leading-snug mb-3 min-h-[2.4em]">{pack.desc}</p>
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {pack.widgets.map((wk) => <span key={wk} className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.05] text-admin-muted/60">{POS_WIDGET_MAP[wk]?.label || wk}</span>)}
+                    <div className="flex flex-wrap gap-1 mb-3 flex-1 content-start">
+                      {pack.widgets.map((wk) => <span key={wk} className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.05] text-admin-muted/60 h-fit">{POS_WIDGET_MAP[wk]?.label || wk}</span>)}
                     </div>
-                    <button onClick={() => onTogglePack(pack)} className={`w-full rounded-xl py-2 text-sm font-medium transition-colors ${on ? 'bg-admin-sage/15 text-admin-sage hover:bg-admin-sage/25' : 'btn-gradient'}`}>{on ? '✓ Ativo — desativar' : 'Ativar pack'}</button>
+                    <button onClick={() => onTogglePack(pack)} className={`w-full rounded-xl py-2 text-sm font-medium transition-colors mt-auto ${on ? 'bg-admin-sage/15 text-admin-sage hover:bg-admin-sage/25' : 'btn-gradient'}`}>{on ? '✓ Ativo — desativar' : 'Ativar pack'}</button>
                   </div>
                 )
               })}
