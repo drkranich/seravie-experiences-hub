@@ -615,25 +615,33 @@ export function POSPanel({ notify }) {
   // ---------- Devolução / estorno de venda ----------
   const refundOrder = async (order, reason) => {
     if (!session) { notify('Abra o caixa para registrar a devolução', 'error'); return { ok: false } }
-    // marca o pedido como devolvido
-    await supabase.from('orders').update({ status: 'refunded', payment_status: 'refunded', notes: (order.notes ? order.notes + ' · ' : '') + `Devolução: ${reason || 'sem motivo'}` }).eq('id', order.id)
-    // estorna caixa (saída) referente ao total
-    await supabase.from('cash_movements').insert({ tenant_id: tenantId, session_id: session.id, type: 'withdrawal', amount: Number(order.total) || 0, payment_method: order.payment_method || 'dinheiro', description: `Devolução venda #${order.number}`, reference_id: order.id, created_by: user?.id || null })
-    // lançamento financeiro negativo
-    await supabase.from('financial_entries').insert({ tenant_id: tenantId, unit_id: profile?.unit_id || null, type: 'expense', category: 'devolucao', description: `Devolução PDV #${order.number}`, amount: Number(order.total) || 0, date: new Date().toISOString().slice(0, 10), payment_method: order.payment_method || 'dinheiro', reference_id: order.id, reference_type: 'order', created_by: user?.id || null }).catch(() => {})
-    // devolve o estoque dos itens
-    for (const it of (Array.isArray(order.items) ? order.items : [])) {
-      if (!it.product_id) continue
-      const { data: p } = await supabase.from('products').select('stock').eq('id', it.product_id).maybeSingle()
-      if (p && p.stock != null) {
-        const bal = Number(p.stock) + (Number(it.qty) || 0)
-        await supabase.from('products').update({ stock: bal }).eq('id', it.product_id)
-        await supabase.from('stock_movements').insert({ tenant_id: tenantId, product_id: it.product_id, type: 'return', quantity: Number(it.qty) || 0, balance_after: bal, reference_id: order.id, reference_type: 'order', created_by: user?.id || null }).catch(() => {})
+    try {
+      // marca o pedido como devolvido
+      await supabase.from('orders').update({ status: 'refunded', payment_status: 'refunded', notes: (order.notes ? order.notes + ' · ' : '') + `Devolução: ${reason || 'sem motivo'}` }).eq('id', order.id)
+      // estorna caixa (saída) referente ao total
+      await supabase.from('cash_movements').insert({ tenant_id: tenantId, session_id: session.id, type: 'withdrawal', amount: Number(order.total) || 0, payment_method: order.payment_method || 'dinheiro', description: `Devolução venda #${order.number}`, reference_id: order.id, created_by: user?.id || null })
+      // lançamento financeiro negativo (best-effort, não bloqueia)
+      try { await supabase.from('financial_entries').insert({ tenant_id: tenantId, unit_id: profile?.unit_id || null, type: 'expense', category: 'devolucao', description: `Devolução PDV #${order.number}`, amount: Number(order.total) || 0, date: new Date().toISOString().slice(0, 10), payment_method: order.payment_method || 'dinheiro', reference_id: order.id, reference_type: 'order', created_by: user?.id || null }) } catch (_) { /* noop */ }
+      // devolve o estoque dos itens (cada item isolado — um erro não trava os outros nem o botão)
+      for (const it of (Array.isArray(order.items) ? order.items : [])) {
+        if (!it.product_id) continue
+        try {
+          const { data: p } = await supabase.from('products').select('stock').eq('id', it.product_id).maybeSingle()
+          if (p && p.stock != null) {
+            const bal = Number(p.stock) + (Number(it.qty) || 0)
+            await supabase.from('products').update({ stock: bal }).eq('id', it.product_id)
+            try { await supabase.from('stock_movements').insert({ tenant_id: tenantId, product_id: it.product_id, type: 'return', quantity: Number(it.qty) || 0, balance_after: bal, reference_id: order.id, reference_type: 'order', created_by: user?.id || null }) } catch (_) { /* noop */ }
+          }
+        } catch (_) { /* item sem catálogo (serviço/vale) — ignora */ }
       }
+      try { await loadSession() } catch (_) { /* noop */ }
+      try { loadProducts() } catch (_) { /* noop */ }
+      notify(`Venda #${order.number} devolvida · ${brl(order.total)} estornado`, 'success')
+      return { ok: true }
+    } catch (e) {
+      notify('Erro ao processar devolução: ' + (e?.message || 'tente novamente'), 'error')
+      return { ok: false }
     }
-    await loadSession(); loadProducts()
-    notify(`Venda #${order.number} devolvida · ${brl(order.total)} estornado`, 'success')
-    return { ok: true }
   }
 
   // ---------- Comandas (holds) ----------
@@ -1284,7 +1292,9 @@ function ReturnsDeliveryModal({ tenantId, notify, onRefund, onClose }) {
   useEffect(() => { tab === 'returns' ? loadOrders() : loadDeliveries() }, [tab])
 
   const doRefund = async () => {
-    setBusy(true); const r = await onRefund(confirm, reason); setBusy(false)
+    setBusy(true)
+    let r
+    try { r = await onRefund(confirm, reason) } catch (_) { r = { ok: false } } finally { setBusy(false) }
     if (r?.ok) { setConfirm(null); setReason(''); loadOrders() }
   }
   const setDelivStatus = async (o, status) => { await supabase.from('orders').update({ status }).eq('id', o.id); loadDeliveries() }
