@@ -54,14 +54,15 @@ export function TechLibrary({ suppliers, notify }) {
       {loading ? <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="glass rounded-2xl h-24 animate-pulse opacity-40" />)}</div>
         : filtered.length === 0 ? <div className="glass rounded-2xl p-12 text-center"><Icon name="folder" className="w-10 h-10 text-admin-champ/20 mx-auto mb-3" /><p className="text-admin-muted/50 text-sm">Nenhum arquivo técnico ainda.</p></div>
           : <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map((it) => { const s = supplierById[it.supplier_id]; const kv = KINDS[it.kind] || KINDS.other; return (
-                <div key={it.id} className="glass rounded-2xl p-4 flex items-start gap-3">
+              {filtered.map((it) => { const s = supplierById[it.supplier_id]; const kv = KINDS[it.kind] || KINDS.other; const mine = mySupplierIds.has(it.supplier_id); return (
+                <div key={it.id} className="group glass rounded-2xl p-4 flex items-start gap-3">
                   <div className="w-11 h-11 rounded-xl bg-admin-champ/10 flex items-center justify-center shrink-0"><Icon name={kv.icon} className="w-5 h-5 text-admin-champ/70" /></div>
                   <div className="min-w-0 flex-1">
                     <p className="text-admin-text text-sm font-medium truncate">{it.title}</p>
                     <p className="text-admin-muted/40 text-[11px] truncate">{kv.label}{s ? ` · ${s.name}` : ''}{it.size_kb ? ` · ${(it.size_kb / 1024).toFixed(1)} MB` : ''}</p>
                     {it.file_url && <a href={it.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-admin-champ/80 hover:text-admin-champ mt-2"><Icon name="download" className="w-3.5 h-3.5" />Baixar</a>}
                   </div>
+                  {mine && <button onClick={async () => { if (confirm('Excluir este arquivo?')) { await supabase.from('supplier_library').delete().eq('id', it.id); load() } }} className="text-admin-muted/30 hover:text-admin-rose opacity-0 group-hover:opacity-100 transition-opacity shrink-0" title="Excluir"><Icon name="trash" className="w-4 h-4" /></button>}
                 </div>
               )})}
             </div>}

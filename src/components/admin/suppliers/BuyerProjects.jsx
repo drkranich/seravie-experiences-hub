@@ -116,11 +116,22 @@ function ProjectDetail({ project, rows, suppliers, tenantId, onBack, onOpenSuppl
   }
   const removeRow = async (id) => { await supabase.from('buyer_project_suppliers').delete().eq('id', id); reload() }
 
+  const share = async () => {
+    let token = project.share_token
+    if (!token || !project.is_public) {
+      token = 'p' + Math.abs(project.id.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 7)).toString(36) + project.id.slice(0, 8)
+      await supabase.from('buyer_projects').update({ share_token: token, is_public: true }).eq('id', project.id)
+    }
+    const url = `${window.location.origin}/projeto/${token}`
+    try { await navigator.clipboard.writeText(url); notify?.('Link do projeto copiado!', 'success') } catch { notify?.('Link: ' + url, 'info') }
+  }
+
   return (
     <div>
       <button onClick={onBack} className="flex items-center gap-1.5 text-admin-muted/60 hover:text-admin-text text-sm mb-4 transition-colors"><Icon name="down" className="w-4 h-4 rotate-90" /> Voltar aos projetos</button>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div><h1 className="font-serif text-2xl text-admin-text">{project.name}</h1><p className="text-admin-muted/50 text-sm mt-1">{seg?.label || project.segment || 'Projeto'} · {rows.length} fornecedores vinculados</p></div>
+        <button onClick={share} className="flex items-center gap-2 glass-input text-admin-muted/70 hover:text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="share" className="w-4 h-4" />Compartilhar link</button>
       </div>
 
       <div className="space-y-5">

@@ -39,9 +39,10 @@ function Stars({ value = 0, size = 'text-xs' }) {
   return <span className={`${size} text-admin-gold tracking-tight`}>{'★'.repeat(full)}<span className="text-white/15">{'★'.repeat(5 - full)}</span></span>
 }
 
-export function VerifSeal({ level, className = '' }) {
+export function VerifSeal({ level, className = '', onDark = true }) {
   const v = VERIF_LEVELS[level] || VERIF_LEVELS.bronze
-  return <span className={`text-[10px] px-2 py-0.5 rounded-lg font-medium ${v.style} ${className}`}>Seravie {v.label}</span>
+  // onDark: quando sobre imagem (pode ser clara), adiciona fundo escuro + blur pra garantir legibilidade
+  return <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-lg font-medium ${onDark ? 'bg-black/45 backdrop-blur-md ring-1 ring-white/10 ' + v.text : v.style} ${className}`}><span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />Seravie {v.label}</span>
 }
 
 // ---- Card grande do fornecedor (descoberta visual) ----
@@ -58,7 +59,6 @@ function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp }) {
         <button onClick={(e) => { e.stopPropagation(); onFav(s) }} className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md transition-colors ${fav ? 'bg-admin-rose/25 text-admin-rose' : 'bg-black/30 text-white/70 hover:text-admin-rose'}`} title="Favoritar">
           <Icon name="heart" className="w-4 h-4" />
         </button>
-        {s.featured && <span className="absolute bottom-3 left-3 text-[9px] uppercase tracking-wider bg-admin-champ/25 text-admin-champ px-2 py-0.5 rounded-md backdrop-blur-md">Destaque</span>}
       </div>
       <div className="p-4">
         <div className="flex items-start gap-3">
@@ -66,7 +66,10 @@ function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp }) {
             {s.logo_url ? <img src={s.logo_url} alt="" className="w-full h-full object-cover" /> : <Icon name={CATEGORY_ICON[s.category] || 'box'} className="w-5 h-5 text-admin-champ/60" />}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-admin-text font-medium truncate">{s.name}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-admin-text font-medium truncate">{s.name}</p>
+              {s.featured && <span className="shrink-0 text-[9px] uppercase tracking-wider bg-admin-champ/15 text-admin-champ px-1.5 py-0.5 rounded">Destaque</span>}
+            </div>
             <p className="text-admin-muted/45 text-xs truncate">{cat}{s.city ? ` · ${s.city}${s.state ? '/' + s.state : ''}` : ''}</p>
           </div>
         </div>
@@ -247,7 +250,7 @@ export function SuppliersMarketplace({ notify }) {
         {view === 'rfq' && (
           <RfqCenter suppliers={suppliers} presetSupplierIds={rfqPreset} onConsumePreset={() => setRfqPreset(null)} notify={notify} />
         )}
-        {view === 'catalogs' && <Catalogs suppliers={suppliers} onOpenSupplier={setOpenSupplier} />}
+        {view === 'catalogs' && <Catalogs suppliers={suppliers} tenantId={tenantId} onOpenSupplier={setOpenSupplier} notify={notify} />}
         {view === 'ai' && <PurchasingAI notify={notify} />}
         {view === 'projects' && <BuyerProjects suppliers={suppliers} onOpenSupplier={setOpenSupplier} notify={notify} />}
         {view === 'library' && <TechLibrary suppliers={suppliers} notify={notify} />}

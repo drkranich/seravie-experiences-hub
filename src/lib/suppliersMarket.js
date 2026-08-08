@@ -22,12 +22,14 @@ export const CATEGORY_ICON = {
 }
 
 // selos de homologação (níveis)
+// style = chip normal (fundo claro do sistema) | text = cor de texto legível sobre fundo escuro
+// dot = cor do ponto indicador do nível (usado no selo sobre imagem)
 export const VERIF_LEVELS = {
-  bronze: { label: 'Bronze', style: 'bg-[#7c5a3a]/25 text-[#c79a6a]', ring: 'ring-[#c79a6a]/30', rank: 1 },
-  prata: { label: 'Prata', style: 'bg-white/10 text-white/80', ring: 'ring-white/25', rank: 2 },
-  ouro: { label: 'Ouro', style: 'bg-admin-gold/20 text-admin-gold', ring: 'ring-admin-gold/40', rank: 3 },
-  platinum: { label: 'Platinum', style: 'bg-admin-champ/20 text-admin-champ', ring: 'ring-admin-champ/45', rank: 4 },
-  signature: { label: 'Signature', style: 'bg-admin-sage/20 text-admin-sage', ring: 'ring-admin-sage/45', rank: 5 },
+  bronze: { label: 'Bronze', style: 'bg-[#7c5a3a]/25 text-[#c79a6a]', text: 'text-[#d8b48a]', dot: 'bg-[#c79a6a]', ring: 'ring-[#c79a6a]/30', rank: 1 },
+  prata: { label: 'Prata', style: 'bg-white/10 text-white/80', text: 'text-white/90', dot: 'bg-white/70', ring: 'ring-white/25', rank: 2 },
+  ouro: { label: 'Ouro', style: 'bg-admin-gold/20 text-admin-gold', text: 'text-admin-gold', dot: 'bg-admin-gold', ring: 'ring-admin-gold/40', rank: 3 },
+  platinum: { label: 'Platinum', style: 'bg-admin-champ/20 text-admin-champ', text: 'text-admin-champ', dot: 'bg-admin-champ', ring: 'ring-admin-champ/45', rank: 4 },
+  signature: { label: 'Signature', style: 'bg-admin-sage/20 text-admin-sage', text: 'text-admin-sage', dot: 'bg-admin-sage', ring: 'ring-admin-sage/45', rank: 5 },
 }
 
 export const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO']

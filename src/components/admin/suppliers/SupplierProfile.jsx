@@ -3,13 +3,15 @@ import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon } from '../ui'
 import { SUPPLIER_CATEGORIES, CATEGORY_ICON, VERIF_LEVELS, brl } from '../../../lib/suppliersMarket'
+import { SupplierChat } from './SupplierChat'
 
 // Perfil do fornecedor — mini-site: capa, logo, galeria, produtos, serviços,
 // certificações, regiões, avaliações + ações (orçamento, favoritar, adicionar ao projeto).
 
 function Seal({ level }) {
   const v = VERIF_LEVELS[level] || VERIF_LEVELS.bronze
-  return <span className={`text-[11px] px-2.5 py-1 rounded-lg font-medium ${v.style}`}>Fornecedor Homologado · Seravie {v.label}</span>
+  // fundo escuro + blur garante legibilidade mesmo quando o selo aparece sobre imagens claras
+  return <span className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg font-medium bg-black/50 backdrop-blur-md ring-1 ring-white/10 ${v.text}`}><span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />Fornecedor Homologado · Seravie {v.label}</span>
 }
 function Stars({ value = 0 }) {
   const full = Math.round(value)
@@ -26,6 +28,18 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
   const [reviews, setReviews] = useState([])
   const [tab, setTab] = useState('sobre')
   const [quoteOpen, setQuoteOpen] = useState(false)
+  const [reviewForm, setReviewForm] = useState(null) // { author_name, rating, comment } | null
+  const [chatOpen, setChatOpen] = useState(false)
+
+  const submitReview = async () => {
+    if (!reviewForm?.rating) return notify?.('Escolha uma nota', 'error')
+    const { data, error } = await supabase.from('supplier_reviews').insert({
+      tenant_id: tenantId, supplier_id: s.id, author_name: reviewForm.author_name || null,
+      rating: reviewForm.rating, comment: reviewForm.comment || null,
+    }).select('*').single()
+    if (error) return notify?.('Erro ao avaliar: ' + error.message, 'error')
+    setReviews((r) => [data, ...r]); setReviewForm(null); notify?.('Avaliação publicada', 'success')
+  }
   const s = supplier
   const cat = SUPPLIER_CATEGORIES[s.category] || s.category
   const gallery = Array.isArray(s.gallery) ? s.gallery : []
@@ -64,21 +78,27 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       </div>
 
-      {/* Cabeçalho */}
-      <div className="px-4 sm:px-6 -mt-12 relative z-10">
-        <div className="flex items-end gap-4 flex-wrap">
+      {/* Cabeçalho — logo sobrepõe a capa; o texto fica ABAIXO da capa (nunca sobre a imagem) */}
+      <div className="px-4 sm:px-6 relative z-10">
+        <div className="flex items-end gap-4 flex-wrap -mt-12">
           <div className="w-24 h-24 rounded-2xl bg-admin-side ring-4 ring-admin-side overflow-hidden shrink-0 flex items-center justify-center">
             {s.logo_url ? <img src={s.logo_url} alt="" className="w-full h-full object-cover" /> : <Icon name={CATEGORY_ICON[s.category] || 'box'} className="w-9 h-9 text-admin-champ/60" />}
           </div>
-          <div className="flex-1 min-w-[200px] pb-1">
-            <div className="flex items-center gap-2 flex-wrap"><h1 className="font-serif text-2xl sm:text-3xl text-admin-text">{s.name}</h1><Seal level={s.verification_level} /></div>
-            <p className="text-admin-muted/55 text-sm mt-1">{cat}{s.city ? ` · ${s.city}${s.state ? '/' + s.state : ''}` : ''}</p>
+          {/* selo posicionado sobre a capa, à direita, com fundo escuro (legível em qualquer imagem) */}
+          <div className="flex-1" />
+        </div>
+        <div className="flex items-end gap-4 flex-wrap mt-3">
+          <div className="flex-1 min-w-[200px]">
+            <h1 className="font-serif text-2xl sm:text-3xl text-admin-text leading-tight">{s.name}</h1>
+            <div className="mt-1.5"><Seal level={s.verification_level} /></div>
+            <p className="text-admin-muted/55 text-sm mt-2">{cat}{s.city ? ` · ${s.city}${s.state ? '/' + s.state : ''}` : ''}</p>
             {s.rating > 0 && <div className="flex items-center gap-2 mt-1.5"><Stars value={s.rating} /><span className="text-admin-muted/45 text-xs">{Number(s.rating).toFixed(1)} · {s.reviews_count || reviews.length} avaliações</span></div>}
           </div>
           {/* Ações */}
-          <div className="flex items-center gap-2 pb-1">
+          <div className="flex items-center gap-2 pb-1 flex-wrap">
             <button onClick={onFav} className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm transition-colors ${isFav ? 'bg-admin-rose/20 text-admin-rose' : 'glass-input text-admin-muted/70 hover:text-admin-rose'}`}><Icon name="heart" className="w-4 h-4" />{isFav ? 'Favoritado' : 'Favoritar'}</button>
             <button onClick={() => notify?.('Adicionado ao projeto (em breve: seleção de projeto).', 'success')} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="plus" className="w-4 h-4" />Adicionar ao projeto</button>
+            <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Conversar</button>
             <button onClick={() => setQuoteOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Solicitar orçamento</button>
           </div>
         </div>
@@ -147,15 +167,31 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
           )}
 
           {tab === 'avaliacoes' && (
-            reviews.length === 0 ? <Empty icon="star" text="Ainda sem avaliações." />
-              : <div className="space-y-3 max-w-2xl">{reviews.map((r) => (
-                  <div key={r.id} className="glass rounded-2xl p-4"><div className="flex items-center justify-between mb-1"><p className="text-admin-text text-sm">{r.author_name || 'Anônimo'}</p><Stars value={r.rating} /></div>{r.comment && <p className="text-admin-muted/60 text-sm">{r.comment}</p>}<p className="text-admin-muted/30 text-[10px] mt-2">{new Date(r.created_at).toLocaleDateString('pt-BR')}</p></div>
-                ))}</div>
+            <div className="max-w-2xl">
+              <div className="flex justify-end mb-4">
+                {!reviewForm && <button onClick={() => setReviewForm({ author_name: '', rating: 5, comment: '' })} className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors"><Icon name="star" className="w-4 h-4" />Deixar avaliação</button>}
+              </div>
+              {reviewForm && (
+                <div className="glass rounded-2xl p-5 mb-4">
+                  <div className="flex items-center gap-1 mb-3">
+                    {[1, 2, 3, 4, 5].map((n) => <button key={n} onClick={() => setReviewForm((f) => ({ ...f, rating: n }))} className={`text-xl ${n <= reviewForm.rating ? 'text-admin-gold' : 'text-white/15'}`}>★</button>)}
+                  </div>
+                  <input value={reviewForm.author_name} onChange={(e) => setReviewForm((f) => ({ ...f, author_name: e.target.value }))} placeholder="Seu nome (opcional)" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none mb-3" />
+                  <textarea value={reviewForm.comment} onChange={(e) => setReviewForm((f) => ({ ...f, comment: e.target.value }))} rows={3} placeholder="Conte sua experiência…" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" />
+                  <div className="flex justify-end gap-2 mt-3"><button onClick={() => setReviewForm(null)} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={submitReview} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Publicar avaliação</button></div>
+                </div>
+              )}
+              {reviews.length === 0 ? <Empty icon="star" text="Ainda sem avaliações. Seja o primeiro." />
+                : <div className="space-y-3">{reviews.map((r) => (
+                    <div key={r.id} className="glass rounded-2xl p-4"><div className="flex items-center justify-between mb-1"><p className="text-admin-text text-sm">{r.author_name || 'Anônimo'}</p><Stars value={r.rating} /></div>{r.comment && <p className="text-admin-muted/60 text-sm">{r.comment}</p>}<p className="text-admin-muted/30 text-[10px] mt-2">{new Date(r.created_at).toLocaleDateString('pt-BR')}</p></div>
+                  ))}</div>}
+            </div>
           )}
         </div>
       </div>
 
       {quoteOpen && <QuoteModal supplier={s} tenantId={tenantId} onClose={() => setQuoteOpen(false)} notify={notify} />}
+      {chatOpen && <SupplierChat supplier={s} onClose={() => setChatOpen(false)} notify={notify} />}
     </div>
   )
 }
