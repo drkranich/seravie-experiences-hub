@@ -4,6 +4,8 @@ import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
+import { CRMDashboard } from './crm/CRMDashboard'
+import { Customer360 } from './crm/Customer360'
 
 const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
@@ -22,6 +24,8 @@ export function CRMPanel({ notify }) {
   const [detail, setDetail] = useState(null)
   const [dOrders, setDOrders] = useState([])
   const [dLoading, setDLoading] = useState(false)
+  const [view, setView] = useState('dashboard')   // dashboard | contacts
+  const [c360, setC360] = useState(null)           // entidade aberta na visão 360°
 
   const load = async () => {
     setLoading(true)
@@ -82,13 +86,37 @@ export function CRMPanel({ notify }) {
     notify('Titular anonimizado', 'success'); setDetail(null); load()
   }
 
+  // Visão 360° em tela cheia
+  if (c360) return (
+    <div>
+      <Customer360 contact={c360} notify={notify} onBack={() => { setC360(null); load() }} />
+    </div>
+  )
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-serif text-4xl text-admin-text">Experience CRM</h1>
-          <p className="text-admin-muted/60 text-sm mt-1">{contacts.length} contatos · Customer 360</p>
+          <h1 className="font-serif text-4xl text-admin-text">Relationship Studio</h1>
+          <p className="text-admin-muted/60 text-sm mt-1">Experience CRM · visão 360° do relacionamento</p>
         </div>
+        <div className="hidden" />
+      </div>
+
+      {/* Navegação */}
+      <div className="flex gap-1.5 mb-6">
+        {[['dashboard', 'Dashboard', 'grid'], ['contacts', 'Contatos', 'user']].map(([k, v, ic]) => (
+          <button key={k} onClick={() => setView(k)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-colors ${view === k ? 'bg-admin-champ/15 text-admin-champ border border-admin-champ/20' : 'text-admin-muted hover:text-admin-text border border-transparent'}`}>
+            <Icon name={ic} className="w-4 h-4" />{v}
+          </button>
+        ))}
+      </div>
+
+      {view === 'dashboard' && <CRMDashboard notify={notify} onOpenContact={(c) => setC360(c)} />}
+
+      {view === 'contacts' && (
+      <>
+      <div className="flex items-center justify-end mb-6">
         <div className="flex gap-2">
           <button onClick={() => exportCsv('contatos.csv', contacts.map((c) => ({ nome: c.name, email: c.email, telefone: c.phone, tipo: TYPE_LABELS[c.type] || c.type, status: c.status, ltv: c.ltv }))) || notify('Nada para exportar', 'error')}
             className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors">
@@ -132,7 +160,7 @@ export function CRMPanel({ notify }) {
               <div className="w-8 h-8 rounded-full bg-admin-champ/15 flex items-center justify-center shrink-0">
                 <span className="text-admin-champ font-serif text-sm">{c.name[0].toUpperCase()}</span>
               </div>
-              <button onClick={() => openDetail(c)} className="flex-1 min-w-0 text-left">
+              <button onClick={() => setC360(c)} className="flex-1 min-w-0 text-left">
                 <p className="text-admin-text text-sm font-medium truncate hover:text-admin-champ transition-colors">{c.name}</p>
                 <p className="text-admin-muted/50 text-xs truncate">{c.email || c.phone || '—'}</p>
               </button>
@@ -150,6 +178,8 @@ export function CRMPanel({ notify }) {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
 
       {/* Modal form */}
