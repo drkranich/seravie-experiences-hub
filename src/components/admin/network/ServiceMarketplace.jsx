@@ -18,6 +18,8 @@ export function ServiceMarketplace({ me, notify }) {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null)
   const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(null)   // briefing sendo editado
+  const [confirmDel, setConfirmDel] = useState(null)
   const [filter, setFilter] = useState('all') // all | mine
 
   const load = useCallback(async () => {
@@ -32,10 +34,21 @@ export function ServiceMarketplace({ me, notify }) {
     if (error) return notify?.('Erro: ' + error.message, 'error')
     setReqs((r) => [data, ...r]); setCreating(false); notify?.('Briefing publicado', 'success')
   }
+  const update = async (id, payload) => {
+    const { data, error } = await supabase.from('service_requests').update(payload).eq('id', id).select('*, service_proposals(*)').single()
+    if (error) return notify?.('Erro: ' + error.message, 'error')
+    setReqs((r) => r.map((x) => (x.id === id ? data : x))); setEditing(null); notify?.('Briefing atualizado', 'success')
+  }
+  const remove = async (req) => {
+    await supabase.from('service_proposals').delete().eq('request_id', req.id)
+    const { error } = await supabase.from('service_requests').delete().eq('id', req.id)
+    if (error) return notify?.('Erro ao excluir: ' + error.message, 'error')
+    setReqs((r) => r.filter((x) => x.id !== req.id)); setConfirmDel(null); setOpen(null); notify?.('Briefing excluído', 'success')
+  }
 
   if (open) {
     const fresh = reqs.find((r) => r.id === open.id) || open
-    return <RequestDetail request={fresh} tenantId={tenantId} me={me} onBack={() => { setOpen(null); load() }} reload={load} notify={notify} />
+    return <RequestDetail request={fresh} tenantId={tenantId} me={me} onBack={() => { setOpen(null); load() }} reload={load} notify={notify} onEdit={() => { setOpen(null); setEditing(fresh) }} onDelete={() => { setOpen(null); setConfirmDel(fresh) }} />
   }
 
   const shown = filter === 'mine' ? reqs.filter((r) => r.tenant_id === tenantId) : reqs
@@ -54,20 +67,38 @@ export function ServiceMarketplace({ me, notify }) {
         : shown.length === 0 ? <div className="glass rounded-2xl p-12 text-center"><Icon name="mail" className="w-10 h-10 text-admin-champ/25 mx-auto mb-3" /><p className="text-admin-muted/60 text-sm">Nenhum briefing ainda.</p><p className="text-admin-muted/35 text-xs mt-1">Publique o que precisa (arquiteto, fotógrafo, fornecedor…) e receba propostas.</p></div>
           : <div className="space-y-3">
               {shown.map((r) => { const st = REQ_STATUS[r.status] || REQ_STATUS.open; const props = r.service_proposals || []; const mine = r.tenant_id === tenantId; return (
-                <button key={r.id} onClick={() => setOpen(r)} className="w-full text-left glass rounded-2xl p-5 hover:ring-1 hover:ring-admin-champ/30 transition-all">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap"><p className="text-admin-text font-medium">{r.title}</p>{r.role && <span className="text-[10px] px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/60">{r.role}</span>}<span className={`text-[10px] px-2 py-0.5 rounded-lg ${st.s}`}>{st.label}</span>{mine && <span className="text-[10px] text-admin-champ/60">seu</span>}</div>
-                      {r.description && <p className="text-admin-muted/55 text-sm mt-2 line-clamp-2">{r.description}</p>}
-                      <p className="text-admin-muted/40 text-[11px] mt-2">{props.length} proposta{props.length === 1 ? '' : 's'}{r.location ? ` · ${r.location}` : ''} · {timeAgo(r.created_at)}</p>
+                <div key={r.id} className="group glass rounded-2xl p-5 hover:ring-1 hover:ring-admin-champ/30 transition-all relative">
+                  <button onClick={() => setOpen(r)} className="w-full text-left">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 pr-16">
+                        <div className="flex items-center gap-2 flex-wrap"><p className="text-admin-text font-medium">{r.title}</p>{r.role && <span className="text-[10px] px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/60">{r.role}</span>}<span className={`text-[10px] px-2 py-0.5 rounded-lg ${st.s}`}>{st.label}</span>{mine && <span className="text-[10px] text-admin-champ/60">seu</span>}</div>
+                        {r.description && <p className="text-admin-muted/55 text-sm mt-2 line-clamp-2">{r.description}</p>}
+                        <p className="text-admin-muted/40 text-[11px] mt-2">{props.length} proposta{props.length === 1 ? '' : 's'}{r.location ? ` · ${r.location}` : ''} · {timeAgo(r.created_at)}</p>
+                      </div>
+                      <div className="text-right shrink-0">{r.budget ? <p className="text-admin-champ text-sm">{brl(r.budget)}</p> : null}{r.deadline && <p className="text-admin-muted/40 text-[11px] mt-0.5">até {new Date(r.deadline).toLocaleDateString('pt-BR')}</p>}</div>
                     </div>
-                    <div className="text-right shrink-0">{r.budget ? <p className="text-admin-champ text-sm">{brl(r.budget)}</p> : null}{r.deadline && <p className="text-admin-muted/40 text-[11px] mt-0.5">até {new Date(r.deadline).toLocaleDateString('pt-BR')}</p>}</div>
-                  </div>
-                </button>
+                  </button>
+                  {mine && (
+                    <div className="absolute top-4 right-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setEditing(r)} className="w-7 h-7 rounded-full bg-black/40 backdrop-blur-md text-white/80 hover:text-admin-champ flex items-center justify-center" title="Editar briefing"><Icon name="pen" className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setConfirmDel(r)} className="w-7 h-7 rounded-full bg-black/40 backdrop-blur-md text-white/80 hover:text-admin-rose flex items-center justify-center" title="Excluir briefing"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
+                </div>
               )})}
             </div>}
 
       {creating && <CreateRequest onClose={() => setCreating(false)} onCreate={create} personTypes={personTypes} />}
+      {editing && <CreateRequest initial={editing} onClose={() => setEditing(null)} onCreate={(payload) => update(editing.id, payload)} personTypes={personTypes} />}
+      {confirmDel && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDel(null)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-serif text-lg text-admin-text mb-2">Excluir briefing?</h2>
+            <p className="text-admin-muted/60 text-sm mb-5">O briefing <span className="text-admin-text">"{confirmDel.title}"</span> e todas as propostas recebidas serão removidos. Esta ação não pode ser desfeita.</p>
+            <div className="flex justify-end gap-2"><button onClick={() => setConfirmDel(null)} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => remove(confirmDel)} className="px-4 py-2 rounded-xl text-sm bg-admin-rose/15 hover:bg-admin-rose/25 text-admin-rose">Excluir briefing</button></div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -75,16 +106,22 @@ export function ServiceMarketplace({ me, notify }) {
 const MODALITY = [{ value: '', label: 'Modalidade' }, { value: 'presencial', label: 'Presencial' }, { value: 'remoto', label: 'Remoto' }, { value: 'hibrido', label: 'Híbrido' }]
 const URGENCY = [{ value: '', label: 'Urgência' }, { value: 'baixa', label: 'Sem pressa' }, { value: 'media', label: 'Nas próximas semanas' }, { value: 'alta', label: 'Urgente' }]
 
-function CreateRequest({ onClose, onCreate, personTypes }) {
-  const [f, setF] = useState({ title: '', role: '', description: '', budget: '', budget_max: '', deadline: '', location: '', modality: '', urgency: '', quantity: '', requirements: '', references: '' })
+function CreateRequest({ onClose, onCreate, personTypes, initial }) {
+  const [f, setF] = useState({
+    title: initial?.title || '', role: initial?.role || '', description: initial?.description || '',
+    budget: initial?.budget ?? '', budget_max: initial?.budget_max ?? '', deadline: initial?.deadline || '',
+    location: initial?.location || '', modality: initial?.modality || '', urgency: initial?.urgency || '',
+    quantity: initial?.quantity || '', requirements: initial?.requirements || '', references: initial?.references || '',
+  })
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
   const roleOpts = [{ value: '', label: 'Tipo de profissional' }, ...(personTypes || PERSON_TYPES).map((t) => ({ value: t, label: t }))]
+  const editing = !!initial
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Publicar briefing</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">{editing ? 'Editar briefing' : 'Publicar briefing'}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-3">
           <div><label className={lbl}>O que você precisa? *</label><input value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Ex.: Projeto de arquitetura para cafeteria" className={cls} /></div>
           <div className="grid grid-cols-2 gap-3">
@@ -107,13 +144,13 @@ function CreateRequest({ onClose, onCreate, personTypes }) {
           </div>
           <div><label className={lbl}>Links de referência (opcional)</label><input value={f.references} onChange={(e) => set('references', e.target.value)} placeholder="Cole links de inspiração, Pinterest, drive…" className={cls} /></div>
         </div>
-        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.title.trim() && onCreate({ title: f.title, role: f.role || null, description: f.description || null, requirements: f.requirements || null, budget: f.budget ? Number(f.budget) : null, budget_max: f.budget_max ? Number(f.budget_max) : null, deadline: f.deadline || null, location: f.location || null, modality: f.modality || null, urgency: f.urgency || null, quantity: f.quantity || null, references: f.references || null })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Publicar</button></div>
+        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.title.trim() && onCreate({ title: f.title, role: f.role || null, description: f.description || null, requirements: f.requirements || null, budget: f.budget ? Number(f.budget) : null, budget_max: f.budget_max ? Number(f.budget_max) : null, deadline: f.deadline || null, location: f.location || null, modality: f.modality || null, urgency: f.urgency || null, quantity: f.quantity || null, references: f.references || null })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">{editing ? 'Salvar' : 'Publicar'}</button></div>
       </div>
     </div>
   )
 }
 
-function RequestDetail({ request, tenantId, me, onBack, reload, notify }) {
+function RequestDetail({ request, tenantId, me, onBack, reload, notify, onEdit, onDelete }) {
   const [proposeOpen, setProposeOpen] = useState(false)
   const isOwner = request.tenant_id === tenantId
   const props = request.service_proposals || []
@@ -143,7 +180,16 @@ function RequestDetail({ request, tenantId, me, onBack, reload, notify }) {
               {request.references && <a href={request.references.startsWith('http') ? request.references : `https://${request.references}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-admin-champ/70 hover:underline"><Icon name="link" className="w-3.5 h-3.5" />Referências</a>}
             </div>
           </div>
-          <div className="text-right shrink-0">{request.budget ? <p className="text-admin-champ text-lg font-serif">{brl(request.budget)}{request.budget_max ? ` – ${brl(request.budget_max)}` : ''}</p> : null}{request.deadline && <p className="text-admin-muted/40 text-xs mt-0.5">Prazo: {new Date(request.deadline).toLocaleDateString('pt-BR')}</p>}</div>
+          <div className="text-right shrink-0">
+            {request.budget ? <p className="text-admin-champ text-lg font-serif">{brl(request.budget)}{request.budget_max ? ` – ${brl(request.budget_max)}` : ''}</p> : null}
+            {request.deadline && <p className="text-admin-muted/40 text-xs mt-0.5">Prazo: {new Date(request.deadline).toLocaleDateString('pt-BR')}</p>}
+            {isOwner && (
+              <div className="flex items-center justify-end gap-2 mt-2">
+                <button onClick={onEdit} className="text-xs glass-input text-admin-muted/70 hover:text-admin-champ px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"><Icon name="pen" className="w-3.5 h-3.5" />Editar</button>
+                <button onClick={onDelete} className="text-xs glass-input text-admin-muted/60 hover:text-admin-rose px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"><Icon name="trash" className="w-3.5 h-3.5" />Excluir</button>
+              </div>
+            )}
+          </div>
         </div>
         {!isOwner && request.status === 'open' && (
           <div className="mt-4 pt-4 border-t border-white/[0.06]">
