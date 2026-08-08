@@ -55,6 +55,9 @@ export function Omnichannel({ notify }) {
     }
     setUploading(false); if (fileRef.current) fileRef.current.value = ''
   }
+  // Canais com envio automático (worker omni-send). Os demais seguem só registrando a mensagem.
+  const AUTO_CHANNELS = ['whatsapp', 'instagram', 'email']
+
   const send = async () => {
     if ((!reply.trim() && attachments.length === 0) || !active) return
     setSending(true)
@@ -62,6 +65,26 @@ export function Omnichannel({ notify }) {
       const { data } = await supabase.from('messages').insert({ tenant_id: tenantId, conversation_id: active.id, sender_type: 'agent', sender_id: profile?.user_id, content: reply.trim() || (attachments.length ? '📎 Anexo' : ''), content_type: attachments.length ? 'file' : 'text', attachments }).select('*').single()
       setMessages((m) => [...m, data]); setReply(''); setAttachments([])
       await supabase.from('conversations').update({ last_message_at: new Date().toISOString(), status: 'open' }).eq('id', active.id)
+
+      // Envio real pelo canal da conversa (quando conectado). Se o canal não tiver
+      // envio automático ou não estiver configurado, a mensagem fica só registrada.
+      if (data && AUTO_CHANNELS.includes(active.channel)) {
+        try {
+          const { data: res, error: fnErr } = await supabase.functions.invoke('omni-send', { body: { message_id: data.id } })
+          const delivery = res?.delivery
+          if (delivery) {
+            setMessages((m) => m.map((x) => (x.id === data.id ? { ...x, delivery } : x)))
+            if (delivery.status === 'sent') notify('Mensagem enviada.', 'success')
+            else if (delivery.status === 'skipped') notify('Registrada. Este canal ainda não envia automaticamente.', 'info')
+            else notify('Registrada, mas o envio falhou: ' + (delivery.error || 'canal não configurado'), 'error')
+          } else if (fnErr) {
+            notify('Registrada. Envio automático indisponível: ' + (fnErr.message || 'função'), 'info')
+          }
+        } catch (fe) {
+          notify('Mensagem registrada (envio automático indisponível).', 'info')
+          void fe
+        }
+      }
     } catch (e) { notify('Erro ao enviar: ' + (e.message || e), 'error') } finally { setSending(false) }
   }
 
@@ -135,7 +158,16 @@ export function Omnichannel({ notify }) {
                               </div>
                             )}
                             {m.content && m.content !== '📎 Anexo' && <p className="whitespace-pre-wrap">{m.content}</p>}
-                            <p className={`text-[9px] mt-1 ${mine ? 'text-admin-champ/50' : 'text-admin-muted/30'}`}>{new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className={`text-[9px] mt-1 flex items-center gap-1 ${mine ? 'text-admin-champ/50 justify-end' : 'text-admin-muted/30'}`}>
+                              {new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              {mine && m.delivery && (
+                                m.delivery.status === 'sent'
+                                  ? <span className="text-admin-sage" title={`Enviado via ${m.delivery.channel || ''}`}>✓ enviado</span>
+                                  : m.delivery.status === 'skipped'
+                                    ? <span className="text-admin-muted/40" title={m.delivery.error || ''}>registrado</span>
+                                    : <span className="text-admin-rose" title={m.delivery.error || 'falha'}>⚠ falha</span>
+                              )}
+                            </p>
                           </div>
                         </div>
                       )
