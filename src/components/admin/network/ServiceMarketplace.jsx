@@ -1,9 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from '../ui'
 import { PERSON_TYPES, timeAgo } from '../../../lib/networkSocial'
 import { usePersonTypes } from '../../../lib/personTypes'
+import { uploadTo } from '../../../lib/storage'
+
+const MAX_FILES = 10
+const fileKind = (f) => { const t = f.type || ''; const n = (f.name || '').toLowerCase(); if (t.startsWith('image/')) return 'image'; if (t.startsWith('video/')) return 'video'; if (t === 'application/pdf' || n.endsWith('.pdf')) return 'pdf'; return 'file' }
+const KIND_ICON = { image: 'image', video: 'play', pdf: 'book', file: 'folder' }
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const REQ_STATUS = { open: { label: 'Aberto', s: 'bg-admin-champ/15 text-admin-champ' }, in_review: { label: 'Em análise', s: 'bg-admin-gold/15 text-admin-gold' }, awarded: { label: 'Contratado', s: 'bg-admin-sage/15 text-admin-sage' }, closed: { label: 'Encerrado', s: 'bg-white/[0.06] text-admin-muted/50' } }
@@ -73,7 +78,7 @@ export function ServiceMarketplace({ me, notify }) {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap"><p className="text-admin-text font-medium">{r.title}</p>{r.role && <span className="text-[10px] px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/60">{r.role}</span>}<span className={`text-[10px] px-2 py-0.5 rounded-lg ${st.s}`}>{st.label}</span>{mine && <span className="text-[10px] text-admin-champ/60">seu</span>}</div>
                         {r.description && <p className="text-admin-muted/55 text-sm mt-2 line-clamp-2">{r.description}</p>}
-                        <p className="text-admin-muted/40 text-[11px] mt-2">{props.length} proposta{props.length === 1 ? '' : 's'}{r.location ? ` · ${r.location}` : ''} · {timeAgo(r.created_at)}</p>
+                        <p className="text-admin-muted/40 text-[11px] mt-2">{props.length} proposta{props.length === 1 ? '' : 's'}{r.location ? ` · ${r.location}` : ''}{Array.isArray(r.attachments) && r.attachments.length ? ` · ${r.attachments.length} anexo${r.attachments.length === 1 ? '' : 's'}` : ''} · {timeAgo(r.created_at)}</p>
                       </div>
                       <div className="text-right shrink-0">{r.budget ? <p className="text-admin-champ text-sm">{brl(r.budget)}</p> : null}{r.deadline && <p className="text-admin-muted/40 text-[11px] mt-0.5">até {new Date(r.deadline).toLocaleDateString('pt-BR')}</p>}</div>
                     </div>
@@ -88,8 +93,8 @@ export function ServiceMarketplace({ me, notify }) {
               )})}
             </div>}
 
-      {creating && <CreateRequest onClose={() => setCreating(false)} onCreate={create} personTypes={personTypes} />}
-      {editing && <CreateRequest initial={editing} onClose={() => setEditing(null)} onCreate={(payload) => update(editing.id, payload)} personTypes={personTypes} />}
+      {creating && <CreateRequest onClose={() => setCreating(false)} onCreate={create} personTypes={personTypes} notify={notify} />}
+      {editing && <CreateRequest initial={editing} onClose={() => setEditing(null)} onCreate={(payload) => update(editing.id, payload)} personTypes={personTypes} notify={notify} />}
       {confirmDel && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDel(null)}>
           <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
@@ -106,18 +111,39 @@ export function ServiceMarketplace({ me, notify }) {
 const MODALITY = [{ value: '', label: 'Modalidade' }, { value: 'presencial', label: 'Presencial' }, { value: 'remoto', label: 'Remoto' }, { value: 'hibrido', label: 'Híbrido' }]
 const URGENCY = [{ value: '', label: 'Urgência' }, { value: 'baixa', label: 'Sem pressa' }, { value: 'media', label: 'Nas próximas semanas' }, { value: 'alta', label: 'Urgente' }]
 
-function CreateRequest({ onClose, onCreate, personTypes, initial }) {
+function CreateRequest({ onClose, onCreate, personTypes, initial, notify }) {
   const [f, setF] = useState({
     title: initial?.title || '', role: initial?.role || '', description: initial?.description || '',
     budget: initial?.budget ?? '', budget_max: initial?.budget_max ?? '', deadline: initial?.deadline || '',
     location: initial?.location || '', modality: initial?.modality || '', urgency: initial?.urgency || '',
     quantity: initial?.quantity || '', requirements: initial?.requirements || '', references: initial?.references || '',
   })
+  const [attachments, setAttachments] = useState(Array.isArray(initial?.attachments) ? initial.attachments : [])
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef(null)
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
   const roleOpts = [{ value: '', label: 'Tipo de profissional' }, ...(personTypes || PERSON_TYPES).map((t) => ({ value: t, label: t }))]
   const editing = !!initial
+
+  const onFiles = async (e) => {
+    const files = Array.from(e.target.files || [])
+    const room = MAX_FILES - attachments.length
+    if (room <= 0) { notify?.(`Limite de ${MAX_FILES} arquivos atingido.`, 'error'); return }
+    const take = files.slice(0, room)
+    if (files.length > room) notify?.(`Enviando ${room} de ${files.length} — limite de ${MAX_FILES}.`, 'info')
+    setUploading(true)
+    const added = []
+    for (const file of take) {
+      const r = await uploadTo(file, { folder: 'network/briefings', accept: 'any', maxMB: 50 })
+      if (r.error) { notify?.(r.error, 'error'); continue }
+      added.push({ url: r.url, name: file.name, kind: fileKind(file) })
+    }
+    setUploading(false); if (fileRef.current) fileRef.current.value = ''
+    if (added.length) setAttachments((a) => [...a, ...added])
+  }
+  const rmFile = (i) => setAttachments((a) => a.filter((_, j) => j !== i))
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -143,8 +169,28 @@ function CreateRequest({ onClose, onCreate, personTypes, initial }) {
             <div><label className={lbl}>Quantidade / volume</label><input value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="Ex.: 1 projeto, 200 un" className={cls} /></div>
           </div>
           <div><label className={lbl}>Links de referência (opcional)</label><input value={f.references} onChange={(e) => set('references', e.target.value)} placeholder="Cole links de inspiração, Pinterest, drive…" className={cls} /></div>
+
+          {/* Anexos: imagens, PDF e vídeos (até 10) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5"><label className="text-[10px] uppercase tracking-wider text-admin-muted/50">Anexos ({attachments.length}/{MAX_FILES})</label><span className="text-[10px] text-admin-muted/35">imagens, PDF, vídeos</span></div>
+            <input ref={fileRef} type="file" accept="image/*,video/*,application/pdf" multiple onChange={onFiles} className="hidden" />
+            {attachments.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-2">
+                {attachments.map((a, i) => (
+                  <div key={i} className="relative group glass-input rounded-xl overflow-hidden">
+                    {a.kind === 'image' ? <img src={a.url} alt={a.name} className="w-full h-20 object-cover" />
+                      : <div className="w-full h-20 flex flex-col items-center justify-center gap-1 text-admin-champ/60"><Icon name={KIND_ICON[a.kind] || 'folder'} className="w-5 h-5" /><span className="text-[9px] text-admin-muted/50 px-2 truncate max-w-full">{a.name}</span></div>}
+                    <button onClick={() => rmFile(i)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white/80 hover:text-admin-rose flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="x" className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {attachments.length < MAX_FILES && (
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-muted/60 hover:text-admin-champ flex items-center justify-center gap-2 transition-colors disabled:opacity-50"><Icon name={uploading ? 'clock' : 'upload'} className="w-4 h-4" />{uploading ? 'Enviando…' : 'Adicionar arquivos'}</button>
+            )}
+          </div>
         </div>
-        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.title.trim() && onCreate({ title: f.title, role: f.role || null, description: f.description || null, requirements: f.requirements || null, budget: f.budget ? Number(f.budget) : null, budget_max: f.budget_max ? Number(f.budget_max) : null, deadline: f.deadline || null, location: f.location || null, modality: f.modality || null, urgency: f.urgency || null, quantity: f.quantity || null, references: f.references || null })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">{editing ? 'Salvar' : 'Publicar'}</button></div>
+        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.title.trim() && onCreate({ title: f.title, role: f.role || null, description: f.description || null, requirements: f.requirements || null, budget: f.budget ? Number(f.budget) : null, budget_max: f.budget_max ? Number(f.budget_max) : null, deadline: f.deadline || null, location: f.location || null, modality: f.modality || null, urgency: f.urgency || null, quantity: f.quantity || null, references: f.references || null, attachments })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">{editing ? 'Salvar' : 'Publicar'}</button></div>
       </div>
     </div>
   )
@@ -191,6 +237,19 @@ function RequestDetail({ request, tenantId, me, onBack, reload, notify, onEdit, 
             )}
           </div>
         </div>
+        {Array.isArray(request.attachments) && request.attachments.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-white/[0.06]">
+            <p className="text-[10px] uppercase tracking-wider text-admin-champ/60 mb-2">Anexos ({request.attachments.length})</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+              {request.attachments.map((a, i) => (
+                <a key={i} href={a.url} target="_blank" rel="noreferrer" className="group glass-input rounded-xl overflow-hidden block" title={a.name}>
+                  {a.kind === 'image' ? <img src={a.url} alt={a.name} className="w-full h-20 object-cover group-hover:scale-105 transition-transform" />
+                    : <div className="w-full h-20 flex flex-col items-center justify-center gap-1 text-admin-champ/60"><Icon name={KIND_ICON[a.kind] || 'folder'} className="w-5 h-5" /><span className="text-[9px] text-admin-muted/50 px-2 truncate max-w-full">{a.name}</span></div>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
         {!isOwner && request.status === 'open' && (
           <div className="mt-4 pt-4 border-t border-white/[0.06]">
             {myProposal ? <p className="text-admin-sage text-sm flex items-center gap-2"><Icon name="check" className="w-4 h-4" />Você já enviou uma proposta.</p>
