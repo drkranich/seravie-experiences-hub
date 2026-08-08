@@ -11,7 +11,7 @@ function Avatar({ name, url, size = 'w-12 h-12', text = 'text-base' }) {
 }
 function Seal({ level }) { const v = VERIF[level] || VERIF.member; return <span className={`text-[10px] px-2 py-0.5 rounded-lg ${v.style}`}>{v.label}</span> }
 
-export function People({ notify }) {
+export function People({ notify, onMessage }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
@@ -37,7 +37,7 @@ export function People({ notify }) {
     })
   }, [members, q, type])
 
-  if (open) return <MemberProfile member={open} onBack={() => setOpen(null)} />
+  if (open) return <MemberProfile member={open} onBack={() => setOpen(null)} onMessage={onMessage} />
 
   return (
     <div>
@@ -70,7 +70,7 @@ export function People({ notify }) {
   )
 }
 
-function MemberProfile({ member: m, onBack }) {
+function MemberProfile({ member: m, onBack, onMessage }) {
   const specialties = Array.isArray(m.specialties) ? m.specialties : []
   return (
     <div>
@@ -86,7 +86,7 @@ function MemberProfile({ member: m, onBack }) {
           </div>
           <div className="flex gap-2 pb-1">
             <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 transition-colors"><Icon name="plus" className="w-4 h-4" />Conectar</button>
-            <button className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Mensagem</button>
+            <button onClick={() => onMessage?.(m.id)} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Mensagem</button>
           </div>
         </div>
 

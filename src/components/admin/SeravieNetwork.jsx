@@ -8,6 +8,8 @@ import { POST_KINDS, COMMUNITY_THEMES, VERIF, timeAgo, initials } from '../../li
 import { Communities } from './network/Communities'
 import { People } from './network/People'
 import { NetworkProjects } from './network/NetworkProjects'
+import { Messages } from './network/Messages'
+import { NotificationsBell } from './network/Notifications'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Network — plataforma social profissional do ecossistema
@@ -16,6 +18,7 @@ import { NetworkProjects } from './network/NetworkProjects'
 
 const NAV = [
   { key: 'feed', label: 'Feed', icon: 'grid' },
+  { key: 'messages', label: 'Mensagens', icon: 'mail' },
   { key: 'communities', label: 'Comunidades', icon: 'users' },
   { key: 'people', label: 'Pessoas & Empresas', icon: 'user' },
   { key: 'projects', label: 'Projetos', icon: 'layout' },
@@ -209,6 +212,7 @@ export function SeravieNetwork({ notify }) {
   const tenantId = profile?.tenant_id
   const [view, setView] = useState('feed')
   const [me, setMe] = useState(null)
+  const [dmTarget, setDmTarget] = useState(null)  // membro para iniciar DM (do "Mensagem" no perfil)
 
   // garante um perfil de membro para o usuário atual (auto-provisiona)
   useEffect(() => {
@@ -247,10 +251,15 @@ export function SeravieNetwork({ notify }) {
       </nav>
 
       <div className="flex-1 min-w-0">
-        <div className="md:hidden mb-4"><GlassSelect value={view} onChange={setView} options={NAV.map((n) => ({ value: n.key, label: n.label }))} /></div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="md:hidden flex-1"><GlassSelect value={view} onChange={setView} options={NAV.map((n) => ({ value: n.key, label: n.label }))} /></div>
+          <div className="flex-1 hidden md:block" />
+          <NotificationsBell onNavigate={setView} notify={notify} />
+        </div>
         {view === 'feed' && <Feed me={me} notify={notify} />}
+        {view === 'messages' && <Messages me={me} notify={notify} startWith={dmTarget} />}
         {view === 'communities' && <Communities me={me} notify={notify} />}
-        {view === 'people' && <People notify={notify} />}
+        {view === 'people' && <People notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
         {view === 'projects' && <NetworkProjects me={me} notify={notify} />}
       </div>
     </div>
