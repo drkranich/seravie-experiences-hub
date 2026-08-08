@@ -31,7 +31,7 @@ function Section({ title, children }) {
 
 function LevelCard({ std, kit, editable, onArea, onSave, saving }) {
   return (
-    <div className="glass rounded-2xl p-5">
+    <div className="glass rounded-2xl p-5 flex flex-col h-full">
       <div className="flex items-start justify-between mb-2">
         <div>
           <p className="text-admin-text font-medium text-lg">{std.level_name}</p>
@@ -52,7 +52,7 @@ function LevelCard({ std, kit, editable, onArea, onSave, saving }) {
         </div>
       </div>
 
-      <div className="space-y-3 mt-4">
+      <div className="space-y-3 mt-4 flex-1">
         <Section title="Layout do espaço"><Chips items={std.layout} icon="grid" tone="champ" /></Section>
         <Section title="Identidade & mobiliário"><Chips items={std.identity} icon="star" tone="gold" /></Section>
         <Section title="Equipamentos & tecnologia"><Chips items={std.equipment} icon="check" tone="sage" /></Section>
