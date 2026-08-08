@@ -99,22 +99,37 @@ export function MarketingPanel({ notify }) {
   const [coupons, setCoupons] = useState([])
   const [contacts, setContacts] = useState([])
   const [automations, setAutomations] = useState([])
+  const [customEvents, setCustomEvents] = useState([])
   const [loading, setLoading] = useState(true)
 
   // modais
   const [campModal, setCampModal] = useState(false)
   const [couponModal, setCouponModal] = useState(false)
-  const [autoModal, setAutoModal] = useState(null) // template
+  const [autoModal, setAutoModal] = useState(null) // automação em edição / nova
 
   const loadCampaigns = async () => { const { data } = await supabase.from('campaigns').select('*').order('created_at', { ascending: false }); setCampaigns(data || []) }
   const loadCoupons = async () => { const { data } = await supabase.from('coupons').select('*').order('created_at', { ascending: false }); setCoupons(data || []) }
   const loadContacts = async () => { const { data } = await supabase.from('contacts').select('id, name, email, phone, birthdate, segment, source, ltv').limit(2000); setContacts(data || []) }
-  const loadAutomations = async () => { const { data } = await supabase.from('marketing_automations').select('*, coupon:coupons(code)').order('trigger'); setAutomations(data || []) }
+  const loadAutomations = async () => { const { data } = await supabase.from('marketing_automations').select('*, coupon:coupons(code)').order('created_at', { ascending: false }); setAutomations(data || []) }
+  const loadCustomEvents = async () => { const { data } = await supabase.from('marketing_custom_events').select('*').order('created_at', { ascending: false }); setCustomEvents(data || []) }
 
   const loadAll = async () => {
     setLoading(true)
-    await Promise.all([loadCampaigns(), loadCoupons(), loadContacts(), loadAutomations()])
+    await Promise.all([loadCampaigns(), loadCoupons(), loadContacts(), loadAutomations(), loadCustomEvents()])
     setLoading(false)
+  }
+
+  // gatilhos disponíveis = catálogo do motor de eventos + eventos personalizados
+  const triggerOptions = [
+    ...MARKETING_EVENTS.map((e) => ({ value: e.type, label: e.label })),
+    ...customEvents.map((e) => ({ value: e.event_type, label: `${e.label} (personalizado)` })),
+  ]
+  const triggerMeta = (type) => {
+    const cat = EVENT_MAP[type]
+    if (cat) return { icon: cat.icon, color: cat.color, label: cat.label }
+    const cust = customEvents.find((e) => e.event_type === type)
+    if (cust) return { icon: cust.icon || 'spark', color: cust.color || 'champ', label: cust.label }
+    return { icon: 'spark', color: 'champ', label: type }
   }
   useEffect(() => { loadAll() }, [])
 
@@ -177,8 +192,8 @@ export function MarketingPanel({ notify }) {
           {studio === 'growth' && tab === 'forms' && <FormsTab tenantId={tenantId} notify={notify} />}
 
           {/* Automation Studio */}
-          {studio === 'automation' && tab === 'automations' && <AutomationsTab automations={automations} coupons={coupons} onEdit={setAutoModal} notify={notify} reload={loadAutomations} />}
-          {studio === 'automation' && tab === 'triggers' && <TriggersTab />}
+          {studio === 'automation' && tab === 'automations' && <AutomationsTab automations={automations} coupons={coupons} triggerOptions={triggerOptions} triggerMeta={triggerMeta} onEdit={setAutoModal} onNew={() => setAutoModal({})} notify={notify} reload={loadAutomations} />}
+          {studio === 'automation' && tab === 'triggers' && <TriggersTab tenantId={tenantId} customEvents={customEvents} notify={notify} reload={loadCustomEvents} />}
           {studio === 'automation' && tab === 'journeys' && <JourneysTab tenantId={tenantId} coupons={coupons} notify={notify} />}
 
           {/* Audience Studio */}
@@ -200,7 +215,7 @@ export function MarketingPanel({ notify }) {
 
       {campModal && <CampaignModal contacts={contacts} coupons={coupons} tenantId={tenantId} createdBy={profile?.user_id} notify={notify} onClose={() => setCampModal(false)} onSaved={() => { setCampModal(false); loadCampaigns() }} />}
       {couponModal && <CouponModal tenantId={tenantId} notify={notify} onClose={() => setCouponModal(false)} onSaved={() => { setCouponModal(false); loadCoupons() }} />}
-      {autoModal && <AutomationModal template={autoModal} coupons={coupons} tenantId={tenantId} notify={notify} onClose={() => setAutoModal(null)} onSaved={() => { setAutoModal(null); loadAutomations() }} />}
+      {autoModal && <AutomationModal automation={autoModal} coupons={coupons} triggerOptions={triggerOptions} tenantId={tenantId} notify={notify} onClose={() => setAutoModal(null)} onSaved={() => { setAutoModal(null); loadAutomations() }} />}
     </div>
   )
 }
@@ -402,68 +417,101 @@ function CampaignModal({ contacts, coupons, tenantId, createdBy, notify, onClose
 }
 
 // ================= AUTOMAÇÕES =================
-function AutomationsTab({ automations, coupons, onEdit, notify, reload }) {
-  const byTrigger = Object.fromEntries(automations.map((a) => [a.trigger, a]))
+const AUTO_STY = {
+  champ: { border: 'border-admin-champ/30', bg: 'bg-admin-champ/10', text: 'text-admin-champ' },
+  rose: { border: 'border-admin-rose/30', bg: 'bg-admin-rose/10', text: 'text-admin-rose' },
+  sage: { border: 'border-admin-sage/30', bg: 'bg-admin-sage/10', text: 'text-admin-sage' },
+  gold: { border: 'border-admin-gold/30', bg: 'bg-admin-gold/10', text: 'text-admin-gold' },
+  copper: { border: 'border-admin-copper/30', bg: 'bg-admin-copper/10', text: 'text-admin-copper' },
+}
+function AutomationsTab({ automations, coupons, triggerOptions, triggerMeta, onEdit, onNew, notify, reload }) {
   const toggle = async (a) => {
-    try { await supabase.from('marketing_automations').update({ is_active: !a.is_active }).eq('id', a.id) } catch { /* noop */ }
+    try { await supabase.from('marketing_automations').update({ is_active: !a.is_active, updated_at: new Date().toISOString() }).eq('id', a.id) } catch { /* noop */ }
     reload()
   }
+  const remove = async (a) => {
+    try { await supabase.from('marketing_automations').delete().eq('id', a.id) } catch { /* noop */ }
+    notify('Automação removida', 'success'); reload()
+  }
+  const triggerLabel = (t) => triggerOptions.find((o) => o.value === t)?.label || AUTO_MAP[t]?.name || t
+
   return (
     <div>
-      <p className="text-admin-muted/50 text-xs mb-4 leading-relaxed">Automações de relacionamento disparam sozinhas com base nos eventos dos clientes do PDV. Ative um gatilho, escreva a mensagem e (opcionalmente) vincule um cupom. A execução fica pronta para o provedor de envio configurado nos Secrets do Supabase.</p>
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <p className="text-admin-muted/50 text-xs max-w-2xl leading-relaxed">Automações disparam sozinhas quando um evento acontece. Crie quantas quiser, escolhendo o gatilho, o canal, o atraso, a mensagem e um cupom. A execução fica pronta para o provedor de envio configurado nos Secrets do Supabase.</p>
+        <button onClick={onNew} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors shrink-0"><Icon name="plus" className="w-4 h-4" />Nova automação</button>
+      </div>
+
+      {/* Modelos rápidos */}
+      <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">Modelos rápidos</p>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-6">
         {AUTOMATION_TEMPLATES.map((t) => {
-          const saved = byTrigger[t.trigger]
-          const active = saved?.is_active
-          // classes literais (Tailwind não gera classes interpoladas)
-          const STY = {
-            champ: { border: 'border-admin-champ/30', bg: 'bg-admin-champ/10', text: 'text-admin-champ' },
-            rose: { border: 'border-admin-rose/30', bg: 'bg-admin-rose/10', text: 'text-admin-rose' },
-            sage: { border: 'border-admin-sage/30', bg: 'bg-admin-sage/10', text: 'text-admin-sage' },
-            gold: { border: 'border-admin-gold/30', bg: 'bg-admin-gold/10', text: 'text-admin-gold' },
-          }[t.color]
+          const sty = AUTO_STY[t.color] || AUTO_STY.champ
           return (
-            <div key={t.trigger} className={`glass rounded-2xl p-5 border transition-colors ${active ? STY.border : 'border-transparent'}`}>
-              <div className="flex items-start gap-3 mb-2">
-                <div className={`w-10 h-10 rounded-xl ${STY.bg} flex items-center justify-center shrink-0`}><Icon name={t.icon} className={`w-5 h-5 ${STY.text}`} /></div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-admin-text text-sm font-medium">{t.name}</p>
-                  <p className="text-admin-muted/50 text-xs mt-0.5 leading-relaxed">{t.desc}</p>
-                </div>
-                <button onClick={() => saved ? toggle(saved) : onEdit(t)} className={`text-[10px] px-2.5 py-1 rounded-lg transition-colors shrink-0 ${active ? 'bg-admin-sage/15 text-admin-sage' : 'bg-white/[0.05] text-admin-muted/50 hover:text-admin-text'}`}>{active ? 'ativa' : 'inativa'}</button>
-              </div>
-              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.05]">
-                {saved && <span className="text-admin-muted/40 text-xs">{CHANNEL_LABEL[saved.channel]}{saved.delay_days ? ` · ${saved.delay_days}d` : ''}{saved.coupon?.code ? ` · 🎟 ${saved.coupon.code}` : ''}</span>}
-                {saved && <span className="text-admin-muted/40 text-xs">Enviadas: {saved.sent_count || 0}</span>}
-                <button onClick={() => onEdit({ ...t, ...saved })} className="ml-auto text-xs text-admin-champ/70 hover:text-admin-champ">{saved ? 'editar' : 'configurar'}</button>
-              </div>
-            </div>
+            <button key={t.trigger} onClick={() => onEdit({ ...t, fromTemplate: true })} className="glass rounded-xl p-3 text-left hover:bg-white/[0.03] transition-colors border border-transparent hover:border-admin-champ/20">
+              <div className={`w-8 h-8 rounded-lg ${sty.bg} flex items-center justify-center mb-2`}><Icon name={t.icon} className={`w-4 h-4 ${sty.text}`} /></div>
+              <p className="text-admin-text text-xs font-medium">{t.name}</p>
+              <p className="text-admin-champ/50 text-[10px] mt-0.5">usar modelo →</p>
+            </button>
           )
         })}
       </div>
+
+      {/* Automações criadas */}
+      <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">Minhas automações</p>
+      {automations.length === 0 ? (
+        <div className="glass rounded-2xl p-10 text-center"><Icon name="spark" className="w-9 h-9 text-admin-champ/25 mx-auto mb-3" /><p className="text-admin-muted/40 text-sm">Nenhuma automação criada. Use um modelo acima ou clique em "Nova automação".</p></div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {automations.map((a) => {
+            const meta = triggerMeta(a.trigger)
+            const sty = AUTO_STY[meta.color] || AUTO_STY.champ
+            return (
+              <div key={a.id} className={`glass rounded-2xl p-5 border transition-colors ${a.is_active ? sty.border : 'border-transparent'}`}>
+                <div className="flex items-start gap-3 mb-2">
+                  <div className={`w-10 h-10 rounded-xl ${sty.bg} flex items-center justify-center shrink-0`}><Icon name={meta.icon} className={`w-5 h-5 ${sty.text}`} /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-admin-text text-sm font-medium truncate">{a.name}</p>
+                    <p className="text-admin-muted/50 text-xs mt-0.5">Gatilho: {triggerLabel(a.trigger)}</p>
+                  </div>
+                  <button onClick={() => toggle(a)} className={`text-[10px] px-2.5 py-1 rounded-lg transition-colors shrink-0 ${a.is_active ? 'bg-admin-sage/15 text-admin-sage' : 'bg-white/[0.05] text-admin-muted/50 hover:text-admin-text'}`}>{a.is_active ? 'ativa' : 'inativa'}</button>
+                </div>
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.05] text-xs">
+                  <span className="text-admin-muted/40">{CHANNEL_LABEL[a.channel] || a.channel}{a.delay_days ? ` · ${a.delay_days}d` : ''}{a.coupon?.code ? ` · 🎟 ${a.coupon.code}` : ''}</span>
+                  <button onClick={() => onEdit(a)} className="ml-auto text-admin-champ/70 hover:text-admin-champ">editar</button>
+                  <button onClick={() => remove(a)} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-// ================= MODAL: AUTOMAÇÃO =================
-function AutomationModal({ template, coupons, tenantId, notify, onClose, onSaved }) {
-  const existing = template.id ? template : null
+// ================= MODAL: AUTOMAÇÃO (livre) =================
+function AutomationModal({ automation, coupons, triggerOptions, tenantId, notify, onClose, onSaved }) {
+  const existing = automation?.id ? automation : null
+  const fromTemplate = automation?.fromTemplate
   const [f, setF] = useState({
-    channel: template.channel || 'email',
-    delay_days: template.delay_days ?? template.delay ?? 0,
-    coupon_id: template.coupon_id || '',
-    subject: template.subject || AUTO_MAP[template.trigger]?.subject || '',
-    message: template.message || AUTO_MAP[template.trigger]?.message || '',
-    is_active: template.is_active ?? true,
+    name: automation?.name || (fromTemplate ? automation.name : ''),
+    trigger: automation?.trigger || 'sale_completed',
+    channel: automation?.channel || 'email',
+    delay_days: automation?.delay_days ?? automation?.delay ?? 0,
+    coupon_id: automation?.coupon_id || '',
+    subject: automation?.subject || (fromTemplate ? AUTO_MAP[automation.trigger]?.subject : '') || '',
+    message: automation?.message || (fromTemplate ? AUTO_MAP[automation.trigger]?.message : '') || '',
+    is_active: automation?.is_active ?? true,
   })
   const [busy, setBusy] = useState(false)
   const set = (patch) => setF((s) => ({ ...s, ...patch }))
-  const showDelay = template.trigger === 'post_sale' || template.trigger === 'winback'
 
   const save = async () => {
+    if (!f.name.trim()) return notify('Dê um nome à automação', 'error')
     setBusy(true)
     const payload = {
-      tenant_id: tenantId, trigger: template.trigger, name: AUTO_MAP[template.trigger]?.name || template.trigger,
+      tenant_id: tenantId, trigger: f.trigger, name: f.name.trim(),
       channel: f.channel, delay_days: Number(f.delay_days) || 0, coupon_id: f.coupon_id || null,
       subject: f.subject || null, message: f.message || null, is_active: f.is_active, updated_at: new Date().toISOString(),
     }
@@ -479,13 +527,14 @@ function AutomationModal({ template, coupons, tenantId, notify, onClose, onSaved
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="glass-pop rounded-2xl p-7 w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">{AUTO_MAP[template.trigger]?.name}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
-        <p className="text-admin-muted/50 text-xs mb-5">{AUTO_MAP[template.trigger]?.desc}</p>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">{existing ? 'Editar automação' : 'Nova automação'}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-4">
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome *</label><input value={f.name} onChange={(e) => set({ name: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="Ex: Agradecimento pós-compra" /></div>
           <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Gatilho (evento)</label><GlassSelect value={f.trigger} onChange={(v) => set({ trigger: v })} options={triggerOptions} /></div>
             <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Canal</label><GlassSelect value={f.channel} onChange={(v) => set({ channel: v })} options={CHANNELS} /></div>
-            {showDelay && <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Dias após o evento</label><input type="number" value={f.delay_days} onChange={(e) => set({ delay_days: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>}
           </div>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Atraso após o evento (dias)</label><input type="number" min="0" value={f.delay_days} onChange={(e) => set({ delay_days: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
           {f.channel === 'email' && <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Assunto</label><input value={f.subject} onChange={(e) => set({ subject: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>}
           <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Mensagem</label><textarea value={f.message} onChange={(e) => set({ message: e.target.value })} rows={4} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" placeholder="Use {nome} para personalizar." /></div>
           <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Cupom (opcional)</label><GlassSelect value={f.coupon_id} onChange={(v) => set({ coupon_id: v })} options={[{ value: '', label: 'Nenhum' }, ...coupons.filter((c) => c.is_active).map((c) => ({ value: c.id, label: `${c.code} · ${c.type === 'percentage' ? c.value + '%' : brl(c.value)}` }))]} /></div>
@@ -699,11 +748,21 @@ function ScheduleModal({ monthLabel, year, onClose, onCreate }) {
   )
 }
 
-// ================= EVENTOS & GATILHOS =================
-function TriggersTab() {
+// ================= EVENTOS & GATILHOS (editável) =================
+const EVT_STY = {
+  champ: { bg: 'bg-admin-champ/10', text: 'text-admin-champ' }, sage: { bg: 'bg-admin-sage/10', text: 'text-admin-sage' },
+  gold: { bg: 'bg-admin-gold/10', text: 'text-admin-gold' }, rose: { bg: 'bg-admin-rose/10', text: 'text-admin-rose' },
+  copper: { bg: 'bg-admin-copper/10', text: 'text-admin-copper' },
+}
+const EVT_ICONS = ['spark', 'flame', 'star', 'gift', 'heart', 'cart', 'chart', 'calendar', 'clock', 'user', 'building', 'layers', 'book', 'check']
+const EVT_COLORS = ['champ', 'sage', 'gold', 'rose', 'copper']
+const slugifyEvt = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '')
+
+function TriggersTab({ tenantId, customEvents, notify, reload }) {
   const [counts, setCounts] = useState({})
   const [loading, setLoading] = useState(true)
-  useEffect(() => { load() }, [])
+  const [modal, setModal] = useState(null) // evento personalizado em edição / novo
+
   const load = async () => {
     setLoading(true)
     try {
@@ -713,36 +772,90 @@ function TriggersTab() {
       setCounts(c)
     } catch { /* noop */ } finally { setLoading(false) }
   }
+  useEffect(() => { load() }, [])
+
+  // dispara manualmente um evento (para testar automações/jornadas)
+  const fire = async (type, module) => {
+    try {
+      const { error } = await supabase.from('marketing_events').insert({ tenant_id: tenantId, event_type: type, source_module: module || 'custom', payload: { manual: true } })
+      if (error) throw error
+      notify('Evento disparado para teste', 'success'); load()
+    } catch (e) { notify('Erro: ' + (e.message || e), 'error') }
+  }
+  const removeCustom = async (ev) => {
+    try { await supabase.from('marketing_custom_events').delete().eq('id', ev.id) } catch { /* noop */ }
+    notify('Evento removido', 'success'); reload && reload()
+  }
+
   const byModule = {}
   MARKETING_EVENTS.forEach((e) => { (byModule[e.module] = byModule[e.module] || []).push(e) })
   const MOD_LABEL = { pos: 'PDV', crm: 'CRM', ecommerce: 'E-commerce', loyalty: 'Fidelidade', reservations: 'Reservas', finance: 'Financeiro', academy: 'Academy' }
-  const STY = {
-    champ: { bg: 'bg-admin-champ/10', text: 'text-admin-champ' }, sage: { bg: 'bg-admin-sage/10', text: 'text-admin-sage' },
-    gold: { bg: 'bg-admin-gold/10', text: 'text-admin-gold' }, rose: { bg: 'bg-admin-rose/10', text: 'text-admin-rose' },
-    copper: { bg: 'bg-admin-copper/10', text: 'text-admin-copper' },
-  }
+
   return (
     <div>
-      <div className="glass-soft rounded-xl px-4 py-3 mb-5 flex items-start gap-3">
-        <Icon name="flame" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
-        <p className="text-admin-muted/60 text-xs leading-relaxed">O diferencial da Seravie: as campanhas disparam porque <span className="text-admin-champ">algo aconteceu</span> em qualquer módulo — não porque alguém entrou numa lista. Cada evento abaixo pode iniciar uma jornada (próxima onda). O PDV já emite eventos de venda em tempo real.</p>
+      <div className="flex items-start justify-between gap-3 mb-5 flex-wrap">
+        <div className="glass-soft rounded-xl px-4 py-3 flex items-start gap-3 flex-1 min-w-[16rem]">
+          <Icon name="flame" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
+          <p className="text-admin-muted/60 text-xs leading-relaxed">As campanhas disparam porque <span className="text-admin-champ">algo aconteceu</span> em qualquer módulo. Use os eventos do catálogo ou crie os seus próprios gatilhos. Você pode disparar um evento manualmente para testar suas automações e jornadas.</p>
+        </div>
+        <button onClick={() => setModal({})} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors shrink-0"><Icon name="plus" className="w-4 h-4" />Novo evento</button>
       </div>
+
+      {/* Eventos personalizados */}
+      {customEvents.length > 0 && (
+        <div className="mb-6">
+          <p className="text-[10px] uppercase tracking-wider text-admin-champ/50 mb-2">Meus eventos personalizados</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {customEvents.map((e) => {
+              const s = EVT_STY[e.color] || EVT_STY.champ
+              const n = counts[e.event_type] || 0
+              return (
+                <div key={e.id} className="glass rounded-xl p-4 group">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}><Icon name={e.icon || 'spark'} className={`w-4 h-4 ${s.text}`} /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-admin-text text-sm font-medium truncate">{e.label}</p>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-lg shrink-0 ${n > 0 ? s.bg + ' ' + s.text : 'bg-white/[0.04] text-admin-muted/40'}`}>{n}</span>
+                      </div>
+                      <p className="text-admin-muted/50 text-xs mt-0.5 leading-relaxed">{e.description || 'Evento personalizado'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.05] text-xs">
+                    <button onClick={() => fire(e.event_type, e.module)} className="text-admin-sage hover:underline">disparar teste</button>
+                    <button onClick={() => setModal(e)} className="ml-auto text-admin-champ/70 hover:text-admin-champ">editar</button>
+                    <button onClick={() => removeCustom(e)} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Catálogo do sistema */}
+      <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">Eventos do sistema</p>
       {Object.entries(byModule).map(([mod, evts]) => (
         <div key={mod} className="mb-6">
           <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">{MOD_LABEL[mod] || mod}</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {evts.map((e) => {
-              const s = STY[e.color] || STY.champ
+              const s = EVT_STY[e.color] || EVT_STY.champ
               const n = counts[e.type] || 0
               return (
-                <div key={e.type} className="glass rounded-xl p-4 flex items-start gap-3">
-                  <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}><Icon name={e.icon} className={`w-4 h-4 ${s.text}`} /></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-admin-text text-sm font-medium">{e.label}</p>
-                      {!loading && <span className={`text-[10px] px-2 py-0.5 rounded-lg shrink-0 ${n > 0 ? s.bg + ' ' + s.text : 'bg-white/[0.04] text-admin-muted/40'}`}>{n}</span>}
+                <div key={e.type} className="glass rounded-xl p-4 group">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}><Icon name={e.icon} className={`w-4 h-4 ${s.text}`} /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-admin-text text-sm font-medium">{e.label}</p>
+                        {!loading && <span className={`text-[10px] px-2 py-0.5 rounded-lg shrink-0 ${n > 0 ? s.bg + ' ' + s.text : 'bg-white/[0.04] text-admin-muted/40'}`}>{n}</span>}
+                      </div>
+                      <p className="text-admin-muted/50 text-xs mt-0.5 leading-relaxed">{e.desc}</p>
                     </div>
-                    <p className="text-admin-muted/50 text-xs mt-0.5 leading-relaxed">{e.desc}</p>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-white/[0.05]">
+                    <button onClick={() => fire(e.type, e.module)} className="text-xs text-admin-sage hover:underline">disparar teste</button>
                   </div>
                 </div>
               )
@@ -750,6 +863,56 @@ function TriggersTab() {
           </div>
         </div>
       ))}
+
+      {modal && <CustomEventModal event={modal} tenantId={tenantId} existingTypes={customEvents.map((c) => c.event_type)} notify={notify} onClose={() => setModal(null)} onSaved={() => { setModal(null); reload && reload(); load() }} />}
+    </div>
+  )
+}
+
+function CustomEventModal({ event, tenantId, existingTypes, notify, onClose, onSaved }) {
+  const editing = event?.id
+  const [f, setF] = useState({ label: event?.label || '', icon: event?.icon || 'spark', color: event?.color || 'champ', description: event?.description || '', module: event?.module || 'custom' })
+  const [busy, setBusy] = useState(false)
+  const set = (p) => setF((s) => ({ ...s, ...p }))
+  const save = async () => {
+    if (!f.label.trim()) return notify('Dê um nome ao evento', 'error')
+    setBusy(true)
+    const event_type = editing ? event.event_type : slugifyEvt(f.label)
+    if (!editing && (existingTypes.includes(event_type) || !event_type)) { notify('Já existe um evento com esse nome (ou nome inválido)', 'error'); setBusy(false); return }
+    const payload = { label: f.label.trim(), icon: f.icon, color: f.color, description: f.description || null, module: f.module }
+    try {
+      let error
+      if (editing) { const r = await supabase.from('marketing_custom_events').update(payload).eq('id', event.id); error = r.error }
+      else { const r = await supabase.from('marketing_custom_events').insert({ ...payload, tenant_id: tenantId, event_type }); error = r.error }
+      if (error) throw error
+      notify('Evento salvo', 'success'); onSaved()
+    } catch (e) { notify('Erro: ' + (e.message || e), 'error') } finally { setBusy(false) }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">{editing ? 'Editar evento' : 'Novo evento personalizado'}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <div className="space-y-4">
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome do evento *</label><input value={f.label} onChange={(e) => set({ label: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="Ex: Visitou a loja física" /></div>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Descrição</label><input value={f.description} onChange={(e) => set({ description: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="Quando esse evento acontece?" /></div>
+          <div>
+            <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Ícone</label>
+            <div className="flex flex-wrap gap-1.5">
+              {EVT_ICONS.map((ic) => <button key={ic} onClick={() => set({ icon: ic })} className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${f.icon === ic ? 'bg-admin-champ/15 ring-1 ring-admin-champ/40' : 'bg-white/[0.04] hover:bg-white/[0.08]'}`}><Icon name={ic} className="w-4 h-4 text-admin-text/70" /></button>)}
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Cor</label>
+            <div className="flex gap-2">
+              {EVT_COLORS.map((c) => { const s = EVT_STY[c]; return <button key={c} onClick={() => set({ color: c })} className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center ${f.color === c ? 'ring-2 ring-admin-text/40' : ''}`}><span className={`w-3 h-3 rounded-full ${s.text.replace('text-', 'bg-')}`} /></button> })}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button disabled={busy} onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar evento'}</button>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+        </div>
+      </div>
     </div>
   )
 }
