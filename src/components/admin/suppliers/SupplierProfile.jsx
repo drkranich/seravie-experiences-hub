@@ -10,8 +10,9 @@ import { SupplierChat } from './SupplierChat'
 
 function Seal({ level }) {
   const v = VERIF_LEVELS[level] || VERIF_LEVELS.bronze
-  // fundo escuro + blur garante legibilidade mesmo quando o selo aparece sobre imagens claras
-  return <span className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg font-medium bg-black/50 backdrop-blur-md ring-1 ring-white/10 ${v.text}`}><span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />Fornecedor Homologado · Seravie {v.label}</span>
+  // fundo escuro sólido + blur + sombra clara no texto = legível sobre qualquer imagem
+  const glow = { textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(255,255,255,0.25)' }
+  return <span style={glow} className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg font-medium bg-black/65 backdrop-blur-md ring-1 ring-white/15 ${v.text}`}><span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} style={{ boxShadow: '0 0 4px rgba(255,255,255,0.5)' }} />Fornecedor Homologado · Seravie {v.label}</span>
 }
 function Stars({ value = 0 }) {
   const full = Math.round(value)

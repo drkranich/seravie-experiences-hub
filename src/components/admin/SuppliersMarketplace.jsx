@@ -43,8 +43,10 @@ function Stars({ value = 0, size = 'text-xs' }) {
 
 export function VerifSeal({ level, className = '', onDark = true }) {
   const v = VERIF_LEVELS[level] || VERIF_LEVELS.bronze
-  // onDark: quando sobre imagem (pode ser clara), adiciona fundo escuro + blur pra garantir legibilidade
-  return <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-lg font-medium ${onDark ? 'bg-black/45 backdrop-blur-md ring-1 ring-white/10 ' + v.text : v.style} ${className}`}><span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />Seravie {v.label}</span>
+  // Sobre imagem (que pode ser clara): fundo escuro sólido + blur + SOMBRA CLARA no texto,
+  // garantindo legibilidade em qualquer imagem sem alterar a cor da letra.
+  const glow = { textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(255,255,255,0.25)' }
+  return <span style={onDark ? glow : undefined} className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-lg font-medium ${onDark ? 'bg-black/65 backdrop-blur-md ring-1 ring-white/15 ' + v.text : v.style} ${className}`}><span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} style={onDark ? { boxShadow: '0 0 4px rgba(255,255,255,0.5)' } : undefined} />Seravie {v.label}</span>
 }
 
 // ---- Card grande do fornecedor (descoberta visual) ----
