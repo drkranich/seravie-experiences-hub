@@ -118,9 +118,11 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
   const [delivery, setDelivery] = useState({ name: profile?.full_name || '', contact: '' })
   const [addr, setAddr] = useState({ cep: '', address: '', address_number: '', neighborhood: '', city: '', state: '', country: 'BR', lat: null, lng: null })
   const [payment, setPayment] = useState('pix')
-  // frete por fornecedor
-  const [freight, setFreight] = useState({}) // supplier_id -> valor
+  // frete por fornecedor: { [supId]: { method, value, service, days, quotes, loading } }
+  const [freightState, setFreightState] = useState({})
   const [saving, setSaving] = useState(false)
+
+  const fset = (supId, patch) => setFreightState((s) => ({ ...s, [supId]: { ...(s[supId] || {}), ...patch } }))
 
   const setD = (k, v) => setDelivery((s) => ({ ...s, [k]: v }))
   const setQty = (id, qty) => setCart((c) => { if (qty <= 0) { const n = { ...c }; delete n[id]; return n } return { ...c, [id]: { ...c[id], qty } } })
@@ -135,7 +137,8 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
 
   const calc = (g, supId) => {
     const subtotal = g.items.reduce((s, { product, qty }) => s + (Number(product.price) || 0) * qty, 0)
-    const ship = Number(freight[supId]) || 0
+    const fr = freightState[supId] || {}
+    const ship = fr.method === 'retirada' || fr.method === 'gratis' ? 0 : (Number(fr.value) || 0)
     const commission = subtotal * (feePct / 100)
     return { subtotal, ship, commission, total: subtotal + ship }
   }
@@ -170,7 +173,7 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
     setSaving(true)
     const created = []
     for (const k of groupKeys) {
-      const g = groups[k]; const c = calc(g, k); const sup = g.supplier
+      const g = groups[k]; const c = calc(g, k); const sup = g.supplier; const fr = freightState[k] || {}
       const items = g.items.map(({ product, qty }) => ({ name: product.name, qty, unit_price: Number(product.price) || 0, note: product.unit || '' }))
       const code = 'PC-' + Date.now().toString(36).slice(-4).toUpperCase() + '-' + created.length
       const snapshot = sup ? { id: sup.id, name: sup.name, city: sup.city, state: sup.state, phone: sup.phone, whatsapp: sup.whatsapp, email: sup.email, address: [sup.address, sup.address_number].filter(Boolean).join(', '), cep: sup.cep, lead_time: sup.lead_time } : null
@@ -178,7 +181,9 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
         tenant_id: tenantId, supplier_id: k === 'sem' ? null : k, supplier_name: sup?.name || 'Fornecedor',
         code, status: 'enviado', items, subtotal: c.subtotal, shipping: c.ship, total: c.total,
         commission_percent: feePct, commission_amount: c.commission, lead_time: sup?.lead_time || null,
-        carrier: null, payment_method: payment, delivery_address: fullAddress || null,
+        carrier: fr.service || null, shipping_method: fr.method || 'combinado', shipping_service: fr.service || null,
+        shipping_days: fr.days ? parseInt(fr.days) : null,
+        payment_method: payment, delivery_address: fullAddress || null,
         buyer_name: delivery.name, buyer_contact: delivery.contact || null, supplier_snapshot: snapshot, paid_at: new Date().toISOString(),
       }
       const { data, error } = await supabase.from('buyer_orders').insert(payload).select('*').single()
@@ -251,15 +256,11 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
               </div>
               <div className="glass-soft rounded-2xl p-4">
                 <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Frete por fornecedor</p>
-                <div className="space-y-2">
-                  {groupKeys.map((k) => { const sup = groups[k].supplier; return (
-                    <div key={k} className="flex items-center gap-3">
-                      <span className="text-sm text-admin-text/80 flex-1 truncate">{sup?.name || 'Fornecedor'}</span>
-                      <div className="flex items-center gap-1.5"><span className="text-admin-muted/40 text-xs">R$</span><input type="number" value={freight[k] || ''} onChange={(e) => setFreight((f) => ({ ...f, [k]: e.target.value }))} placeholder="0,00" className="glass-input rounded-lg px-3 py-1.5 text-sm text-admin-text outline-none w-28" /></div>
-                    </div>
-                  )})}
+                <div className="space-y-3">
+                  {groupKeys.map((k) => (
+                    <SupplierFreight key={k} supplierKey={k} group={groups[k]} destCep={addr.cep} state={freightState[k]} onChange={(patch) => fset(k, patch)} notify={notify} />
+                  ))}
                 </div>
-                <p className="text-admin-muted/40 text-[11px] mt-2">Informe o frete combinado com cada fornecedor (ou deixe 0 para combinar depois).</p>
               </div>
               <div className="glass-soft rounded-2xl p-4">
                 <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Forma de pagamento</p>
@@ -311,6 +312,92 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─────────────── FRETE POR FORNECEDOR (Melhor Envio + modos manuais) ───────────────
+const SHIP_MODES = [
+  { value: 'melhor_envio', label: 'Melhor Envio', icon: 'truck' },
+  { value: 'combinado', label: 'Combinar com fornecedor', icon: 'mail' },
+  { value: 'retirada', label: 'Retirar no fornecedor', icon: 'map' },
+  { value: 'gratis', label: 'Frete grátis', icon: 'gift' },
+]
+
+function SupplierFreight({ supplierKey, group, destCep, state = {}, onChange, notify }) {
+  const sup = group.supplier
+  const method = state.method || 'combinado'
+  const originCep = sup?.cep
+  // frete grátis automático se todos os itens marcam free_shipping
+  const allFree = group.items.length > 0 && group.items.every(({ product }) => product.free_shipping)
+
+  // pacote agregado do carrinho deste fornecedor
+  const pkg = group.items.reduce((acc, { product, qty }) => ({
+    weight: acc.weight + (Number(product.weight_kg) || 1) * qty,
+    width: Math.max(acc.width, Number(product.width_cm) || 15),
+    height: acc.height + (Number(product.height_cm) || 10) * qty,
+    length: Math.max(acc.length, Number(product.length_cm) || 20),
+  }), { weight: 0, width: 0, height: 0, length: 0 })
+
+  const quote = async () => {
+    if (!originCep) return notify?.('Fornecedor sem CEP de origem cadastrado. Use "combinar com fornecedor".', 'error')
+    if (!destCep || String(destCep).replace(/\D/g, '').length !== 8) return notify?.('Preencha o CEP de entrega para cotar o frete.', 'error')
+    onChange({ loading: true, quotes: null })
+    try {
+      const { data, error } = await supabase.functions.invoke('shipping-quote', {
+        body: { from_cep: originCep, to_cep: destCep, package: pkg },
+      })
+      if (error) { onChange({ loading: false }); return notify?.('Erro ao cotar: ' + error.message, 'error') }
+      if (data?.error === 'shipping_not_configured') { onChange({ loading: false, method: 'combinado' }); return notify?.('Melhor Envio ainda não configurado. Use "combinar com fornecedor".', 'info') }
+      if (data?.error) { onChange({ loading: false }); return notify?.('Cotação: ' + (data.detail || data.error), 'error') }
+      const quotes = data?.options || []
+      onChange({ loading: false, quotes })
+      if (!quotes.length) notify?.('Nenhuma opção de frete retornada para este CEP.', 'info')
+    } catch (e) { onChange({ loading: false }); notify?.('Falha: ' + (e?.message || e), 'error') }
+  }
+
+  return (
+    <div className="glass-input rounded-xl p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm text-admin-text/85 font-medium truncate">{sup?.name || 'Fornecedor'}</span>
+        {allFree && <span className="text-[10px] px-2 py-0.5 rounded-lg bg-admin-sage/15 text-admin-sage">frete grátis disponível</span>}
+      </div>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {SHIP_MODES.filter((m) => m.value !== 'gratis' || allFree).map((m) => (
+          <button key={m.value} type="button" onClick={() => { onChange({ method: m.value, value: m.value === 'retirada' || m.value === 'gratis' ? 0 : state.value, service: m.value === 'retirada' ? 'Retirada' : m.value === 'gratis' ? 'Grátis' : null, days: null, quotes: m.value === 'melhor_envio' ? state.quotes : null }); if (m.value === 'melhor_envio' && !state.quotes) setTimeout(quote, 0) }}
+            className={`text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors ${method === m.value ? 'bg-admin-champ/20 text-admin-champ ring-1 ring-admin-champ/40' : 'bg-white/[0.04] text-admin-muted/60 hover:text-admin-champ'}`}>
+            <Icon name={m.icon} className="w-3.5 h-3.5" />{m.label}
+          </button>
+        ))}
+      </div>
+
+      {method === 'melhor_envio' && (
+        <div>
+          {state.loading ? <p className="text-admin-muted/50 text-xs py-2 flex items-center gap-2"><Icon name="clock" className="w-3.5 h-3.5" />Cotando frete…</p>
+            : !state.quotes ? <button type="button" onClick={quote} className="text-[11px] text-admin-champ/80 hover:text-admin-champ flex items-center gap-1.5"><Icon name="refresh" className="w-3.5 h-3.5" />Cotar frete no Melhor Envio</button>
+              : state.quotes.length === 0 ? <p className="text-admin-muted/40 text-[11px]">Sem opções para este CEP. Escolha outro modo.</p>
+                : <div className="space-y-1.5 mt-1">
+                    {state.quotes.map((o) => (
+                      <button key={o.id} type="button" onClick={() => onChange({ value: o.price, service: `${o.company} ${o.service}`.trim(), days: o.delivery_days })} className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors ${state.service === `${o.company} ${o.service}`.trim() ? 'bg-admin-champ/15 ring-1 ring-admin-champ/40' : 'bg-white/[0.03] hover:bg-white/[0.06]'}`}>
+                        {o.company_picture ? <img src={o.company_picture} alt="" className="w-6 h-6 rounded object-contain bg-white/5 shrink-0" /> : <Icon name="truck" className="w-4 h-4 text-admin-champ/60 shrink-0" />}
+                        <div className="min-w-0 flex-1"><p className="text-admin-text text-xs truncate">{o.company} · {o.service}</p>{o.delivery_days != null && <p className="text-admin-muted/40 text-[10px]">{o.delivery_days} dia(s) úteis</p>}</div>
+                        <span className="text-admin-champ text-xs shrink-0">{brl(o.price)}</span>
+                      </button>
+                    ))}
+                  </div>}
+        </div>
+      )}
+
+      {method === 'combinado' && (
+        <div className="flex items-center gap-2">
+          <span className="text-admin-muted/45 text-[11px]">Valor combinado:</span>
+          <span className="text-admin-muted/40 text-xs">R$</span>
+          <input type="number" value={state.value || ''} onChange={(e) => onChange({ value: e.target.value, service: 'Combinado', days: null })} placeholder="0,00" className="glass-input rounded-lg px-3 py-1.5 text-sm text-admin-text outline-none w-28" />
+          <span className="text-admin-muted/35 text-[10px]">(ou 0 para acertar depois)</span>
+        </div>
+      )}
+      {method === 'retirada' && <p className="text-admin-muted/50 text-[11px]">Retirada no fornecedor{sup?.city ? ` (${sup.city})` : ''} · sem frete.</p>}
+      {method === 'gratis' && <p className="text-admin-sage/70 text-[11px]">Frete grátis oferecido pelo fornecedor.</p>}
     </div>
   )
 }

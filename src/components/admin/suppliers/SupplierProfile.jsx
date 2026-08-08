@@ -50,7 +50,12 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
       name: form.name, description: form.description || null, price: form.price !== '' && form.price != null ? Number(form.price) : null,
       unit: form.unit || null, min_qty: form.min_qty !== '' && form.min_qty != null ? Number(form.min_qty) : null,
       stock: form.stock !== '' && form.stock != null ? parseInt(form.stock) : null,
-      direct_sale: !!form.direct_sale, notes: form.notes || null, image_url: form.image_url || null,
+      direct_sale: !!form.direct_sale, free_shipping: !!form.free_shipping,
+      weight_kg: form.weight_kg !== '' && form.weight_kg != null ? Number(form.weight_kg) : null,
+      width_cm: form.width_cm !== '' && form.width_cm != null ? Number(form.width_cm) : null,
+      height_cm: form.height_cm !== '' && form.height_cm != null ? Number(form.height_cm) : null,
+      length_cm: form.length_cm !== '' && form.length_cm != null ? Number(form.length_cm) : null,
+      notes: form.notes || null, image_url: form.image_url || null,
       gallery: Array.isArray(form.gallery) ? form.gallery : [], videos: Array.isArray(form.videos) ? form.videos : [],
     }
     if (form.id) {
@@ -213,14 +218,14 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
           {tab === 'produtos' && (
             <div>
               {isMine && (
-                <div className="flex justify-end mb-4"><button onClick={() => setProdModal({ name: '', description: '', price: '', unit: 'un', min_qty: '', stock: '', direct_sale: false, notes: '', image_url: '' })} className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors"><Icon name="plus" className="w-4 h-4" />Adicionar produto</button></div>
+                <div className="flex justify-end mb-4"><button onClick={() => setProdModal({ name: '', description: '', price: '', unit: 'un', min_qty: '', stock: '', direct_sale: false, free_shipping: false, weight_kg: '', width_cm: '', height_cm: '', length_cm: '', notes: '', image_url: '' })} className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors"><Icon name="plus" className="w-4 h-4" />Adicionar produto</button></div>
               )}
               {products.length === 0 ? <Empty icon="box" text={isMine ? 'Adicione seu primeiro produto.' : 'Este fornecedor ainda não publicou produtos.'} />
                 : <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{products.map((p) => (
                     <div key={p.id} className="group glass rounded-2xl overflow-hidden relative">
                       {isMine && (
                         <div className="absolute top-2 right-2 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => setProdModal({ id: p.id, name: p.name || '', description: p.description || '', price: p.price ?? '', unit: p.unit || 'un', min_qty: p.min_qty ?? '', stock: p.stock ?? '', direct_sale: !!p.direct_sale, notes: p.notes || '', image_url: p.image_url || '', gallery: Array.isArray(p.gallery) ? p.gallery : [], videos: Array.isArray(p.videos) ? p.videos : [] })} className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-champ flex items-center justify-center" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setProdModal({ id: p.id, name: p.name || '', description: p.description || '', price: p.price ?? '', unit: p.unit || 'un', min_qty: p.min_qty ?? '', stock: p.stock ?? '', direct_sale: !!p.direct_sale, free_shipping: !!p.free_shipping, weight_kg: p.weight_kg ?? '', width_cm: p.width_cm ?? '', height_cm: p.height_cm ?? '', length_cm: p.length_cm ?? '', notes: p.notes || '', image_url: p.image_url || '', gallery: Array.isArray(p.gallery) ? p.gallery : [], videos: Array.isArray(p.videos) ? p.videos : [] })} className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-champ flex items-center justify-center" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
                           <button onClick={() => deleteProduct(p)} className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-rose flex items-center justify-center" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
                         </div>
                       )}
@@ -404,6 +409,20 @@ function ProductEditModal({ initial, onClose, onSave, notify }) {
             <label className="flex items-start gap-2 text-sm text-admin-text/80 cursor-pointer">
               <input type="checkbox" checked={!!f.direct_sale} onChange={(e) => set('direct_sale', e.target.checked)} className="w-4 h-4 accent-admin-champ mt-0.5" />
               <span>Disponível para <span className="text-admin-champ">venda direta</span><span className="block text-admin-muted/45 text-[11px]">Aparece no Marketplace de venda direta para compra imediata. Requer um preço definido.</span></span>
+            </label>
+            {/* dimensões p/ cotação de frete (Melhor Envio) */}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1.5">Dimensões para frete (Melhor Envio)</p>
+              <div className="grid grid-cols-4 gap-2">
+                <input type="number" step="0.1" value={f.weight_kg} onChange={(e) => set('weight_kg', e.target.value)} placeholder="Peso kg" className={cls} />
+                <input type="number" value={f.width_cm} onChange={(e) => set('width_cm', e.target.value)} placeholder="Larg cm" className={cls} />
+                <input type="number" value={f.height_cm} onChange={(e) => set('height_cm', e.target.value)} placeholder="Alt cm" className={cls} />
+                <input type="number" value={f.length_cm} onChange={(e) => set('length_cm', e.target.value)} placeholder="Comp cm" className={cls} />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-admin-text/80 cursor-pointer">
+              <input type="checkbox" checked={!!f.free_shipping} onChange={(e) => set('free_shipping', e.target.checked)} className="w-4 h-4 accent-admin-champ" />
+              Oferecer <span className="text-admin-sage">frete grátis</span> neste produto
             </label>
           </div>
 
