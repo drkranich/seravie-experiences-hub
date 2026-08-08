@@ -39,16 +39,16 @@ export function StoriesStrip({ me, notify }) {
 
   return (
     <div className="mb-5">
-      <div className="flex items-center gap-3 overflow-x-auto pb-2">
+      <div className="flex items-start gap-4 overflow-x-auto overflow-y-hidden px-1 pt-1 pb-3">
         {/* adicionar */}
         <button onClick={() => addRef.current?.click()} className="shrink-0 flex flex-col items-center gap-1.5 w-16">
-          <div className="w-16 h-16 rounded-full ring-2 ring-dashed ring-admin-champ/40 flex items-center justify-center text-admin-champ/70 hover:bg-admin-champ/5 transition-colors"><Icon name="plus" className="w-5 h-5" /></div>
-          <span className="text-[10px] text-admin-muted/50">Seu story</span>
+          <div className="w-14 h-14 rounded-full border-2 border-dashed border-admin-champ/40 flex items-center justify-center text-admin-champ/70 hover:bg-admin-champ/5 transition-colors"><Icon name="plus" className="w-5 h-5" /></div>
+          <span className="text-[10px] text-admin-muted/50 whitespace-nowrap">Seu story</span>
         </button>
         <input ref={addRef} type="file" accept="image/*,video/*" onChange={onAdd} className="hidden" />
         {stories.map((st, i) => (
           <button key={st.id} onClick={() => setViewing(i)} className="shrink-0 flex flex-col items-center gap-1.5 w-16">
-            <div className="w-16 h-16 rounded-full p-0.5 bg-gradient-to-br from-admin-champ to-admin-copper">
+            <div className="w-14 h-14 rounded-full p-0.5 bg-gradient-to-br from-admin-champ to-admin-copper">
               <div className="w-full h-full rounded-full overflow-hidden bg-admin-side">
                 {st.media_type === 'image' ? <img src={st.media_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Icon name="play" className="w-5 h-5 text-white/70" /></div>}
               </div>
