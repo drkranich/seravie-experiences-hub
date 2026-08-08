@@ -265,7 +265,7 @@ export function SuppliersMarketplace({ notify }) {
         <div className="flex items-center gap-3 mb-4">
           <div className="md:hidden flex-1"><GlassSelect value={view} onChange={setView} options={NAV.map((n) => ({ value: n.key, label: n.label }))} /></div>
           <div className="flex-1 hidden md:block" />
-          <NotificationsBell notify={notify} rawRoute onNavigate={(route) => { const map = { orders: 'orders', direct: 'direct', rfq: 'rfq', projects: 'projects', sup_events: 'sup_events', suppliers: 'discover' }; setView(map[route] || 'discover') }} />
+          <NotificationsBell notify={notify} rawRoute domain="suppliers" onNavigate={(route) => { const map = { orders: 'orders', direct: 'direct', rfq: 'rfq', projects: 'projects', sup_events: 'sup_events', suppliers: 'discover' }; setView(map[route] || 'discover') }} />
         </div>
 
         {(view === 'discover' || view === 'favorites') && (

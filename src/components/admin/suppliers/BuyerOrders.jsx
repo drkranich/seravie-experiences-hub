@@ -175,7 +175,7 @@ function CreateOrder({ suppliers, onClose, onCreate, notify }) {
                       {catalog.map((p) => { const inCart = cart[p.id]; return (
                         <div key={p.id} className="flex items-center gap-3 glass-soft rounded-xl p-2">
                           <div className="w-10 h-10 rounded-lg bg-white/[0.05] overflow-hidden flex items-center justify-center shrink-0">{p.image_url ? <img src={p.image_url} alt="" className="w-full h-full object-cover" /> : <Icon name="box" className="w-4 h-4 text-admin-champ/50" />}</div>
-                          <div className="min-w-0 flex-1"><p className="text-admin-text text-sm truncate">{p.name}</p><p className="text-admin-champ text-xs">{p.price ? brl(p.price) : 'Sob consulta'}{p.unit ? ` / ${p.unit}` : ''}</p></div>
+                          <div className="min-w-0 flex-1"><p className="text-admin-text text-sm truncate">{p.name}</p>{p.price ? <p className="text-admin-champ text-xs">{brl(p.price)}{p.unit ? ` / ${p.unit}` : ''}</p> : <p className="text-admin-muted/40 text-xs">Sob consulta</p>}</div>
                           {inCart ? (
                             <div className="flex items-center gap-1.5 shrink-0">
                               <button onClick={() => setQty(p.id, inCart.qty - 1)} className="w-6 h-6 rounded-md glass-input text-admin-muted/70 hover:text-admin-champ flex items-center justify-center">−</button>
@@ -200,7 +200,13 @@ function CreateOrder({ suppliers, onClose, onCreate, notify }) {
           )}
           <div><label className={lbl}>Entrega prevista</label><GlassDate value={f.expected_at} onChange={(v) => set('expected_at', v)} placeholder="dd/mm/aaaa" /></div>
           <div><label className={lbl}>Observações</label><textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} rows={2} className={`${cls} resize-none`} /></div>
-          <div className="glass-soft rounded-xl p-3 flex items-center justify-between text-sm"><span className="text-admin-muted/60">Total ({cartItems.length} item/ns)</span><span className="text-admin-champ font-serif">{brl(total)}</span></div>
+          {/* Total só aparece quando há itens no pedido; e o valor só quando existir preço */}
+          {cartItems.length > 0 && (
+            <div className="glass-soft rounded-xl p-3 flex items-center justify-between text-sm">
+              <span className="text-admin-muted/60">Total ({cartItems.length} {cartItems.length === 1 ? 'item' : 'itens'})</span>
+              {total > 0 ? <span className="text-admin-champ font-serif">{brl(total)}</span> : <span className="text-admin-muted/45 text-xs">A combinar</span>}
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={submit} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar pedido</button></div>
       </div>

@@ -6,16 +6,19 @@ import { timeAgo } from '../../../lib/networkSocial'
 // Sino de notificações do ecossistema (Network + Suppliers).
 // Usado no cabeçalho do Network; abre um painel com as notificações do tenant.
 
-export function NotificationsBell({ onNavigate, notify, rawRoute = false }) {
+export function NotificationsBell({ onNavigate, notify, rawRoute = false, domain }) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(50); setItems(data || []) }
-    catch { /* noop */ } finally { setLoading(false) }
-  }, [])
+    try {
+      let q = supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(50)
+      if (domain) q = q.eq('domain', domain)
+      const { data } = await q; setItems(data || [])
+    } catch { /* noop */ } finally { setLoading(false) }
+  }, [domain])
   useEffect(() => { load() }, [load])
 
   const unread = items.filter((n) => !n.read_at).length

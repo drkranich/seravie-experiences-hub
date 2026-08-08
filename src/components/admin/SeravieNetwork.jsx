@@ -279,7 +279,7 @@ export function SeravieNetwork({ notify }) {
         <div className="flex items-center gap-3 mb-4">
           <div className="md:hidden flex-1"><GlassSelect value={view} onChange={setView} options={NAV.map((n) => ({ value: n.key, label: n.label }))} /></div>
           <div className="flex-1 hidden md:block" />
-          <NotificationsBell onNavigate={setView} notify={notify} />
+          <NotificationsBell onNavigate={setView} notify={notify} domain="network" />
         </div>
         {view === 'dashboard' && <NetworkDashboard me={me} notify={notify} onNavigate={setView} />}
         {view === 'feed' && <Feed me={me} notify={notify} />}
