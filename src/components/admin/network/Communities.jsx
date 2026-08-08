@@ -86,7 +86,7 @@ export function Communities({ me, notify }) {
           )}
 
           <div>
-            <p className="text-[11px] uppercase tracking-wider text-admin-champ/60 mb-4">{communities.length ? 'Criar mais comunidades' : 'Comece criando comunidades'}</p>
+            {!communities.length && <p className="text-[11px] uppercase tracking-wider text-admin-champ/60 mb-4">Comece criando comunidades</p>}
             {suggestions.length > 0 ? (
               <div className="space-y-4">
                 {groupKeys.map((g) => (

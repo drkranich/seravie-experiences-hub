@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, GlassSelect } from '../ui'
+import { Icon, GlassSelect, GlassDate } from '../ui'
+import { uploadTo } from '../../../lib/storage'
 import { SUPPLIER_CATEGORIES, CATEGORY_ICON } from '../../../lib/suppliersMarket'
 
 // Projetos do comprador — "estou criando uma Cafeteria" → fornecedores por categoria.
@@ -80,23 +81,48 @@ export function BuyerProjects({ suppliers, onOpenSupplier, notify }) {
           </div>
         )}
 
-      {creating && <CreateProject onClose={() => setCreating(false)} onCreate={create} />}
+      {creating && <CreateProject onClose={() => setCreating(false)} onCreate={create} notify={notify} />}
     </div>
   )
 }
 
-function CreateProject({ onClose, onCreate }) {
-  const [f, setF] = useState({ name: '', segment: '' })
+function CreateProject({ onClose, onCreate, notify }) {
+  const [f, setF] = useState({ name: '', segment: '', description: '', goals: '', location: '', budget: '', deadline: '', cover_url: '' })
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
+  const [uploading, setUploading] = useState(false)
+  const coverRef = useRef(null)
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
+  const upCover = async (file) => {
+    setUploading(true)
+    const r = await uploadTo(file, { folder: 'suppliers/projects', accept: 'image', maxMB: 10 })
+    setUploading(false)
+    if (r.error) return notify?.(r.error, 'error')
+    set('cover_url', r.url)
+  }
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Novo projeto</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-3">
-          <input value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} placeholder="Nome do projeto" className={cls} />
-          <GlassSelect value={f.segment} onChange={(v) => setF((s) => ({ ...s, segment: v }))} options={[{ value: '', label: 'Segmento (opcional)' }, ...Object.entries(SEGMENTS).map(([k, v]) => ({ value: k, label: v.label }))]} />
+          <div>
+            <label className={lbl}>Imagem de capa</label>
+            <input ref={coverRef} type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && upCover(e.target.files[0])} className="hidden" />
+            <button type="button" onClick={() => coverRef.current?.click()} disabled={uploading} className="w-full h-24 rounded-xl overflow-hidden glass-input flex items-center justify-center text-admin-muted/60 hover:text-admin-champ transition-colors disabled:opacity-50">
+              {f.cover_url ? <img src={f.cover_url} alt="" className="w-full h-full object-cover" /> : <span className="flex items-center gap-2 text-sm"><Icon name={uploading ? 'clock' : 'image'} className="w-5 h-5" />{uploading ? 'Enviando…' : 'Enviar capa'}</span>}
+            </button>
+          </div>
+          <div><label className={lbl}>Nome do projeto *</label><input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Ex.: Cafeteria Centro" className={cls} /></div>
+          <div><label className={lbl}>Segmento</label><GlassSelect value={f.segment} onChange={(v) => set('segment', v)} options={[{ value: '', label: 'Segmento (opcional)' }, ...Object.entries(SEGMENTS).map(([k, v]) => ({ value: k, label: v.label }))]} /></div>
+          <div><label className={lbl}>Descrição</label><textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={2} placeholder="Sobre o projeto e contexto" className={`${cls} resize-none`} /></div>
+          <div><label className={lbl}>Objetivos / o que precisa</label><textarea value={f.goals} onChange={(e) => set('goals', e.target.value)} rows={2} placeholder="Categorias, entregáveis, prioridades" className={`${cls} resize-none`} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Localização</label><input value={f.location} onChange={(e) => set('location', e.target.value)} placeholder="Cidade / endereço" className={cls} /></div>
+            <div><label className={lbl}>Orçamento (R$)</label><input type="number" value={f.budget} onChange={(e) => set('budget', e.target.value)} placeholder="opcional" className={cls} /></div>
+          </div>
+          <div><label className={lbl}>Prazo</label><GlassDate value={f.deadline} onChange={(v) => set('deadline', v)} placeholder="dd/mm/aaaa" /></div>
         </div>
-        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.name.trim() && onCreate({ name: f.name, segment: f.segment || null, status: 'active' })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar</button></div>
+        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.name.trim() && onCreate({ name: f.name, segment: f.segment || null, description: f.description || null, goals: f.goals || null, location: f.location || null, budget: f.budget ? Number(f.budget) : null, deadline: f.deadline || null, cover_url: f.cover_url || null, status: 'active' })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar</button></div>
       </div>
     </div>
   )

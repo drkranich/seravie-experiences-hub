@@ -38,6 +38,22 @@ export function NetworkEvents({ me, notify }) {
     if (error) return notify?.('Erro: ' + error.message, 'error')
     setEvents((e) => [data, ...e].sort((a, b) => new Date(a.starts_at || 0) - new Date(b.starts_at || 0))); setCreating(false); notify?.('Evento criado', 'success')
   }
+  const genPaymentLink = async (ev) => {
+    if (!ev.price || ev.price <= 0) return notify?.('Este evento é gratuito.', 'info')
+    notify?.('Gerando link de pagamento…', 'info')
+    try {
+      const { data, error } = await supabase.functions.invoke('event-payment-link', {
+        body: { event_id: ev.id, tenant_id: tenantId, amount: Number(ev.price), title: ev.title, quantity_adjustable: true },
+      })
+      if (error) return notify?.('Erro ao gerar link: ' + error.message, 'error')
+      if (data?.error === 'stripe_not_configured') return notify?.('Configure sua chave Stripe (STRIPE_SECRET_KEY) nos Secrets do Supabase para gerar links de pagamento.', 'error')
+      if (data?.error) return notify?.('Erro Stripe: ' + (data.detail || data.error), 'error')
+      if (!data?.url) return notify?.('Não foi possível gerar o link.', 'error')
+      await supabase.from('network_events').update({ payment_url: data.url }).eq('id', ev.id)
+      setEvents((p) => p.map((x) => x.id === ev.id ? { ...x, payment_url: data.url } : x))
+      try { await navigator.clipboard.writeText(data.url); notify?.('Link de pagamento gerado e copiado!', 'success') } catch { notify?.('Link gerado: ' + data.url, 'success') }
+    } catch (e) { notify?.('Falha: ' + (e?.message || e), 'error') }
+  }
   const toggleSignup = async (ev) => {
     const has = signups.has(ev.id)
     setSignups((p) => { const n = new Set(p); has ? n.delete(ev.id) : n.add(ev.id); return n })
@@ -76,8 +92,14 @@ export function NetworkEvents({ me, notify }) {
                     </div>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]">
                       <span className="text-admin-muted/40 text-[11px]">{ev.signups_count || 0} inscritos</span>
-                      <button onClick={() => toggleSignup(ev)} className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${joined ? 'bg-admin-sage/12 text-admin-sage' : 'bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20'}`}>{joined ? '✓ Inscrito' : 'Inscrever-se'}</button>
+                      <div className="flex items-center gap-1.5">
+                        {ev.price > 0 && ev.payment_url && <a href={ev.payment_url} target="_blank" rel="noreferrer" className="text-xs px-3 py-1.5 rounded-lg bg-admin-gold/15 text-admin-gold hover:bg-admin-gold/25 transition-colors flex items-center gap-1"><Icon name="tag" className="w-3.5 h-3.5" />Pagar</a>}
+                        <button onClick={() => toggleSignup(ev)} className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${joined ? 'bg-admin-sage/12 text-admin-sage' : 'bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20'}`}>{joined ? '✓ Inscrito' : 'Inscrever-se'}</button>
+                      </div>
                     </div>
+                    {ev.tenant_id === tenantId && ev.price > 0 && (
+                      <button onClick={() => genPaymentLink(ev)} className="mt-2 w-full text-[11px] px-3 py-1.5 rounded-lg glass-input text-admin-champ/80 hover:text-admin-champ transition-colors flex items-center justify-center gap-1.5"><Icon name="link" className="w-3.5 h-3.5" />{ev.payment_url ? 'Regenerar link de pagamento' : 'Gerar link de pagamento'}</button>
+                    )}
                   </div>
                 </div>
               )})}
