@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
-import { Icon, GlassSelect, GlassDate } from './ui'
+import { Icon, GlassSelect, GlassDate, AddressAutocomplete } from './ui'
 import { NetworkDashboard } from './NetworkDashboard'
 
 const COMM_TYPE_LABELS = { announcement: 'Comunicado', alert: 'Alerta', training: 'Treinamento', campaign: 'Campanha', policy: 'Política', other: 'Outro' }
@@ -88,8 +88,13 @@ export function FranchisePanel({ notify }) {
   // ---------- Saves ----------
   const saveUnit = async () => {
     if (!form.name?.trim()) return notify('Nome obrigatório', 'error')
-    const { error } = await supabase.from('units').insert({ name: form.name, city: form.city, state: form.state, address: form.address, phone: form.phone, email: form.email, status: form.status || 'active', tenant_id: tenantId })
-    if (error) return notify('Erro ao salvar', 'error')
+    const { error } = await supabase.from('units').insert({
+      name: form.name, city: form.city, state: form.state, address: form.address,
+      cep: form.cep || null, address_number: form.address_number || null, neighborhood: form.neighborhood || null,
+      country: form.country || 'BR', lat: form.lat ?? null, lng: form.lng ?? null,
+      phone: form.phone, email: form.email, status: form.status || 'active', tenant_id: tenantId,
+    })
+    if (error) return notify('Erro ao salvar: ' + error.message, 'error')
     notify('Unidade criada', 'success'); close(); loadTab()
   }
   const saveComm = async () => {
@@ -265,8 +270,14 @@ export function FranchisePanel({ notify }) {
         <Modal title="Nova unidade" onClose={close}>
           <div className="space-y-4">
             <Fld label="Nome *"><input value={form.name || ''} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputCls} placeholder="Ex: Loja Centro SP" /></Fld>
-            <div className="grid grid-cols-2 gap-3"><Fld label="Cidade"><input value={form.city || ''} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} className={inputCls} /></Fld><Fld label="Estado"><input value={form.state || ''} onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))} className={inputCls} maxLength={2} placeholder="SP" /></Fld></div>
-            <Fld label="Endereço"><input value={form.address || ''} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className={inputCls} /></Fld>
+            <div>
+              <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Endereço (GPS)</label>
+              <AddressAutocomplete
+                value={{ cep: form.cep, address: form.address, address_number: form.address_number, neighborhood: form.neighborhood, city: form.city, state: form.state, lat: form.lat, lng: form.lng }}
+                onChange={(a) => setForm((f) => ({ ...f, cep: a.cep, address: a.address, address_number: a.address_number, neighborhood: a.neighborhood, city: a.city, state: a.state, lat: a.lat, lng: a.lng }))}
+                notify={() => {}}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3"><Fld label="Telefone"><input value={form.phone || ''} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className={inputCls} /></Fld><Fld label="E-mail"><input value={form.email || ''} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className={inputCls} /></Fld></div>
           </div>
           <ModalActions onSave={saveUnit} onClose={close} label="Criar unidade" />

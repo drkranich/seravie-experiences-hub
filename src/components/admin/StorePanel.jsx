@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect, Toggle } from './ui'
+import { Icon, GlassSelect, Toggle, AddressAutocomplete } from './ui'
 import { ResourcePanel, ResourceTabs } from './ResourcePanel'
 import { ChannelsTab } from './SalesChannels'
 import { exportCsv, exportPdf } from '../../lib/export'
@@ -125,7 +125,10 @@ function SettingsTab({ notify }) {
     setSaving(true)
     const payload = {
       tenant_id: tenantId, store_name: form.store_name, slug: form.slug, about: form.about,
-      currency: form.currency || 'BRL', whatsapp: form.whatsapp, email: form.email, address: form.address,
+      currency: form.currency || 'BRL', whatsapp: form.whatsapp, email: form.email,
+      address: form.address, cep: form.cep || null, address_number: form.address_number || null,
+      neighborhood: form.neighborhood || null, city: form.city || null, state: form.state || null,
+      country: form.country || 'BR', lat: form.lat ?? null, lng: form.lng ?? null,
       shipping_flat: Number(form.shipping_flat) || 0, free_shipping_min: form.free_shipping_min ? Number(form.free_shipping_min) : null,
       primary_color: form.primary_color, logo_url: form.logo_url, is_open: !!form.is_open, updated_at: new Date().toISOString(),
     }
@@ -160,7 +163,14 @@ function SettingsTab({ notify }) {
           <div className="sm:col-span-2"><Fld label="Sobre a loja"><textarea value={form.about || ''} onChange={(e) => set('about', e.target.value)} rows={2} className={`${inputCls} resize-none`} /></Fld></div>
           <Fld label="WhatsApp"><input value={form.whatsapp || ''} onChange={(e) => set('whatsapp', e.target.value)} className={inputCls} placeholder="(11) 9…" /></Fld>
           <Fld label="E-mail"><input value={form.email || ''} onChange={(e) => set('email', e.target.value)} className={inputCls} /></Fld>
-          <div className="sm:col-span-2"><Fld label="Endereço"><input value={form.address || ''} onChange={(e) => set('address', e.target.value)} className={inputCls} /></Fld></div>
+          <div className="sm:col-span-2">
+            <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Endereço da loja (GPS)</label>
+            <AddressAutocomplete
+              value={{ cep: form.cep, address: form.address, address_number: form.address_number, neighborhood: form.neighborhood, city: form.city, state: form.state, lat: form.lat, lng: form.lng }}
+              onChange={(a) => setForm((f) => ({ ...f, cep: a.cep, address: a.address, address_number: a.address_number, neighborhood: a.neighborhood, city: a.city, state: a.state, lat: a.lat, lng: a.lng }))}
+              notify={() => {}}
+            />
+          </div>
         </div>
       </div>
 
