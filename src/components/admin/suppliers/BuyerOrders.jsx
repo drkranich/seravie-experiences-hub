@@ -4,6 +4,7 @@ import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from '../ui'
 import { brl } from '../../../lib/suppliersMarket'
 import { OrderReceipt } from './OrderReceipt'
+import { FreightPicker } from './FreightPicker'
 
 // Compras — pedidos do comprador ao fornecedor. Cria pedido (manual ou a partir
 // de um fornecedor), acompanha status, histórico. Grava em buyer_orders.
@@ -101,22 +102,28 @@ function Stat({ label, value, small }) { return <div className="glass rounded-xl
 // definido pelo fornecedor (travado) — o comprador só escolhe produtos e
 // quantidades. Nunca digita preço de produto do fornecedor.
 function CreateOrder({ suppliers, onClose, onCreate, notify }) {
-  const [f, setF] = useState({ supplier_id: '', notes: '', delivery_address: '', expected_at: '', shipping: '' })
+  const [f, setF] = useState({ supplier_id: '', notes: '', delivery_address: '', delivery_cep: '', expected_at: '' })
   const [catalog, setCatalog] = useState([])
   const [loadingCat, setLoadingCat] = useState(false)
   const [cart, setCart] = useState({}) // product_id -> { product, qty }
+  const [freight, setFreight] = useState({ method: 'combinado', value: 0 })
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
+  const supObj = suppliers.find((s) => s.id === f.supplier_id)
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
 
-  // ao trocar de fornecedor, carrega o catálogo dele (produtos ativos com preço)
+  const [supCep, setSupCep] = useState(null)
+  // ao trocar de fornecedor, carrega o catálogo + o CEP de origem dele
   useEffect(() => {
-    if (!f.supplier_id) { setCatalog([]); setCart({}); return }
+    if (!f.supplier_id) { setCatalog([]); setCart({}); setSupCep(null); setFreight({ method: 'combinado', value: 0 }); return }
     let alive = true
     ;(async () => {
       setLoadingCat(true)
-      const { data } = await supabase.from('supplier_products').select('*').eq('supplier_id', f.supplier_id).eq('status', 'active').order('name')
-      if (alive) { setCatalog(data || []); setCart({}) }
+      const [{ data: prods }, { data: sup }] = await Promise.all([
+        supabase.from('supplier_products').select('*').eq('supplier_id', f.supplier_id).eq('status', 'active').order('name'),
+        supabase.from('suppliers').select('cep').eq('id', f.supplier_id).maybeSingle(),
+      ])
+      if (alive) { setCatalog(prods || []); setCart({}); setSupCep(sup?.cep || null); setFreight({ method: 'combinado', value: 0 }) }
       setLoadingCat(false)
     })()
     return () => { alive = false }
@@ -126,14 +133,27 @@ function CreateOrder({ suppliers, onClose, onCreate, notify }) {
   const setQty = (id, qty) => setCart((c) => { if (qty <= 0) { const n = { ...c }; delete n[id]; return n } return { ...c, [id]: { ...c[id], qty } } })
   const cartItems = Object.values(cart)
   const subtotal = cartItems.reduce((s, { product, qty }) => s + (Number(product.price) || 0) * qty, 0)
-  const total = subtotal + (Number(f.shipping) || 0)
+  const shipVal = freight.method === 'retirada' || freight.method === 'gratis' ? 0 : (Number(freight.value) || 0)
+  const total = subtotal + shipVal
+  // pacote agregado para a cotação
+  const pkg = cartItems.reduce((acc, { product, qty }) => ({
+    weight: acc.weight + (Number(product.weight_kg) || 1) * qty,
+    width: Math.max(acc.width, Number(product.width_cm) || 15),
+    height: acc.height + (Number(product.height_cm) || 10) * qty,
+    length: Math.max(acc.length, Number(product.length_cm) || 20),
+  }), { weight: 0, width: 0, height: 0, length: 0 })
+  const allFree = cartItems.length > 0 && cartItems.every(({ product }) => product.free_shipping)
 
   const submit = () => {
     if (!f.supplier_id) return notify?.('Escolha o fornecedor', 'error')
     if (!cartItems.length) return notify?.('Selecione ao menos 1 produto do catálogo', 'error')
     const items = cartItems.map(({ product, qty }) => ({ name: product.name, qty, unit_price: Number(product.price) || 0, note: product.unit || '' }))
     const sup = suppliers.find((s) => s.id === f.supplier_id)
-    onCreate({ supplier_id: f.supplier_id, supplier_name: sup?.name || 'Fornecedor', items, subtotal, shipping: Number(f.shipping) || 0, total, notes: f.notes || null, delivery_address: f.delivery_address || null, expected_at: f.expected_at || null })
+    onCreate({
+      supplier_id: f.supplier_id, supplier_name: sup?.name || 'Fornecedor', items, subtotal, shipping: shipVal, total,
+      shipping_method: freight.method, shipping_service: freight.service || null, shipping_days: freight.days ? parseInt(freight.days) : null,
+      carrier: freight.service || null, notes: f.notes || null, delivery_address: f.delivery_address || null, expected_at: f.expected_at || null,
+    })
   }
 
   return (
@@ -169,11 +189,15 @@ function CreateOrder({ suppliers, onClose, onCreate, notify }) {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Frete (R$)</label><input type="number" value={f.shipping} onChange={(e) => set('shipping', e.target.value)} placeholder="0,00" className={cls} /></div>
-            <div><label className={lbl}>Entrega prevista</label><GlassDate value={f.expected_at} onChange={(v) => set('expected_at', v)} placeholder="dd/mm/aaaa" /></div>
-          </div>
-          <div><label className={lbl}>Endereço de entrega</label><input value={f.delivery_address} onChange={(e) => set('delivery_address', e.target.value)} className={cls} /></div>
+          <div><label className={lbl}>Endereço de entrega</label><input value={f.delivery_address} onChange={(e) => set('delivery_address', e.target.value)} placeholder="Rua, número, cidade" className={cls} /></div>
+          <div><label className={lbl}>CEP de entrega (para cotar frete)</label><input value={f.delivery_cep} onChange={(e) => set('delivery_cep', e.target.value)} placeholder="00000-000" className={cls} /></div>
+          {f.supplier_id && cartItems.length > 0 && (
+            <div className="glass-input rounded-xl p-3">
+              <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-2">Frete</p>
+              <FreightPicker originCep={supCep} destCep={f.delivery_cep} pkg={pkg} allowFree={allFree} state={freight} onChange={(patch) => setFreight((s) => ({ ...s, ...patch }))} notify={notify} />
+            </div>
+          )}
+          <div><label className={lbl}>Entrega prevista</label><GlassDate value={f.expected_at} onChange={(v) => set('expected_at', v)} placeholder="dd/mm/aaaa" /></div>
           <div><label className={lbl}>Observações</label><textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} rows={2} className={`${cls} resize-none`} /></div>
           <div className="glass-soft rounded-xl p-3 flex items-center justify-between text-sm"><span className="text-admin-muted/60">Total ({cartItems.length} item/ns)</span><span className="text-admin-champ font-serif">{brl(total)}</span></div>
         </div>
