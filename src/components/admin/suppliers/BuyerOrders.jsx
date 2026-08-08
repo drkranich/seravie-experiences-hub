@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, GlassSelect, GlassDate } from '../ui'
+import { Icon, GlassSelect, GlassDate, AddressAutocomplete } from '../ui'
 import { brl } from '../../../lib/suppliersMarket'
 import { OrderReceipt } from './OrderReceipt'
 import { FreightPicker } from './FreightPicker'
@@ -102,7 +102,8 @@ function Stat({ label, value, small }) { return <div className="glass rounded-xl
 // definido pelo fornecedor (travado) — o comprador só escolhe produtos e
 // quantidades. Nunca digita preço de produto do fornecedor.
 function CreateOrder({ suppliers, onClose, onCreate, notify }) {
-  const [f, setF] = useState({ supplier_id: '', notes: '', delivery_address: '', delivery_cep: '', expected_at: '' })
+  const [f, setF] = useState({ supplier_id: '', notes: '', expected_at: '' })
+  const [addr, setAddr] = useState({ cep: '', address: '', address_number: '', neighborhood: '', city: '', state: '', country: 'BR', lat: null, lng: null })
   const [catalog, setCatalog] = useState([])
   const [loadingCat, setLoadingCat] = useState(false)
   const [cart, setCart] = useState({}) // product_id -> { product, qty }
@@ -149,10 +150,11 @@ function CreateOrder({ suppliers, onClose, onCreate, notify }) {
     if (!cartItems.length) return notify?.('Selecione ao menos 1 produto do catálogo', 'error')
     const items = cartItems.map(({ product, qty }) => ({ name: product.name, qty, unit_price: Number(product.price) || 0, note: product.unit || '' }))
     const sup = suppliers.find((s) => s.id === f.supplier_id)
+    const fullAddress = [[addr.address, addr.address_number].filter(Boolean).join(', '), addr.neighborhood, [addr.city, addr.state].filter(Boolean).join('/'), addr.cep].filter(Boolean).join(' · ')
     onCreate({
       supplier_id: f.supplier_id, supplier_name: sup?.name || 'Fornecedor', items, subtotal, shipping: shipVal, total,
       shipping_method: freight.method, shipping_service: freight.service || null, shipping_days: freight.days ? parseInt(freight.days) : null,
-      carrier: freight.service || null, notes: f.notes || null, delivery_address: f.delivery_address || null, expected_at: f.expected_at || null,
+      carrier: freight.service || null, notes: f.notes || null, delivery_address: fullAddress || null, expected_at: f.expected_at || null,
     })
   }
 
@@ -189,12 +191,11 @@ function CreateOrder({ suppliers, onClose, onCreate, notify }) {
             </div>
           )}
 
-          <div><label className={lbl}>Endereço de entrega</label><input value={f.delivery_address} onChange={(e) => set('delivery_address', e.target.value)} placeholder="Rua, número, cidade" className={cls} /></div>
-          <div><label className={lbl}>CEP de entrega (para cotar frete)</label><input value={f.delivery_cep} onChange={(e) => set('delivery_cep', e.target.value)} placeholder="00000-000" className={cls} /></div>
+          <div><label className={lbl}>Endereço de entrega (GPS mundial)</label><AddressAutocomplete value={addr} onChange={setAddr} notify={notify} /></div>
           {f.supplier_id && cartItems.length > 0 && (
             <div className="glass-input rounded-xl p-3">
               <p className="text-[10px] uppercase tracking-wider text-admin-champ/70 mb-2">Frete</p>
-              <FreightPicker originCep={supCep} destCep={f.delivery_cep} pkg={pkg} allowFree={allFree} state={freight} onChange={(patch) => setFreight((s) => ({ ...s, ...patch }))} notify={notify} />
+              <FreightPicker originCep={supCep} destCep={addr.cep} pkg={pkg} allowFree={allFree} state={freight} onChange={(patch) => setFreight((s) => ({ ...s, ...patch }))} notify={notify} />
             </div>
           )}
           <div><label className={lbl}>Entrega prevista</label><GlassDate value={f.expected_at} onChange={(v) => set('expected_at', v)} placeholder="dd/mm/aaaa" /></div>
