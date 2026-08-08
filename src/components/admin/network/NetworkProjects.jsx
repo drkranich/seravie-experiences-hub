@@ -4,6 +4,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from '../ui'
 import { uploadTo } from '../../../lib/storage'
+import { startVideoCall } from '../../../lib/videoCall'
 import { initials, timeAgo } from '../../../lib/networkSocial'
 
 // Projetos colaborativos — equipe convidada da rede trabalha junto no projeto.
@@ -164,7 +165,10 @@ function ProjectRoom({ project, team, members, tenantId, onBack, reload, notify 
             {project.deadline && <span className="flex items-center gap-1"><Icon name="calendar" className="w-3.5 h-3.5" />{new Date(project.deadline).toLocaleDateString('pt-BR')}</span>}
           </div>
         </div>
-        <button onClick={share} className="flex items-center gap-2 glass-input text-admin-muted/70 hover:text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors shrink-0"><Icon name="share" className="w-4 h-4" />Compartilhar link</button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => startVideoCall('proj-' + project.id)} className="flex items-center gap-2 glass-input text-admin-muted/70 hover:text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors" title="Videochamada da equipe"><Icon name="tv" className="w-4 h-4" />Videochamada</button>
+          <button onClick={share} className="flex items-center gap-2 glass-input text-admin-muted/70 hover:text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="share" className="w-4 h-4" />Compartilhar link</button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-3">

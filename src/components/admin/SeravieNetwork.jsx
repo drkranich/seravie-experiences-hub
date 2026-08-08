@@ -21,6 +21,10 @@ import { NetworkDashboard } from './network/NetworkDashboard'
 import { Collections } from './network/Collections'
 import { NetworkAI } from './network/NetworkAI'
 import { TimelineViva } from './network/TimelineViva'
+import { ExperienceDNA } from './network/ExperienceDNA'
+import { Passport } from './network/Passport'
+import { Certifications } from './network/Certifications'
+import { ExperienceLab } from './network/ExperienceLab'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Network — plataforma social profissional do ecossistema
@@ -41,7 +45,11 @@ const NAV = [
   { key: 'events', label: 'Eventos', icon: 'calendar' },
   { key: 'projects', label: 'Projetos', icon: 'layout' },
   { key: 'academy', label: 'Academy', icon: 'book' },
+  { key: 'certifications', label: 'Certificações', icon: 'check' },
   { key: 'collections', label: 'Coleções', icon: 'layers' },
+  { key: 'lab', label: 'Experience Lab', icon: 'spark' },
+  { key: 'dna', label: 'Experience DNA', icon: 'leaf' },
+  { key: 'passport', label: 'Passaporte', icon: 'star' },
   { key: 'timeline', label: 'Timeline Viva', icon: 'clock' },
 ]
 
@@ -295,6 +303,10 @@ export function SeravieNetwork({ notify }) {
         {view === 'projects' && <NetworkProjects me={me} notify={notify} />}
         {view === 'academy' && <Academy me={me} notify={notify} />}
         {view === 'collections' && <Collections me={me} notify={notify} onOpenSupplier={openSupplier} />}
+        {view === 'certifications' && <Certifications me={me} notify={notify} />}
+        {view === 'lab' && <ExperienceLab me={me} notify={notify} />}
+        {view === 'dna' && <ExperienceDNA notify={notify} />}
+        {view === 'passport' && <Passport me={me} notify={notify} />}
         {view === 'timeline' && <TimelineViva notify={notify} />}
       </div>
     </div>
