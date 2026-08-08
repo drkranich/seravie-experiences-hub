@@ -10,6 +10,8 @@ import { People } from './network/People'
 import { NetworkProjects } from './network/NetworkProjects'
 import { Messages } from './network/Messages'
 import { NotificationsBell } from './network/Notifications'
+import { NetworkEvents } from './network/NetworkEvents'
+import { ServiceMarketplace } from './network/ServiceMarketplace'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Network — plataforma social profissional do ecossistema
@@ -21,6 +23,8 @@ const NAV = [
   { key: 'messages', label: 'Mensagens', icon: 'mail' },
   { key: 'communities', label: 'Comunidades', icon: 'users' },
   { key: 'people', label: 'Pessoas & Empresas', icon: 'user' },
+  { key: 'services', label: 'Marketplace de Serviços', icon: 'tag' },
+  { key: 'events', label: 'Eventos', icon: 'calendar' },
   { key: 'projects', label: 'Projetos', icon: 'layout' },
 ]
 
@@ -260,6 +264,8 @@ export function SeravieNetwork({ notify }) {
         {view === 'messages' && <Messages me={me} notify={notify} startWith={dmTarget} />}
         {view === 'communities' && <Communities me={me} notify={notify} />}
         {view === 'people' && <People notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
+        {view === 'services' && <ServiceMarketplace me={me} notify={notify} />}
+        {view === 'events' && <NetworkEvents me={me} notify={notify} />}
         {view === 'projects' && <NetworkProjects me={me} notify={notify} />}
       </div>
     </div>
