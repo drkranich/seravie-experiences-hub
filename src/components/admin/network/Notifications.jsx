@@ -6,7 +6,7 @@ import { timeAgo } from '../../../lib/networkSocial'
 // Sino de notificações do ecossistema (Network + Suppliers).
 // Usado no cabeçalho do Network; abre um painel com as notificações do tenant.
 
-export function NotificationsBell({ onNavigate, notify }) {
+export function NotificationsBell({ onNavigate, notify, rawRoute = false }) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,7 +40,9 @@ export function NotificationsBell({ onNavigate, notify }) {
   const openItem = async (n) => {
     if (!n.read_at) { await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', n.id); setItems((p) => p.map((x) => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)) }
     if (onNavigate) {
-      const target = ROUTE_MAP[n.link_route] || 'feed'
+      // rawRoute: o pai faz o próprio mapeamento (ex.: Suppliers). Senão, mapeia
+      // para uma view válida do Network.
+      const target = rawRoute ? n.link_route : (ROUTE_MAP[n.link_route] || 'feed')
       onNavigate(target)
     }
     setOpen(false)
