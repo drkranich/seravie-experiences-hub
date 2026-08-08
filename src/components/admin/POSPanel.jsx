@@ -7,6 +7,7 @@ import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MA
 import { uploadTo } from '../../lib/storage'
 import { exportPdf, exportCsv } from '../../lib/export'
 import { printProductLabels, printThermalReceipt, LABEL_TEMPLATES, LABEL_TEMPLATE_MAP, labelCellHtml } from '../../lib/labels'
+import { emitSaleEvents, emitMarketingEvent } from '../../lib/marketingEvents'
 
 const PAYMENT_METHODS = [
   { value: 'dinheiro', label: 'Dinheiro' },
@@ -563,6 +564,28 @@ export function POSPanel({ notify }) {
     if (appliedCoupon?.id) {
       try { await supabase.from('coupons').update({ used_count: (appliedCoupon.used_count || 0) + 1 }).eq('id', appliedCoupon.id) } catch { /* noop */ }
     }
+    // ---- Motor de Eventos do Marketing Hub: registra a venda para as jornadas reagirem ----
+    try {
+      let isFirst = false, avgTicket = 0
+      if (customer?.id) {
+        // conta pedidos anteriores deste contato (exclui o atual)
+        const { count } = await supabase.from('orders').select('id', { count: 'exact', head: true }).eq('contact_id', customer.id).neq('id', order.id)
+        isFirst = (count || 0) === 0
+      }
+      // ticket médio do tenant (para detectar "compra acima da média")
+      const { data: aggRows } = await supabase.from('orders').select('total').eq('status', 'delivered').limit(500)
+      if (aggRows && aggRows.length) avgTicket = aggRows.reduce((s, r) => s + Number(r.total || 0), 0) / aggRows.length
+      await emitSaleEvents({ tenantId, contactId: customer?.id || null, orderId: order.id, total, isFirst, avgTicket })
+      // aniversário próximo (dentro de 7 dias) do comprador
+      if (customer?.id && customer?.birthdate) {
+        const bd = new Date(customer.birthdate + 'T12:00:00')
+        const now = new Date()
+        const next = new Date(now.getFullYear(), bd.getMonth(), bd.getDate())
+        if (next < now) next.setFullYear(now.getFullYear() + 1)
+        const days = Math.round((next - now) / 86400000)
+        if (days >= 0 && days <= 7) await emitMarketingEvent({ event_type: 'birthday_near', source_module: 'crm', contact_id: customer.id, payload: { days } }, tenantId)
+      }
+    } catch { /* best-effort: marketing nunca bloqueia a venda */ }
     // ---- Vale-presente: emitir os vendidos e debitar os resgatados ----
     try {
       // vendidos (itens do carrinho marcados como gift_sale)

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
+import { MarketingDashboard } from './marketing/MarketingDashboard'
+import { MARKETING_EVENTS, EVENT_MAP, eventLabel } from '../../lib/marketingEvents'
 
 // ---- helpers ----
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -50,9 +52,40 @@ const AUTOMATION_TEMPLATES = [
 ]
 const AUTO_MAP = Object.fromEntries(AUTOMATION_TEMPLATES.map((t) => [t.trigger, t]))
 
+// ============================================================
+//  SERAVIE MARKETING HUB — organizado em Estúdios.
+//  Onda 1: Dashboard vivo + motor de eventos + estúdios com as
+//  abas já funcionais. Jornadas visuais / Segmentação avançada /
+//  Inteligência preditiva chegam nas próximas ondas (marcadas abaixo).
+// ============================================================
+const STUDIOS = [
+  { key: 'dashboard', label: 'Dashboard', icon: 'grid' },
+  {
+    key: 'growth', label: 'Growth Studio', icon: 'spark',
+    tabs: [['campaigns', 'Campanhas', 'mail'], ['calendar', 'Calendário', 'calendar', true], ['content', 'Conteúdo', 'star', true], ['landing', 'Landing Pages', 'layers', true], ['forms', 'Formulários', 'check', true]],
+  },
+  {
+    key: 'automation', label: 'Automation Studio', icon: 'spark',
+    tabs: [['automations', 'Automações', 'spark'], ['journeys', 'Jornadas', 'layers', true], ['triggers', 'Eventos & Gatilhos', 'flame']],
+  },
+  {
+    key: 'audience', label: 'Audience Studio', icon: 'user',
+    tabs: [['audience', 'Público', 'user'], ['segments', 'Segmentação', 'search', true], ['loyalty', 'Fidelidade', 'star', true]],
+  },
+  {
+    key: 'campaign', label: 'Campaign Studio', icon: 'mail',
+    tabs: [['coupons', 'Cupons', 'gift'], ['channels', 'Canais', 'chart', true], ['referrals', 'Indicações', 'heart', true]],
+  },
+  {
+    key: 'intelligence', label: 'Intelligence', icon: 'chart',
+    tabs: [['ai', 'IA de Crescimento', 'spark'], ['analytics', 'Analytics', 'chart', true], ['attribution', 'Atribuição', 'layers', true]],
+  },
+]
+
 export function MarketingPanel({ notify }) {
   const { profile } = useTenant()
   const tenantId = profile?.tenant_id
+  const [studio, setStudio] = useState('dashboard')
   const [tab, setTab] = useState('campaigns')
   const [campaigns, setCampaigns] = useState([])
   const [coupons, setCoupons] = useState([])
@@ -77,53 +110,109 @@ export function MarketingPanel({ notify }) {
   }
   useEffect(() => { loadAll() }, [])
 
-  // ---- métricas topo ----
-  const withEmail = contacts.filter((c) => c.email).length
-  const withPhone = contacts.filter((c) => c.phone).length
-  const activeAutos = automations.filter((a) => a.is_active).length
+  const currentStudio = STUDIOS.find((s) => s.key === studio)
+  const studioTabs = currentStudio?.tabs || []
 
-  const TABS = [['campaigns', 'Campanhas', 'mail'], ['automations', 'Automações', 'spark'], ['coupons', 'Cupons', 'gift'], ['audience', 'Público', 'user']]
+  // ao trocar de estúdio, seleciona a primeira aba disponível
+  const selectStudio = (key) => {
+    setStudio(key)
+    const st = STUDIOS.find((s) => s.key === key)
+    if (st?.tabs?.length) setTab(st.tabs[0][0])
+  }
+
+  const showNewCampaign = studio === 'growth' && tab === 'campaigns'
+  const showNewCoupon = studio === 'campaign' && tab === 'coupons'
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+      <div className="flex items-center justify-between mb-5 gap-4 flex-wrap">
         <div>
-          <h1 className="font-serif text-4xl text-admin-text">Marketing & Campanhas</h1>
-          <p className="text-admin-muted/60 text-sm mt-1">Relacionamento com os clientes do PDV · e-mail, WhatsApp e cupons</p>
+          <h1 className="font-serif text-4xl text-admin-text">Marketing Hub</h1>
+          <p className="text-admin-muted/60 text-sm mt-1">Centro de crescimento · orientado pelos eventos de todo o ecossistema Seravie</p>
         </div>
         <div className="flex gap-2">
-          {tab === 'campaigns' && <button onClick={() => setCampModal(true)} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Nova campanha</button>}
-          {tab === 'coupons' && <button onClick={() => setCouponModal(true)} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Novo cupom</button>}
+          {showNewCampaign && <button onClick={() => setCampModal(true)} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Nova campanha</button>}
+          {showNewCoupon && <button onClick={() => setCouponModal(true)} className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="plus" className="w-4 h-4" />Novo cupom</button>}
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <KpiCard icon="user" label="Contatos" value={contacts.length} sub="base total" />
-        <KpiCard icon="mail" label="Com e-mail" value={withEmail} sub={contacts.length ? `${Math.round(withEmail / contacts.length * 100)}% da base` : '—'} />
-        <KpiCard icon="chart" label="Com telefone" value={withPhone} sub={contacts.length ? `${Math.round(withPhone / contacts.length * 100)}% da base` : '—'} />
-        <KpiCard icon="spark" label="Automações ativas" value={activeAutos} sub={`de ${AUTOMATION_TEMPLATES.length} gatilhos`} />
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-xl w-fit">
-        {TABS.map(([k, v, ic]) => (
-          <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${tab === k ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}><Icon name={ic} className="w-3.5 h-3.5" />{v}</button>
+      {/* Navegação por Estúdios */}
+      <div className="flex gap-1.5 mb-5 overflow-x-auto pb-1">
+        {STUDIOS.map((s) => (
+          <button key={s.key} onClick={() => selectStudio(s.key)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm whitespace-nowrap transition-colors ${studio === s.key ? 'bg-admin-champ/15 text-admin-champ border border-admin-champ/20' : 'text-admin-muted hover:text-admin-text border border-transparent'}`}>
+            <Icon name={s.icon} className="w-4 h-4" />{s.label}
+          </button>
         ))}
       </div>
 
+      {/* Sub-abas do estúdio */}
+      {studioTabs.length > 0 && (
+        <div className="flex gap-1 mb-6 bg-white/[0.03] p-1 rounded-xl w-fit flex-wrap">
+          {studioTabs.map(([k, v, ic, soon]) => (
+            <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm transition-colors ${tab === k ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}>
+              <Icon name={ic} className="w-3.5 h-3.5" />{v}
+              {soon && <span className="text-[8px] uppercase tracking-wider bg-admin-gold/15 text-admin-gold/80 px-1.5 py-0.5 rounded">em breve</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Carregando…</p> : (
         <>
-          {tab === 'campaigns' && <CampaignsTab campaigns={campaigns} contacts={contacts} notify={notify} reload={loadCampaigns} tenantId={tenantId} />}
-          {tab === 'automations' && <AutomationsTab automations={automations} coupons={coupons} onEdit={setAutoModal} notify={notify} reload={loadAutomations} />}
-          {tab === 'coupons' && <CouponsTab coupons={coupons} reload={loadCoupons} />}
-          {tab === 'audience' && <AudienceTab contacts={contacts} />}
+          {studio === 'dashboard' && <MarketingDashboard notify={notify} />}
+
+          {/* Growth Studio */}
+          {studio === 'growth' && tab === 'campaigns' && <CampaignsTab campaigns={campaigns} contacts={contacts} notify={notify} reload={loadCampaigns} tenantId={tenantId} />}
+          {studio === 'growth' && tab === 'calendar' && <CampaignCalendar campaigns={campaigns} />}
+          {studio === 'growth' && ['content', 'landing', 'forms'].includes(tab) && <ComingSoon tab={tab} />}
+
+          {/* Automation Studio */}
+          {studio === 'automation' && tab === 'automations' && <AutomationsTab automations={automations} coupons={coupons} onEdit={setAutoModal} notify={notify} reload={loadAutomations} />}
+          {studio === 'automation' && tab === 'triggers' && <TriggersTab />}
+          {studio === 'automation' && tab === 'journeys' && <ComingSoon tab="journeys" />}
+
+          {/* Audience Studio */}
+          {studio === 'audience' && tab === 'audience' && <AudienceTab contacts={contacts} />}
+          {studio === 'audience' && ['segments', 'loyalty'].includes(tab) && <ComingSoon tab={tab} />}
+
+          {/* Campaign Studio */}
+          {studio === 'campaign' && tab === 'coupons' && <CouponsTab coupons={coupons} reload={loadCoupons} />}
+          {studio === 'campaign' && ['channels', 'referrals'].includes(tab) && <ComingSoon tab={tab} />}
+
+          {/* Intelligence */}
+          {studio === 'intelligence' && tab === 'ai' && <GrowthAI contacts={contacts} campaigns={campaigns} notify={notify} onStudio={selectStudio} />}
+          {studio === 'intelligence' && ['analytics', 'attribution'].includes(tab) && <ComingSoon tab={tab} />}
         </>
       )}
 
       {campModal && <CampaignModal contacts={contacts} coupons={coupons} tenantId={tenantId} createdBy={profile?.user_id} notify={notify} onClose={() => setCampModal(false)} onSaved={() => { setCampModal(false); loadCampaigns() }} />}
       {couponModal && <CouponModal tenantId={tenantId} notify={notify} onClose={() => setCouponModal(false)} onSaved={() => { setCouponModal(false); loadCoupons() }} />}
       {autoModal && <AutomationModal template={autoModal} coupons={coupons} tenantId={tenantId} notify={notify} onClose={() => setAutoModal(null)} onSaved={() => { setAutoModal(null); loadAutomations() }} />}
+    </div>
+  )
+}
+
+// Placeholder elegante para abas das próximas ondas.
+const SOON_INFO = {
+  content: { icon: 'star', title: 'Conteúdo & Redes Sociais', desc: 'Planejamento e agendamento para Instagram, Facebook, TikTok, Pinterest e LinkedIn — calendário editorial unificado.' },
+  landing: { icon: 'layers', title: 'Landing Pages', desc: 'Editor visual de páginas de captura e vendas, no estilo do Document Studio.' },
+  forms: { icon: 'check', title: 'Formulários & Popups', desc: 'Quizzes, formulários de lead, pesquisas e popups conectados ao CRM.' },
+  journeys: { icon: 'layers', title: 'Jornadas Visuais', desc: 'Construtor de fluxos estilo n8n/ActiveCampaign: gatilho → esperar → canal → condição → ação. Já preparado pelo motor de eventos.' },
+  segments: { icon: 'search', title: 'Segmentação Avançada', desc: 'Construtor visual de regras (Cidade E comprou nos últimos 30 dias E ticket > R$300 E não usou cupom) com públicos salvos.' },
+  loyalty: { icon: 'star', title: 'Fidelidade unificada', desc: 'Programa de pontos, gift cards, cashback e indicações — tudo dentro do Marketing Hub.' },
+  channels: { icon: 'chart', title: 'Canais', desc: 'WhatsApp (conversas, templates, bots), E-mail, SMS, Push e anúncios (Google, Meta, TikTok) em um só lugar.' },
+  referrals: { icon: 'heart', title: 'Indicações', desc: 'Cliente indica → recebe pontos. Marketing cooperado para franqueados.' },
+  analytics: { icon: 'chart', title: 'Analytics profundo', desc: 'ROI, receita, conversão, funil, cohorts, retenção, LTV e CAC por canal, campanha, produto, segmento e cidade.' },
+  attribution: { icon: 'layers', title: 'Atribuição', desc: 'Jornada completa do cliente entre canais até a compra, com mapa de calor por região.' },
+}
+function ComingSoon({ tab }) {
+  const info = SOON_INFO[tab] || { icon: 'spark', title: 'Em breve', desc: 'Este módulo faz parte das próximas ondas do Marketing Hub.' }
+  return (
+    <div className="glass rounded-2xl p-12 text-center max-w-2xl mx-auto">
+      <div className="w-14 h-14 rounded-2xl bg-admin-champ/10 flex items-center justify-center mx-auto mb-4"><Icon name={info.icon} className="w-7 h-7 text-admin-champ/60" /></div>
+      <h3 className="font-serif text-2xl text-admin-text mb-2">{info.title}</h3>
+      <p className="text-admin-muted/60 text-sm leading-relaxed">{info.desc}</p>
+      <span className="inline-block mt-4 text-[10px] uppercase tracking-wider bg-admin-gold/15 text-admin-gold/80 px-3 py-1 rounded-lg">Próxima onda</span>
     </div>
   )
 }
@@ -164,11 +253,12 @@ function CampaignsTab({ campaigns, contacts, notify, reload, tenantId }) {
         if (error) throw error
         inserted = count ?? rows.length
       } catch (e) { notify('Erro ao enfileirar: ' + (e.message || e), 'error'); setBusy(null); return }
-      // atualiza a campanha: público + status enviada + contadores
+      // atualiza a campanha: público + status "em envio" + contadores
+      // (a constraint da tabela aceita: draft, scheduled, running, paused, completed, cancelled)
       try {
         await supabase.from('campaigns').update({
-          status: 'sent', audience_size: list.length, sent_count: list.length,
-          started_at: new Date().toISOString(), completed_at: new Date().toISOString(),
+          status: 'running', audience_size: list.length, sent_count: list.length,
+          started_at: new Date().toISOString(),
         }).eq('id', c.id)
       } catch { /* noop */ }
       notify(`${inserted} destinatários enfileirados para ${CHANNEL_LABEL[c.type] || c.type}`, 'success')
@@ -216,8 +306,8 @@ function CampaignsTab({ campaigns, contacts, notify, reload, tenantId }) {
                   <Icon name="spark" className="w-3.5 h-3.5" />{busy === c.id ? 'Enfileirando…' : 'Preparar envio'}
                 </button>
               )}
-              {c.status === 'sent' && <span className="text-xs text-admin-champ/70">✓ {c.sent_count} na fila de envio</span>}
-              {c.status === 'sent' && <button onClick={() => setStatus(c, 'completed')} className="text-xs text-admin-muted hover:text-admin-champ">marcar concluída</button>}
+              {c.status === 'running' && <span className="text-xs text-admin-champ/70">✓ {c.sent_count} na fila de envio</span>}
+              {c.status === 'running' && <button onClick={() => setStatus(c, 'completed')} className="text-xs text-admin-muted hover:text-admin-champ">marcar concluída</button>}
               <button onClick={() => remove(c)} className="ml-auto text-admin-muted/50 hover:text-admin-rose transition-colors" title="Remover"><Icon name="trash" className="w-3.5 h-3.5" /></button>
             </div>
           </div>
@@ -506,6 +596,179 @@ function AudienceTab({ contacts }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ================= CALENDÁRIO DE CAMPANHAS =================
+function CampaignCalendar({ campaigns }) {
+  const MES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+  const now = new Date()
+  const year = now.getFullYear()
+  // agrupa campanhas por mês (usa scheduled_at se houver, senão created_at)
+  const byMonth = {}
+  for (let i = 0; i < 12; i++) byMonth[i] = []
+  campaigns.forEach((c) => {
+    const d = new Date(c.scheduled_at || c.created_at)
+    if (d.getFullYear() === year) byMonth[d.getMonth()].push(c)
+  })
+  const stColor = { draft: 'bg-white/[0.06] text-admin-muted/60', scheduled: 'bg-admin-gold/15 text-admin-gold', running: 'bg-admin-sage/15 text-admin-sage', sent: 'bg-admin-champ/15 text-admin-champ', completed: 'bg-white/[0.04] text-admin-muted/40', paused: 'bg-admin-rose/15 text-admin-rose' }
+  return (
+    <div>
+      <p className="text-admin-muted/50 text-xs mb-4">Planejamento anual de campanhas · {year}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {MES.map((m, i) => (
+          <div key={i} className={`glass rounded-xl p-3 min-h-[7rem] ${i === now.getMonth() ? 'border border-admin-champ/25' : ''}`}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-admin-text text-sm font-medium">{m}</p>
+              {byMonth[i].length > 0 && <span className="text-[10px] text-admin-muted/40">{byMonth[i].length}</span>}
+            </div>
+            <div className="space-y-1.5">
+              {byMonth[i].slice(0, 4).map((c) => (
+                <div key={c.id} className={`text-[11px] px-2 py-1 rounded-lg truncate ${stColor[c.status] || 'bg-white/[0.05] text-admin-muted/60'}`} title={c.title}>{c.title}</div>
+              ))}
+              {byMonth[i].length > 4 && <p className="text-[10px] text-admin-muted/40 px-2">+{byMonth[i].length - 4} mais</p>}
+              {byMonth[i].length === 0 && <p className="text-[10px] text-admin-muted/25 px-2">—</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ================= EVENTOS & GATILHOS =================
+function TriggersTab() {
+  const [counts, setCounts] = useState({})
+  const [loading, setLoading] = useState(true)
+  useEffect(() => { load() }, [])
+  const load = async () => {
+    setLoading(true)
+    try {
+      const { data } = await supabase.from('marketing_events').select('event_type').limit(5000)
+      const c = {}
+      ;(data || []).forEach((e) => { c[e.event_type] = (c[e.event_type] || 0) + 1 })
+      setCounts(c)
+    } catch { /* noop */ } finally { setLoading(false) }
+  }
+  const byModule = {}
+  MARKETING_EVENTS.forEach((e) => { (byModule[e.module] = byModule[e.module] || []).push(e) })
+  const MOD_LABEL = { pos: 'PDV', crm: 'CRM', ecommerce: 'E-commerce', loyalty: 'Fidelidade', reservations: 'Reservas', finance: 'Financeiro', academy: 'Academy' }
+  const STY = {
+    champ: { bg: 'bg-admin-champ/10', text: 'text-admin-champ' }, sage: { bg: 'bg-admin-sage/10', text: 'text-admin-sage' },
+    gold: { bg: 'bg-admin-gold/10', text: 'text-admin-gold' }, rose: { bg: 'bg-admin-rose/10', text: 'text-admin-rose' },
+    copper: { bg: 'bg-admin-copper/10', text: 'text-admin-copper' },
+  }
+  return (
+    <div>
+      <div className="glass-soft rounded-xl px-4 py-3 mb-5 flex items-start gap-3">
+        <Icon name="flame" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
+        <p className="text-admin-muted/60 text-xs leading-relaxed">O diferencial da Seravie: as campanhas disparam porque <span className="text-admin-champ">algo aconteceu</span> em qualquer módulo — não porque alguém entrou numa lista. Cada evento abaixo pode iniciar uma jornada (próxima onda). O PDV já emite eventos de venda em tempo real.</p>
+      </div>
+      {Object.entries(byModule).map(([mod, evts]) => (
+        <div key={mod} className="mb-6">
+          <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">{MOD_LABEL[mod] || mod}</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {evts.map((e) => {
+              const s = STY[e.color] || STY.champ
+              const n = counts[e.type] || 0
+              return (
+                <div key={e.type} className="glass rounded-xl p-4 flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}><Icon name={e.icon} className={`w-4 h-4 ${s.text}`} /></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-admin-text text-sm font-medium">{e.label}</p>
+                      {!loading && <span className={`text-[10px] px-2 py-0.5 rounded-lg shrink-0 ${n > 0 ? s.bg + ' ' + s.text : 'bg-white/[0.04] text-admin-muted/40'}`}>{n}</span>}
+                    </div>
+                    <p className="text-admin-muted/50 text-xs mt-0.5 leading-relaxed">{e.desc}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ================= IA DE CRESCIMENTO =================
+// Analisa dados reais e sugere ações. Sem chamadas externas: heurísticas sobre a base.
+function GrowthAI({ contacts, campaigns, notify, onStudio }) {
+  const [insights, setInsights] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => { analyze() }, [contacts, campaigns])
+
+  const analyze = async () => {
+    setLoading(true)
+    const out = []
+    try {
+      // 1) aniversariantes do mês sem campanha
+      const mm = String(new Date().getMonth() + 1).padStart(2, '0')
+      const bdayMonth = contacts.filter((c) => c.birthdate && String(c.birthdate).slice(5, 7) === mm)
+      if (bdayMonth.length >= 3) out.push({ icon: 'gift', tone: 'rose', title: `${bdayMonth.length} aniversariantes este mês`, body: 'Crie uma campanha de aniversário com cupom para aumentar a taxa de retorno.', cta: 'Ir para Campanhas', go: 'growth' })
+
+      // 2) clientes inativos (compraram, mas há muito tempo)
+      const { data: orders } = await supabase.from('orders').select('contact_id, created_at, total').eq('status', 'delivered').limit(4000)
+      const last = {}, totals = {}
+      ;(orders || []).forEach((o) => { if (o.contact_id) { const t = new Date(o.created_at).getTime(); if (!last[o.contact_id] || t > last[o.contact_id]) last[o.contact_id] = t; totals[o.contact_id] = (totals[o.contact_id] || 0) + Number(o.total || 0) } })
+      const inactive = Object.entries(last).filter(([, t]) => (Date.now() - t) > 45 * 86400000)
+      if (inactive.length >= 3) out.push({ icon: 'clock', tone: 'gold', title: `${inactive.length} clientes inativos há +45 dias`, body: 'Ative a automação de reativação (winback) com um incentivo para trazê-los de volta.', cta: 'Ver Automações', go: 'automation' })
+
+      // 3) alto valor (VIPs) — top 10% por LTV
+      const withLtv = contacts.filter((c) => Number(c.ltv || 0) > 0).sort((a, b) => Number(b.ltv) - Number(a.ltv))
+      if (withLtv.length >= 5) {
+        const vipCount = Math.max(1, Math.round(withLtv.length * 0.1))
+        const vipThreshold = Number(withLtv[vipCount - 1].ltv)
+        out.push({ icon: 'star', tone: 'champ', title: `${vipCount} clientes VIP (LTV ≥ ${brl(vipThreshold)})`, body: 'Crie um público VIP e ofereça benefícios exclusivos para aumentar a fidelidade.', cta: 'Segmentar público', go: 'audience' })
+      }
+
+      // 4) campanha com baixa abertura
+      const lowOpen = (campaigns || []).find((c) => (c.sent_count || 0) >= 10 && (c.open_count || 0) / c.sent_count < 0.15)
+      if (lowOpen) out.push({ icon: 'mail', tone: 'copper', title: `Campanha "${lowOpen.title}" com baixa abertura`, body: `Apenas ${Math.round((lowOpen.open_count || 0) / lowOpen.sent_count * 100)}% abriram. Revise o assunto e o horário de envio para melhorar o desempenho.`, cta: 'Ver Campanhas', go: 'growth' })
+
+      // 5) base sem contato (sem email/telefone)
+      const noContact = contacts.filter((c) => !c.email && !c.phone).length
+      if (noContact >= 5) out.push({ icon: 'user', tone: 'rose', title: `${noContact} contatos sem e-mail nem telefone`, body: 'Você não consegue alcançá-los. Colete o contato no próximo atendimento no PDV.', cta: null })
+
+      // 6) sem cupom ativo
+      const { count: activeCoupons } = await supabase.from('coupons').select('id', { count: 'exact', head: true }).eq('is_active', true)
+      if ((activeCoupons || 0) === 0) out.push({ icon: 'gift', tone: 'gold', title: 'Nenhum cupom ativo', body: 'Cupons impulsionam conversão em campanhas e automações. Crie o primeiro.', cta: 'Ir para Cupons', go: 'campaign' })
+
+      if (out.length === 0) out.push({ icon: 'check', tone: 'sage', title: 'Tudo em ordem por aqui', body: 'Conforme sua base cresce e as vendas acontecem, novas oportunidades aparecerão automaticamente aqui.', cta: null })
+    } catch (e) { notify && notify('Erro na análise: ' + (e.message || e), 'error') } finally { setLoading(false) }
+    setInsights(out)
+  }
+
+  const TONE = {
+    champ: { bg: 'bg-admin-champ/10', text: 'text-admin-champ', br: 'border-admin-champ/20' },
+    sage: { bg: 'bg-admin-sage/10', text: 'text-admin-sage', br: 'border-admin-sage/20' },
+    gold: { bg: 'bg-admin-gold/10', text: 'text-admin-gold', br: 'border-admin-gold/20' },
+    rose: { bg: 'bg-admin-rose/10', text: 'text-admin-rose', br: 'border-admin-rose/20' },
+    copper: { bg: 'bg-admin-copper/10', text: 'text-admin-copper', br: 'border-admin-copper/20' },
+  }
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4"><Icon name="spark" className="w-5 h-5 text-admin-champ/70" /><p className="text-admin-text text-sm">Oportunidades encontradas na sua base — atualizadas em tempo real.</p></div>
+      {loading ? <p className="text-admin-muted/30 text-sm py-12 text-center">Analisando sua base…</p> : (
+        <div className="grid md:grid-cols-2 gap-3">
+          {insights.map((it, i) => {
+            const t = TONE[it.tone] || TONE.champ
+            return (
+              <div key={i} className={`glass rounded-2xl p-5 border ${t.br}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-xl ${t.bg} flex items-center justify-center shrink-0`}><Icon name={it.icon} className={`w-5 h-5 ${t.text}`} /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-admin-text text-sm font-medium">{it.title}</p>
+                    <p className="text-admin-muted/60 text-xs mt-1 leading-relaxed">{it.body}</p>
+                    {it.cta && it.go && <button onClick={() => onStudio(it.go)} className={`mt-3 text-xs ${t.text} hover:underline`}>{it.cta} →</button>}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
