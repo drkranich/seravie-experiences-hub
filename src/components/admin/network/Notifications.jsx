@@ -25,9 +25,24 @@ export function NotificationsBell({ onNavigate, notify }) {
     setItems((p) => p.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })))
     await supabase.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids)
   }
+  // Traduz o link_route salvo na notificação para uma view VÁLIDA do Network.
+  // Rotas antigas/externas (network_hub, suppliers…) caem num destino sensato,
+  // evitando tela em branco quando a rota não existe dentro do Network.
+  const ROUTE_MAP = {
+    network_hub: 'feed', network_classic: 'feed', feed: 'feed', dashboard: 'dashboard',
+    messages: 'messages', dm: 'messages', communities: 'communities', people: 'people',
+    services: 'services', service: 'services', marketplace: 'services', talent: 'talent',
+    events: 'events', event: 'events', projects: 'projects', project: 'projects',
+    academy: 'academy', collections: 'collections', smart: 'smart', map: 'map',
+    // rotas de Suppliers não pertencem ao Network → manda para o feed
+    suppliers: 'feed',
+  }
   const openItem = async (n) => {
     if (!n.read_at) { await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', n.id); setItems((p) => p.map((x) => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)) }
-    if (n.link_route && onNavigate) onNavigate(n.link_route)
+    if (onNavigate) {
+      const target = ROUTE_MAP[n.link_route] || 'feed'
+      onNavigate(target)
+    }
     setOpen(false)
   }
 
