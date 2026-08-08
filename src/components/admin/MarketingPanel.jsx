@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
 import { MarketingDashboard } from './marketing/MarketingDashboard'
+import { JourneysTab } from './marketing/JourneysTab'
 import { MARKETING_EVENTS, EVENT_MAP, eventLabel } from '../../lib/marketingEvents'
 
 // ---- helpers ----
@@ -66,7 +67,7 @@ const STUDIOS = [
   },
   {
     key: 'automation', label: 'Automation Studio', icon: 'spark',
-    tabs: [['automations', 'Automações', 'spark'], ['journeys', 'Jornadas', 'layers', true], ['triggers', 'Eventos & Gatilhos', 'flame']],
+    tabs: [['automations', 'Automações', 'spark'], ['journeys', 'Jornadas', 'layers'], ['triggers', 'Eventos & Gatilhos', 'flame']],
   },
   {
     key: 'audience', label: 'Audience Studio', icon: 'user',
@@ -169,7 +170,7 @@ export function MarketingPanel({ notify }) {
           {/* Automation Studio */}
           {studio === 'automation' && tab === 'automations' && <AutomationsTab automations={automations} coupons={coupons} onEdit={setAutoModal} notify={notify} reload={loadAutomations} />}
           {studio === 'automation' && tab === 'triggers' && <TriggersTab />}
-          {studio === 'automation' && tab === 'journeys' && <ComingSoon tab="journeys" />}
+          {studio === 'automation' && tab === 'journeys' && <JourneysTab tenantId={tenantId} coupons={coupons} notify={notify} />}
 
           {/* Audience Studio */}
           {studio === 'audience' && tab === 'audience' && <AudienceTab contacts={contacts} />}
