@@ -14,6 +14,7 @@ import { SignDocument } from './pages/SignDocument'
 import { VerifyDocument } from './pages/VerifyDocument'
 import { AcceptInvite } from './pages/AcceptInvite'
 import { RecoverPassword } from './pages/RecoverPassword'
+import { ProjectPublic } from './pages/ProjectPublic'
 
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth()
@@ -58,6 +59,9 @@ export default function App() {
 
   // Seravie Flow Studio — experiência pública de formulário (/form/<slug>)
   if (pub('form')) return <FlowExperience />
+
+  // Projeto compartilhado público (/projeto/<token>)
+  if (pub('projeto')) return <ProjectPublic />
 
   // Seravie Document Studio — proposta "viva" pública (/p/<slug>)
   if (pub('p')) return <DocumentView />

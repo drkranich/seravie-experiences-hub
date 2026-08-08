@@ -14,6 +14,7 @@ import { Catalogs } from './suppliers/Catalogs'
 import { TechLibrary } from './suppliers/TechLibrary'
 import { BuyerProjects } from './suppliers/BuyerProjects'
 import { PurchasingAnalytics, PurchasingAI } from './suppliers/PurchasingExtras'
+import { SeravieMatch } from './suppliers/SeravieMatch'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Suppliers — marketplace B2B de descoberta (estilo Faire/Archiproducts)
@@ -27,6 +28,7 @@ const NAV = [
   { key: 'compare', label: 'Comparar', icon: 'layers' },
   { key: 'rfq', label: 'Cotações', icon: 'mail' },
   { key: 'ai', label: 'IA de Compras', icon: 'sparkles' },
+  { key: 'match', label: 'Seravie Match', icon: 'spark' },
   { key: 'projects', label: 'Projetos', icon: 'layout' },
   { key: 'library', label: 'Biblioteca Técnica', icon: 'book' },
   { key: 'moodboards', label: 'Moodboards', icon: 'palette' },
@@ -252,6 +254,7 @@ export function SuppliersMarketplace({ notify }) {
         )}
         {view === 'catalogs' && <Catalogs suppliers={suppliers} tenantId={tenantId} onOpenSupplier={setOpenSupplier} notify={notify} />}
         {view === 'ai' && <PurchasingAI notify={notify} />}
+        {view === 'match' && <SeravieMatch onOpenSupplier={setOpenSupplier} notify={notify} />}
         {view === 'projects' && <BuyerProjects suppliers={suppliers} onOpenSupplier={setOpenSupplier} notify={notify} />}
         {view === 'library' && <TechLibrary suppliers={suppliers} notify={notify} />}
         {view === 'analytics' && <PurchasingAnalytics suppliers={suppliers} />}

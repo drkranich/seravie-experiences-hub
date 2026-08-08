@@ -6,11 +6,36 @@ import { Icon, GlassSelect } from '../ui'
 //  CAMPAIGN STUDIO — Canais (WhatsApp/E-mail/SMS/Push) e Indicações.
 // =====================================================================
 
+// Cada canal declara seus campos de credencial (informados NA TELA).
+// Campos secret: true aparecem mascarados. Ficam em marketing_channels.config
+// (protegida por RLS — só o próprio tenant lê/escreve).
 const CHANNELS = [
-  { key: 'email', label: 'E-mail', icon: 'mail', color: 'champ', provider: 'Resend / SMTP', senderLabel: 'E-mail remetente', desc: 'Disparos e automações por e-mail.' },
-  { key: 'whatsapp', label: 'WhatsApp', icon: 'chart', color: 'sage', provider: 'Meta / Twilio', senderLabel: 'Número WhatsApp', desc: 'Mensagens e templates aprovados pela Meta.' },
-  { key: 'sms', label: 'SMS', icon: 'chart', color: 'gold', provider: 'Twilio / Zenvia', senderLabel: 'Remetente (sender ID)', desc: 'Mensagens curtas por SMS.' },
-  { key: 'push', label: 'Push', icon: 'spark', color: 'copper', provider: 'OneSignal / FCM', senderLabel: 'App / domínio', desc: 'Notificações push web e app.' },
+  { key: 'email', label: 'E-mail', icon: 'mail', color: 'champ', provider: 'Resend / SMTP', senderLabel: 'E-mail remetente', desc: 'Disparos e automações por e-mail.',
+    fields: [
+      { key: 'from_email', label: 'E-mail remetente', placeholder: 'contato@sualoja.com' },
+      { key: 'from_name', label: 'Nome do remetente', placeholder: 'Sua Loja' },
+      { key: 'provider', label: 'Provedor', placeholder: 'resend | sendgrid | smtp' },
+      { key: 'api_key', label: 'API Key (Resend/SendGrid)', secret: true },
+      { key: 'smtp_host', label: 'SMTP Host (se SMTP)', placeholder: 'smtp.seudominio.com' },
+      { key: 'smtp_user', label: 'SMTP Usuário', placeholder: 'opcional' },
+      { key: 'smtp_pass', label: 'SMTP Senha', secret: true },
+    ] },
+  { key: 'whatsapp', label: 'WhatsApp', icon: 'chart', color: 'sage', provider: 'Meta / Twilio', senderLabel: 'Número WhatsApp', desc: 'Mensagens e templates aprovados pela Meta.',
+    fields: [
+      { key: 'phone_number_id', label: 'Phone Number ID', placeholder: 'ID do número (Meta)' },
+      { key: 'access_token', label: 'Access Token', secret: true },
+    ] },
+  { key: 'sms', label: 'SMS', icon: 'chart', color: 'gold', provider: 'Twilio / Zenvia', senderLabel: 'Remetente (sender ID)', desc: 'Mensagens curtas por SMS.',
+    fields: [
+      { key: 'sender_id', label: 'Sender ID / número', placeholder: 'SEULOJA' },
+      { key: 'account_sid', label: 'Account SID (Twilio)', placeholder: 'ACxxxxxxxx' },
+      { key: 'auth_token', label: 'Auth Token', secret: true },
+    ] },
+  { key: 'push', label: 'Push', icon: 'spark', color: 'copper', provider: 'OneSignal / FCM', senderLabel: 'App / domínio', desc: 'Notificações push web e app.',
+    fields: [
+      { key: 'app_id', label: 'App ID (OneSignal)', placeholder: 'ID do app' },
+      { key: 'rest_api_key', label: 'REST API Key', secret: true },
+    ] },
 ]
 const COLOR = {
   champ: { bg: 'bg-admin-champ/10', text: 'text-admin-champ', br: 'border-admin-champ/25' },
@@ -48,11 +73,15 @@ export function ChannelsTab({ tenantId, notify }) {
     } catch (e) { notify('Erro: ' + (e.message || e), 'error') }
     load()
   }
-  const saveChannel = async (k, patch) => {
+  const saveChannel = async (k, { sender_name, provider, config }) => {
     const existing = rowFor(k)
+    // preserva segredos já salvos quando o campo vier vazio
+    const merged = { ...(existing?.config || {}), ...config }
+    Object.keys(merged).forEach((key) => { if (merged[key] === '' || merged[key] == null) delete merged[key] })
+    const payload = { sender_name: sender_name || null, provider: provider || null, config: merged, updated_at: new Date().toISOString() }
     try {
-      if (existing) await supabase.from('marketing_channels').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', existing.id)
-      else await supabase.from('marketing_channels').insert({ tenant_id: tenantId, channel: k, ...patch })
+      if (existing) await supabase.from('marketing_channels').update(payload).eq('id', existing.id)
+      else await supabase.from('marketing_channels').insert({ tenant_id: tenantId, channel: k, ...payload })
       notify('Canal salvo', 'success'); setEditing(null); load()
     } catch (e) { notify('Erro: ' + (e.message || e), 'error') }
   }
@@ -62,7 +91,7 @@ export function ChannelsTab({ tenantId, notify }) {
     <div>
       <div className="glass-soft rounded-xl px-4 py-3 mb-5 flex items-start gap-3 bg-admin-champ/[0.04] border border-admin-champ/15">
         <Icon name="gear" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
-        <p className="text-admin-muted/60 text-xs leading-relaxed">Configure aqui apenas o remetente e o provedor de cada canal. <span className="text-admin-champ">Chaves e tokens secretos nunca passam por este painel</span> — eles ficam nos Secrets do Supabase. Ativar um canal o disponibiliza para campanhas, automações e jornadas.</p>
+        <p className="text-admin-muted/60 text-xs leading-relaxed">Informe as credenciais de cada canal aqui na tela. <span className="text-admin-champ">Elas ficam guardadas com segurança na sua conta</span> (área protegida, visível só para você) e são usadas pelo servidor no envio. Ativar um canal o disponibiliza para campanhas, automações e jornadas.</p>
       </div>
 
       {loading ? <p className="text-admin-muted/30 text-sm py-10 text-center">Carregando…</p> : (
@@ -128,21 +157,37 @@ export function ChannelsTab({ tenantId, notify }) {
 
 function ChannelModal({ channelKey, row, onClose, onSave }) {
   const ch = CHANNELS.find((c) => c.key === channelKey)
+  const cfg = row?.config || {}
   const [senderName, setSenderName] = useState(row?.sender_name || '')
-  const [senderId, setSenderId] = useState(row?.sender_id || '')
-  const [provider, setProvider] = useState(row?.provider || ch.provider)
+  const [values, setValues] = useState(() => Object.fromEntries(ch.fields.map((f) => [f.key, cfg[f.key] || ''])))
+  const [show, setShow] = useState({})
+  const setV = (k, v) => setValues((s) => ({ ...s, [k]: v }))
+  const inp = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="glass-pop rounded-2xl p-7 w-full max-w-md">
-        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Configurar {ch.label}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2"><h2 className="font-serif text-2xl text-admin-text">Configurar {ch.label}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <p className="text-admin-muted/50 text-xs mb-5">{ch.desc}</p>
         <div className="space-y-4">
-          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome do remetente</label><input value={senderName} onChange={(e) => setSenderName(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="Ex: Loja Manos de Solei" /></div>
-          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{ch.senderLabel}</label><input value={senderId} onChange={(e) => setSenderId(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder={ch.key === 'email' ? 'contato@sualoja.com' : ch.key === 'whatsapp' ? '+55 11 90000-0000' : '—'} /></div>
-          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Provedor</label><input value={provider} onChange={(e) => setProvider(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
-          <p className="text-admin-muted/40 text-[11px] leading-relaxed">🔒 Chaves de API e tokens não são inseridos aqui — configure-os nos Secrets do Supabase.</p>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome do remetente (exibição)</label><input value={senderName} onChange={(e) => setSenderName(e.target.value)} className={inp} placeholder="Ex: Loja Manos de Solei" /></div>
+          {ch.fields.map((fld) => {
+            const isSecret = fld.secret && !show[fld.key]
+            return (
+              <div key={fld.key}>
+                <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{fld.label}</label>
+                <div className="relative">
+                  <input type={isSecret ? 'password' : 'text'} value={values[fld.key]} onChange={(e) => setV(fld.key, e.target.value)} className={inp} placeholder={fld.placeholder || ''} autoComplete="off" />
+                  {fld.secret && <button type="button" onClick={() => setShow((s) => ({ ...s, [fld.key]: !s[fld.key] }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-admin-muted/50 hover:text-admin-champ">{show[fld.key] ? 'ocultar' : 'mostrar'}</button>}
+                </div>
+              </div>
+            )
+          })}
+          <div className="glass-soft rounded-xl px-4 py-3 bg-admin-champ/[0.05] border border-admin-champ/15">
+            <p className="text-admin-champ/80 text-[11px] leading-relaxed">🔒 Suas credenciais ficam guardadas com segurança na sua conta (área protegida) e só são usadas pelo servidor no envio. Deixe um campo secreto em branco para manter o valor já salvo.</p>
+          </div>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={() => onSave(channelKey, { sender_name: senderName, sender_id: senderId, provider })} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Salvar</button>
+          <button onClick={() => onSave(channelKey, { sender_name: senderName, provider: values.provider || ch.provider, config: values })} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Salvar</button>
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
         </div>
       </div>
