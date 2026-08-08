@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon } from '../ui'
 import { SUPPLIER_CATEGORIES, CATEGORY_ICON, VERIF_LEVELS, brl } from '../../../lib/suppliersMarket'
 import { SupplierChat } from './SupplierChat'
+import { uploadTo } from '../../../lib/storage'
 
 // Perfil do fornecedor — mini-site: capa, logo, galeria, produtos, serviços,
 // certificações, regiões, avaliações + ações (orçamento, favoritar, adicionar ao projeto).
@@ -31,6 +32,32 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [reviewForm, setReviewForm] = useState(null) // { author_name, rating, comment } | null
   const [chatOpen, setChatOpen] = useState(false)
+  const [prodModal, setProdModal] = useState(null) // produto em edição/criação | null
+  const isMine = supplier.tenant_id === tenantId
+
+  const saveProduct = async (form) => {
+    if (!form.name?.trim()) return notify?.('Informe o nome do produto', 'error')
+    const payload = {
+      name: form.name, description: form.description || null, price: form.price !== '' && form.price != null ? Number(form.price) : null,
+      unit: form.unit || null, notes: form.notes || null, image_url: form.image_url || null,
+    }
+    if (form.id) {
+      const { data, error } = await supabase.from('supplier_products').update(payload).eq('id', form.id).select('*').single()
+      if (error) return notify?.('Erro ao salvar: ' + error.message, 'error')
+      setProducts((p) => p.map((x) => (x.id === form.id ? data : x)))
+    } else {
+      const { data, error } = await supabase.from('supplier_products').insert({ ...payload, tenant_id: tenantId, supplier_id: s.id, status: 'active' }).select('*').single()
+      if (error) return notify?.('Erro ao criar: ' + error.message, 'error')
+      setProducts((p) => [data, ...p])
+    }
+    setProdModal(null); notify?.('Produto salvo', 'success')
+  }
+  const deleteProduct = async (p) => {
+    if (!confirm(`Excluir o produto “${p.name}”?`)) return
+    const { error } = await supabase.from('supplier_products').delete().eq('id', p.id)
+    if (error) return notify?.('Erro ao excluir: ' + error.message, 'error')
+    setProducts((x) => x.filter((y) => y.id !== p.id)); notify?.('Produto excluído', 'info')
+  }
 
   const submitReview = async () => {
     if (!reviewForm?.rating) return notify?.('Escolha uma nota', 'error')
@@ -43,9 +70,24 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
   }
   const s = supplier
   const cat = SUPPLIER_CATEGORIES[s.category] || s.category
-  const gallery = Array.isArray(s.gallery) ? s.gallery : []
+  const [gallery, setGallery] = useState(Array.isArray(s.gallery) ? s.gallery : [])
+  const galleryRef = useRef(null)
   const specialties = Array.isArray(s.specialties) ? s.specialties : []
   const states = Array.isArray(s.states) ? s.states : []
+
+  const persistGallery = async (next) => {
+    setGallery(next)
+    const { error } = await supabase.from('suppliers').update({ gallery: next }).eq('id', s.id)
+    if (error) notify?.('Erro ao salvar galeria: ' + error.message, 'error')
+  }
+  const onGalleryFile = async (e) => {
+    const files = Array.from(e.target.files || []); if (!files.length) return
+    const urls = []
+    for (const file of files) { const r = await uploadTo(file, { folder: 'suppliers/galeria', accept: 'image', maxMB: 10 }); if (r.error) { notify?.(r.error, 'error'); continue } urls.push(r.url) }
+    if (urls.length) { await persistGallery([...gallery, ...urls]); notify?.('Imagem(ns) adicionada(s)', 'success') }
+    if (galleryRef.current) galleryRef.current.value = ''
+  }
+  const removeGalleryImg = async (i) => { await persistGallery(gallery.filter((_, j) => j !== i)); notify?.('Imagem removida', 'info') }
 
   useEffect(() => {
     let alive = true
@@ -97,7 +139,8 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
           </div>
           {/* Ações */}
           <div className="flex items-center gap-2 pb-1 flex-wrap">
-            <button onClick={onFav} className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm transition-colors ${isFav ? 'bg-admin-rose/20 text-admin-rose' : 'glass-input text-admin-muted/70 hover:text-admin-rose'}`}><Icon name="heart" className="w-4 h-4" />{isFav ? 'Favoritado' : 'Favoritar'}</button>
+            <button onClick={() => { const url = `${window.location.origin}/fornecedor/${s.id}`; navigator.clipboard?.writeText(url).then(() => notify?.('Link do fornecedor copiado!', 'success')).catch(() => notify?.('Link: ' + url, 'info')) }} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="share" className="w-4 h-4" />Compartilhar</button>
+            <button onClick={onFav} className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm border transition-all duration-200 ${isFav ? 'bg-admin-rose/15 text-admin-rose border-admin-rose/30' : 'text-admin-muted/70 border-white/[0.08] hover:text-admin-rose hover:border-admin-rose/30 hover:bg-admin-rose/[0.06]'}`}><Icon name="heart" className="w-4 h-4" filled={isFav} />{isFav ? 'Favoritado' : 'Favoritar'}</button>
             <button onClick={() => notify?.('Adicionado ao projeto (em breve: seleção de projeto).', 'success')} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="plus" className="w-4 h-4" />Adicionar ao projeto</button>
             <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Conversar</button>
             <button onClick={() => setQuoteOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Solicitar orçamento</button>
@@ -153,18 +196,47 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
           )}
 
           {tab === 'produtos' && (
-            products.length === 0 ? <Empty icon="box" text="Este fornecedor ainda não publicou produtos." />
-              : <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{products.map((p) => (
-                  <div key={p.id} className="glass rounded-2xl overflow-hidden">
-                    <div className="h-36 bg-white/[0.03] overflow-hidden">{p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Icon name="box" className="w-8 h-8 text-admin-champ/20" /></div>}</div>
-                    <div className="p-4"><p className="text-admin-text text-sm font-medium truncate">{p.name}</p>{p.description && <p className="text-admin-muted/50 text-xs mt-1 line-clamp-2">{p.description}</p>}<div className="flex items-center justify-between mt-3"><span className="text-admin-champ text-sm">{p.price ? brl(p.price) : 'Sob consulta'}</span>{p.unit && <span className="text-admin-muted/40 text-[11px]">/{p.unit}</span>}</div></div>
-                  </div>
-                ))}</div>
+            <div>
+              {isMine && (
+                <div className="flex justify-end mb-4"><button onClick={() => setProdModal({ name: '', description: '', price: '', unit: 'un', notes: '', image_url: '' })} className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors"><Icon name="plus" className="w-4 h-4" />Adicionar produto</button></div>
+              )}
+              {products.length === 0 ? <Empty icon="box" text={isMine ? 'Adicione seu primeiro produto.' : 'Este fornecedor ainda não publicou produtos.'} />
+                : <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{products.map((p) => (
+                    <div key={p.id} className="group glass rounded-2xl overflow-hidden relative">
+                      {isMine && (
+                        <div className="absolute top-2 right-2 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setProdModal({ id: p.id, name: p.name || '', description: p.description || '', price: p.price ?? '', unit: p.unit || 'un', notes: p.notes || '', image_url: p.image_url || '' })} className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-champ flex items-center justify-center" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => deleteProduct(p)} className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-rose flex items-center justify-center" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                        </div>
+                      )}
+                      <div className="h-36 bg-white/[0.03] overflow-hidden">{p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Icon name="box" className="w-8 h-8 text-admin-champ/20" /></div>}</div>
+                      <div className="p-4">
+                        <p className="text-admin-text text-sm font-medium truncate">{p.name}</p>
+                        {p.description && <p className="text-admin-muted/50 text-xs mt-1 line-clamp-2">{p.description}</p>}
+                        {p.notes && <p className="text-admin-muted/40 text-[11px] mt-1.5 italic line-clamp-2">Obs.: {p.notes}</p>}
+                        <div className="flex items-center justify-between mt-3"><span className="text-admin-champ text-sm">{p.price ? brl(p.price) : 'Sob consulta'}</span>{p.unit && <span className="text-admin-muted/40 text-[11px]">/{p.unit}</span>}</div>
+                      </div>
+                    </div>
+                  ))}</div>}
+            </div>
           )}
 
           {tab === 'galeria' && (
-            gallery.length === 0 ? <Empty icon="image" text="Nenhuma imagem na galeria ainda." />
-              : <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{gallery.map((url, i) => <a key={i} href={url} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden aspect-square bg-white/[0.03]"><img src={url} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform" /></a>)}</div>
+            <div>
+              {isMine && (
+                <div className="flex justify-end mb-4">
+                  <input ref={galleryRef} type="file" accept="image/*" multiple onChange={onGalleryFile} className="hidden" />
+                  <button onClick={() => galleryRef.current?.click()} className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors"><Icon name="upload" className="w-4 h-4" />Adicionar imagens</button>
+                </div>
+              )}
+              {gallery.length === 0 ? <Empty icon="image" text={isMine ? 'Adicione imagens à sua galeria.' : 'Nenhuma imagem na galeria ainda.'} />
+                : <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{gallery.map((url, i) => (
+                    <div key={i} className="group relative rounded-xl overflow-hidden aspect-square bg-white/[0.03]">
+                      <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" /></a>
+                      {isMine && <button onClick={() => removeGalleryImg(i)} className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-rose flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" title="Excluir imagem"><Icon name="trash" className="w-3.5 h-3.5" /></button>}
+                    </div>
+                  ))}</div>}
+            </div>
           )}
 
           {tab === 'avaliacoes' && (
@@ -193,6 +265,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
 
       {quoteOpen && <QuoteModal supplier={s} tenantId={tenantId} onClose={() => setQuoteOpen(false)} notify={notify} />}
       {chatOpen && <SupplierChat supplier={s} onClose={() => setChatOpen(false)} notify={notify} />}
+      {prodModal && <ProductEditModal initial={prodModal} onClose={() => setProdModal(null)} onSave={saveProduct} notify={notify} />}
     </div>
   )
 }
@@ -233,6 +306,48 @@ function QuoteModal({ supplier, tenantId, onClose, notify }) {
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button>
           <button onClick={send} disabled={sending} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ disabled:opacity-50">{sending ? 'Enviando…' : 'Enviar pedido'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ProductEditModal({ initial, onClose, onSave, notify }) {
+  const [f, setF] = useState(initial)
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const fileRef = useRef(null)
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
+  const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setUploading(true)
+    const r = await uploadTo(file, { folder: 'suppliers/produtos', accept: 'image', maxMB: 10 })
+    setUploading(false)
+    if (r.error) return notify?.(r.error, 'error')
+    set('image_url', r.url)
+  }
+  const submit = async () => { setSaving(true); await onSave(f); setSaving(false) }
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">{f.id ? 'Editar produto' : 'Novo produto'}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <div className="space-y-3">
+          <input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Nome do produto *" className={cls} />
+          <textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={2} placeholder="Descrição" className={`${cls} resize-none`} />
+          <textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} rows={2} placeholder="Observações (ex.: prazo especial, variações, condições)" className={`${cls} resize-none`} />
+          <div className="grid grid-cols-2 gap-3">
+            <input type="number" value={f.price} onChange={(e) => set('price', e.target.value)} placeholder="Preço (R$)" className={cls} />
+            <input value={f.unit} onChange={(e) => set('unit', e.target.value)} placeholder="Unidade (un, m²…)" className={cls} />
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="w-full glass-input rounded-xl px-4 py-3 text-sm text-admin-muted/70 hover:text-admin-champ flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
+            <Icon name={uploading ? 'clock' : f.image_url ? 'check' : 'image'} className="w-4 h-4" />{uploading ? 'Enviando…' : f.image_url ? 'Imagem pronta' : 'Foto do produto'}
+          </button>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button>
+          <button onClick={submit} disabled={saving} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar'}</button>
         </div>
       </div>
     </div>

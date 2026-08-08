@@ -50,7 +50,7 @@ export function VerifSeal({ level, className = '', onDark = true }) {
 }
 
 // ---- Card grande do fornecedor (descoberta visual) ----
-function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp }) {
+function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp, onShare }) {
   const cat = SUPPLIER_CATEGORIES[s.category] || s.category
   const specialties = Array.isArray(s.specialties) ? s.specialties : []
   return (
@@ -60,9 +60,14 @@ function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp }) {
           ? <img src={s.cover_url} alt={s.name} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
           : <div className="w-full h-full flex items-center justify-center"><Icon name={CATEGORY_ICON[s.category] || 'box'} className="w-10 h-10 text-admin-champ/25" /></div>}
         <div className="absolute top-3 left-3"><VerifSeal level={s.verification_level} /></div>
-        <button onClick={(e) => { e.stopPropagation(); onFav(s) }} className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-md ring-1 shadow-lg transition-all duration-200 hover:scale-110 ${fav ? 'bg-admin-rose/90 text-white ring-admin-rose/50' : 'bg-black/25 text-white ring-white/20 hover:bg-black/40'}`} title={fav ? 'Remover dos favoritos' : 'Favoritar'} aria-pressed={fav}>
-          <Icon name="heart" className="w-4 h-4" filled={fav} />
-        </button>
+        <div className="absolute top-3 right-3 flex items-center gap-1 p-1 rounded-full" style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(8px)', boxShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+          <button onClick={(e) => { e.stopPropagation(); onShare(s) }} className="w-7 h-7 rounded-full flex items-center justify-center text-[#3a3a3a] hover:bg-black/[0.06] transition-colors" title="Compartilhar link">
+            <Icon name="share" className="w-4 h-4" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onFav(s) }} className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${fav ? 'text-admin-rose' : 'text-[#3a3a3a] hover:text-admin-rose hover:bg-black/[0.06]'}`} title={fav ? 'Remover dos favoritos' : 'Favoritar'} aria-pressed={fav}>
+            <Icon name="heart" className="w-4 h-4" filled={fav} />
+          </button>
+        </div>
       </div>
       <div className="p-4">
         <div className="flex items-start gap-3">
@@ -95,7 +100,7 @@ function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp }) {
 }
 
 // ---- Tela Descobrir ----
-function Discover({ suppliers, favorites, compare, loading, onOpen, onFav, onCmp, onlyFav = false }) {
+function Discover({ suppliers, favorites, compare, loading, onOpen, onFav, onCmp, onShare, onlyFav = false }) {
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('')
   const [uf, setUf] = useState('')
@@ -168,7 +173,7 @@ function Discover({ suppliers, favorites, compare, loading, onOpen, onFav, onCmp
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
-              {filtered.map((s) => <SupplierCard key={s.id} s={s} fav={favorites.has(s.id)} cmp={compare.includes(s.id)} onOpen={onOpen} onFav={onFav} onCmp={onCmp} />)}
+              {filtered.map((s) => <SupplierCard key={s.id} s={s} fav={favorites.has(s.id)} cmp={compare.includes(s.id)} onOpen={onOpen} onFav={onFav} onCmp={onCmp} onShare={onShare} />)}
             </div>
           )}
         </div>
@@ -218,6 +223,12 @@ export function SuppliersMarketplace({ notify }) {
     } catch { notify?.('Não foi possível atualizar o favorito', 'error') }
   }, [favorites, tenantId, notify])
 
+  const shareSupplier = useCallback(async (s) => {
+    const url = `${window.location.origin}/fornecedor/${s.id}`
+    try { await navigator.clipboard.writeText(url); notify?.('Link do fornecedor copiado!', 'success') }
+    catch { notify?.('Link: ' + url, 'info') }
+  }, [notify])
+
   if (openSupplier) {
     return <SupplierProfile supplier={openSupplier} isFav={favorites.has(openSupplier.id)} onFav={() => toggleFav(openSupplier)} onBack={() => setOpenSupplier(null)} notify={notify} />
   }
@@ -246,7 +257,7 @@ export function SuppliersMarketplace({ notify }) {
         <div className="md:hidden mb-4"><GlassSelect value={view} onChange={setView} options={NAV.map((n) => ({ value: n.key, label: n.label }))} /></div>
 
         {(view === 'discover' || view === 'favorites') && (
-          <Discover suppliers={suppliers} favorites={favorites} compare={compare} loading={loading} onOpen={setOpenSupplier} onFav={toggleFav} onCmp={toggleCompare} onlyFav={view === 'favorites'} />
+          <Discover suppliers={suppliers} favorites={favorites} compare={compare} loading={loading} onOpen={setOpenSupplier} onFav={toggleFav} onCmp={toggleCompare} onShare={shareSupplier} onlyFav={view === 'favorites'} />
         )}
         {view === 'compare' && (
           <Comparator suppliers={suppliers} selected={compare} onToggle={(id) => setCompare((p) => p.filter((x) => x !== id))} onOpen={setOpenSupplier} onClear={() => setCompare([])} onRfq={(ids) => { setRfqPreset(ids || compare); setView('rfq') }} />
