@@ -48,6 +48,20 @@ export function FranchisePanel({ notify }) {
   const [form, setForm] = useState({})
   const [vmDetail, setVmDetail] = useState(null)
   const [vmExecs, setVmExecs] = useState([])
+  const [invite, setInvite] = useState(null) // { unit, email, name } — modal de convite de gerente
+  const [inviting, setInviting] = useState(false)
+
+  const sendInvite = async () => {
+    if (!invite?.email?.trim()) return notify('Informe o e-mail do gerente', 'error')
+    setInviting(true)
+    try {
+      const { data: res, error } = await supabase.functions.invoke('invite-manager', {
+        body: { email: invite.email.trim(), unit_id: invite.unit?.id || null, name: invite.name || null },
+      })
+      if (error || res?.error) { notify('Não foi possível convidar: ' + (res?.detail || error?.message || res?.error), 'error') }
+      else { notify(res?.invited ? 'Convite enviado por e-mail.' : 'Gerente vinculado à unidade.', 'success'); setInvite(null) }
+    } catch (e) { notify('Erro ao convidar: ' + (e.message || e), 'error') } finally { setInviting(false) }
+  }
 
   const unitName = (id) => units.find((u) => u.id === id)?.name || '—'
   const unitOptions = [{ value: '', label: 'Toda a rede' }, ...units.map((u) => ({ value: u.id, label: u.name }))]
@@ -161,6 +175,9 @@ export function FranchisePanel({ notify }) {
             <div className="flex items-start justify-between mb-2"><p className="text-admin-text text-sm font-medium">{u.name}</p><span className={`text-[9px] px-2 py-0.5 rounded-lg ${u.status === 'active' ? 'bg-admin-sage/10 text-admin-sage' : 'bg-white/[0.04] text-admin-muted/40'}`}>{u.status || 'active'}</span></div>
             {(u.city || u.state) && <p className="text-admin-muted/50 text-xs">{[u.city, u.state].filter(Boolean).join(', ')}</p>}
             {u.phone && <p className="text-admin-muted/40 text-xs mt-1">{u.phone}</p>}
+            <button onClick={() => setInvite({ unit: u, email: '', name: '' })} className="mt-3 flex items-center gap-1.5 text-xs text-admin-champ hover:text-admin-champ/80 transition-colors">
+              <Icon name="user" className="w-3.5 h-3.5" />Convidar gerente
+            </button>
           </div>
         ))}</div>
       ))}
@@ -330,6 +347,26 @@ export function FranchisePanel({ notify }) {
               </div>
             ))}</div>
           )}
+        </Modal>
+      )}
+
+      {/* CONVIDAR GERENTE — cria/convida um e-mail vinculado à unidade */}
+      {invite && (
+        <Modal title="Convidar gerente" onClose={() => setInvite(null)}>
+          <div className="space-y-4">
+            <p className="text-admin-muted/60 text-xs leading-relaxed">
+              O gerente recebe um e-mail para definir a senha e passa a acessar apenas a unidade
+              <span className="text-admin-text/80"> {invite.unit?.name ? `“${invite.unit.name}”` : 'selecionada'}</span>.
+              Você (dono da rede) continua com uma conta única vendo tudo consolidado.
+            </p>
+            <Fld label="Unidade"><input value={invite.unit?.name || 'Toda a rede'} disabled className={`${inputCls} opacity-60`} /></Fld>
+            <Fld label="E-mail do gerente"><input type="email" value={invite.email} onChange={(e) => setInvite((v) => ({ ...v, email: e.target.value }))} className={inputCls} placeholder="gerente@exemplo.com" /></Fld>
+            <Fld label="Nome (opcional)"><input value={invite.name} onChange={(e) => setInvite((v) => ({ ...v, name: e.target.value }))} className={inputCls} placeholder="Nome do gerente" /></Fld>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setInvite(null)} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button>
+              <button onClick={sendInvite} disabled={inviting} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ transition-colors disabled:opacity-50">{inviting ? 'Enviando…' : 'Convidar'}</button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>
