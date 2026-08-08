@@ -39,6 +39,7 @@ export function TeamPanel({ notify }) {
   const [importing, setImporting] = useState(false)
   const [preview, setPreview] = useState([])
   const [teamSheet, setTeamSheet] = useState('') // planilha geral da equipe (arquivo único)
+  const [units, setUnits] = useState([]) // unidades da rede (para vincular o colaborador)
   const [tenantName, setTenantName] = useState('Seravie Experiences')
   const fileRef = useRef(null)
 
@@ -46,6 +47,8 @@ export function TeamPanel({ notify }) {
     setLoading(true)
     const { data } = await supabase.from('employees').select('*').order('name')
     setEmployees(data || [])
+    const { data: us } = await supabase.from('units').select('id, name').order('name')
+    setUnits(us || [])
     // planilha geral + nome ficam no tenant
     const { data: t } = await supabase.from('tenants').select('name, settings').eq('id', tenantId).maybeSingle()
     setTeamSheet(t?.settings?.team_sheet_url || '')
@@ -79,6 +82,7 @@ export function TeamPanel({ notify }) {
       pix_key: f.pix_key || null, bank_info: f.bank_info || null,
       registration_file: f.registration_file || null, documents: Array.isArray(f.documents) ? f.documents : [],
       has_system_access: !!f.has_system_access, notes: f.notes || null,
+      unit_id: f.unit_id || null,
     }
     const { error } = modal.editingId
       ? await supabase.from('employees').update(payload).eq('id', modal.editingId)
@@ -206,6 +210,9 @@ export function TeamPanel({ notify }) {
                 <div className="col-span-2"><label className={lbl}>Nome completo *</label><input value={modal.form.name} onChange={(e) => setF('name', e.target.value)} className={inputCls} /></div>
                 <div><label className={lbl}>Setor / Categoria</label><GlassSelect value={modal.form.department} onChange={(v) => setF('department', v)} options={[{ value: '', label: '— selecione —' }, ...DEPARTMENTS.map((d) => ({ value: d, label: d }))]} /></div>
                 <div><label className={lbl}>Cargo</label><input value={modal.form.role} onChange={(e) => setF('role', e.target.value)} className={inputCls} placeholder="Ex: Atendente" /></div>
+                {units.length > 0 && (
+                  <div className="col-span-2"><label className={lbl}>Unidade (loja)</label><GlassSelect value={modal.form.unit_id || ''} onChange={(v) => setF('unit_id', v)} options={[{ value: '', label: 'Toda a rede / sem unidade' }, ...units.map((u) => ({ value: u.id, label: u.name }))]} /></div>
+                )}
               </div>
             </div>
 

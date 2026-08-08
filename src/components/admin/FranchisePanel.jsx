@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
 import { Icon, GlassSelect, GlassDate } from './ui'
+import { NetworkDashboard } from './NetworkDashboard'
 
 const COMM_TYPE_LABELS = { announcement: 'Comunicado', alert: 'Alerta', training: 'Treinamento', campaign: 'Campanha', policy: 'Política', other: 'Outro' }
 const PRIORITY_COLORS = { low: 'text-admin-muted/40', normal: 'text-admin-sage', high: 'text-admin-gold', urgent: 'text-admin-rose' }
@@ -15,6 +16,7 @@ const SEV_COLOR = { low: 'text-admin-muted/50', medium: 'text-admin-sage', high:
 const brl = (n) => `R$ ${(Number(n) || 0).toFixed(2)}`
 
 const TABS = [
+  ['overview', 'Painel da Rede'],
   ['network', 'Rede & Unidades'], ['communications', 'Comunicados'], ['vm', 'Visual Merchandising'],
   ['audits', 'Auditorias'], ['incidents', 'Ocorrências'], ['goals', 'Metas & Ranking'],
 ]
@@ -38,7 +40,7 @@ export function FranchisePanel({ notify }) {
   const tenantId = profile?.tenant_id
   const uid = user?.id || null
 
-  const [tab, setTab] = useState('network')
+  const [tab, setTab] = useState('overview')
   const [units, setUnits] = useState([])
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
@@ -148,6 +150,9 @@ export function FranchisePanel({ notify }) {
           <button key={k} onClick={() => setTab(k)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${tab === k ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}>{v}</button>
         ))}
       </div>
+
+      {/* PAINEL DA REDE — visão consolidada de todas as unidades */}
+      {tab === 'overview' && <NetworkDashboard notify={notify} />}
 
       {/* REDE */}
       {tab === 'network' && (loading ? <Loading /> : data.length === 0 ? <Empty t="Nenhuma unidade cadastrada" /> : (
