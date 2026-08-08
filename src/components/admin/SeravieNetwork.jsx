@@ -19,6 +19,8 @@ import { ExperienceMap } from './network/ExperienceMap'
 import { SmartNetworking } from './network/SmartNetworking'
 import { NetworkDashboard } from './network/NetworkDashboard'
 import { Collections } from './network/Collections'
+import { NetworkAI } from './network/NetworkAI'
+import { TimelineViva } from './network/TimelineViva'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Network — plataforma social profissional do ecossistema
@@ -31,7 +33,8 @@ const NAV = [
   { key: 'messages', label: 'Mensagens', icon: 'mail' },
   { key: 'communities', label: 'Comunidades', icon: 'users' },
   { key: 'people', label: 'Pessoas & Empresas', icon: 'user' },
-  { key: 'smart', label: 'Networking', icon: 'sparkles' },
+  { key: 'ai', label: 'IA Consultora', icon: 'sparkles' },
+  { key: 'smart', label: 'Networking', icon: 'spark' },
   { key: 'map', label: 'Mapa do Ecossistema', icon: 'map' },
   { key: 'services', label: 'Marketplace', icon: 'tag' },
   { key: 'talent', label: 'Banco de Talentos', icon: 'star' },
@@ -39,6 +42,7 @@ const NAV = [
   { key: 'projects', label: 'Projetos', icon: 'layout' },
   { key: 'academy', label: 'Academy', icon: 'book' },
   { key: 'collections', label: 'Coleções', icon: 'layers' },
+  { key: 'timeline', label: 'Timeline Viva', icon: 'clock' },
 ]
 
 export function Avatar({ name, url, size = 'w-10 h-10', text = 'text-sm' }) {
@@ -282,6 +286,7 @@ export function SeravieNetwork({ notify }) {
         {view === 'messages' && <Messages me={me} notify={notify} startWith={dmTarget} />}
         {view === 'communities' && <Communities me={me} notify={notify} />}
         {view === 'people' && <People notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
+        {view === 'ai' && <NetworkAI me={me} notify={notify} />}
         {view === 'smart' && <SmartNetworking me={me} notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
         {view === 'map' && <ExperienceMap notify={notify} onOpenSupplier={openSupplier} />}
         {view === 'services' && <ServiceMarketplace me={me} notify={notify} />}
@@ -290,6 +295,7 @@ export function SeravieNetwork({ notify }) {
         {view === 'projects' && <NetworkProjects me={me} notify={notify} />}
         {view === 'academy' && <Academy me={me} notify={notify} />}
         {view === 'collections' && <Collections me={me} notify={notify} onOpenSupplier={openSupplier} />}
+        {view === 'timeline' && <TimelineViva notify={notify} />}
       </div>
     </div>
   )

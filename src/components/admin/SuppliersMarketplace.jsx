@@ -16,6 +16,7 @@ import { BuyerProjects } from './suppliers/BuyerProjects'
 import { PurchasingAnalytics, PurchasingAI } from './suppliers/PurchasingExtras'
 import { SeravieMatch } from './suppliers/SeravieMatch'
 import { NotificationsBell } from './network/Notifications'
+import { IndiceBadge } from './suppliers/IndiceSeravie'
 import { BuyerOrders } from './suppliers/BuyerOrders'
 import { DirectMarket } from './suppliers/DirectMarket'
 import { SupplierEvents } from './suppliers/SupplierEvents'
@@ -96,7 +97,7 @@ function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp, onShare }) {
           </div>
         )}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/[0.05]">
-          <div className="flex items-center gap-1.5">{s.rating > 0 ? <><Stars value={s.rating} /><span className="text-admin-muted/40 text-[11px]">{Number(s.rating).toFixed(1)}</span></> : <span className="text-admin-muted/30 text-[11px]">Novo</span>}</div>
+          <div className="flex items-center gap-2 min-w-0">{s.rating > 0 ? <div className="flex items-center gap-1.5"><Stars value={s.rating} /><span className="text-admin-muted/40 text-[11px]">{Number(s.rating).toFixed(1)}</span></div> : <span className="text-admin-muted/30 text-[11px]">Novo</span>}<IndiceBadge supplierId={s.id} /></div>
           <span onClick={(e) => { e.stopPropagation(); onCmp(s) }} className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg cursor-pointer transition-colors ${cmp ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted/50 hover:text-admin-champ'}`} title="Adicionar ao comparador">
             <Icon name="layers" className="w-3.5 h-3.5" />{cmp ? 'Comparando' : 'Comparar'}
           </span>

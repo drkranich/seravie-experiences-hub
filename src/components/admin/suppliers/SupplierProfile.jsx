@@ -5,6 +5,7 @@ import { Icon, GlassSelect, GlassMulti } from '../ui'
 import { SUPPLIER_CATEGORIES, CATEGORY_ICON, VERIF_LEVELS, STATES, brl } from '../../../lib/suppliersMarket'
 import { SupplierChat } from './SupplierChat'
 import { uploadTo } from '../../../lib/storage'
+import { IndiceCard } from './IndiceSeravie'
 
 // Perfil do fornecedor — mini-site: capa, logo, galeria, produtos, serviços,
 // certificações, regiões, avaliações + ações (orçamento, favoritar, adicionar ao projeto).
@@ -193,6 +194,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
                 )}
               </div>
               <div className="space-y-5">
+                <IndiceCard supplierId={s.id} />
                 <div className="glass rounded-2xl p-5 space-y-3">
                   <h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70">Atendimento</h3>
                   {s.whatsapp && <a href={`https://wa.me/${String(s.whatsapp).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-sage hover:underline"><Icon name="chart" className="w-4 h-4" />WhatsApp</a>}
