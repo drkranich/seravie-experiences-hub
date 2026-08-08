@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from '../ui'
 import { brl } from '../../../lib/suppliersMarket'
+import { OrderReceipt } from './OrderReceipt'
 
 // Compras — pedidos do comprador ao fornecedor. Cria pedido (manual ou a partir
 // de um fornecedor), acompanha status, histórico. Grava em buyer_orders.
@@ -148,6 +149,8 @@ function CreateOrder({ suppliers, onClose, onCreate, notify }) {
 
 function OrderDetail({ order: o, onBack, onPatch, onDelete, notify }) {
   const [confirmDel, setConfirmDel] = useState(false)
+  const [showReceipt, setShowReceipt] = useState(false)
+  const snap = o.supplier_snapshot || null
   const st = STATUS[o.status] || STATUS.rascunho
   const stepIdx = FLOW.indexOf(o.status)
   const advance = () => { if (stepIdx >= 0 && stepIdx < FLOW.length - 1) onPatch(o.id, { status: FLOW[stepIdx + 1] }) }
@@ -161,6 +164,7 @@ function OrderDetail({ order: o, onBack, onPatch, onDelete, notify }) {
           {o.expected_at && <p className="text-admin-muted/45 text-xs mt-1">Entrega prevista: {new Date(o.expected_at).toLocaleDateString('pt-BR')}</p>}
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowReceipt(true)} className="text-sm glass-input text-admin-muted/70 hover:text-admin-champ px-4 py-2 rounded-xl transition-colors flex items-center gap-2"><Icon name="download" className="w-4 h-4" />Comprovante</button>
           {stepIdx >= 0 && stepIdx < FLOW.length - 1 && <button onClick={advance} className="text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-4 py-2 rounded-xl transition-colors">Avançar → {STATUS[FLOW[stepIdx + 1]].label}</button>}
           {o.status !== 'cancelado' && o.status !== 'concluido' && <button onClick={() => onPatch(o.id, { status: 'cancelado' })} className="text-sm glass-input text-admin-muted/60 hover:text-admin-rose px-4 py-2 rounded-xl transition-colors">Cancelar</button>}
           <button onClick={() => setConfirmDel(true)} className="glass-input text-admin-muted/60 hover:text-admin-rose px-3 py-2 rounded-xl transition-colors" title="Excluir"><Icon name="trash" className="w-4 h-4" /></button>
@@ -194,15 +198,39 @@ function OrderDetail({ order: o, onBack, onPatch, onDelete, notify }) {
           <div className="flex justify-between text-admin-muted/55"><span>Subtotal</span><span>{brl(o.subtotal)}</span></div>
           {o.shipping ? <div className="flex justify-between text-admin-muted/55"><span>Frete</span><span>{brl(o.shipping)}</span></div> : null}
           <div className="flex justify-between text-admin-text font-medium"><span>Total</span><span className="text-admin-champ">{brl(o.total)}</span></div>
+          {o.commission_percent ? <div className="flex justify-between text-admin-muted/35 text-[11px] pt-1"><span>Comissão Seravie ({o.commission_percent}%) — retida do fornecedor</span><span>{brl(o.commission_amount)}</span></div> : null}
         </div>
       </div>
 
-      {(o.delivery_address || o.notes) && (
+      {/* dados do fornecedor (snapshot no momento da compra) */}
+      {snap && (
+        <div className="glass rounded-2xl p-5 mb-5">
+          <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Fornecedor</p>
+          <p className="text-admin-text text-sm font-medium">{snap.name}</p>
+          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-1.5 text-[12px] text-admin-muted/55">
+            {(snap.address || snap.city) && <span className="flex items-center gap-1"><Icon name="map" className="w-3.5 h-3.5" />{[snap.address, snap.city, snap.state].filter(Boolean).join(', ')}{snap.cep ? ` · ${snap.cep}` : ''}</span>}
+            {(snap.whatsapp || snap.phone) && <a href={`https://wa.me/${String(snap.whatsapp || snap.phone).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-admin-sage/80 hover:underline"><Icon name="mail" className="w-3.5 h-3.5" />{snap.whatsapp || snap.phone}</a>}
+            {snap.email && <a href={`mailto:${snap.email}`} className="flex items-center gap-1 hover:text-admin-text"><Icon name="mail" className="w-3.5 h-3.5" />{snap.email}</a>}
+            {snap.lead_time && <span className="flex items-center gap-1"><Icon name="clock" className="w-3.5 h-3.5" />Prazo: {snap.lead_time}</span>}
+          </div>
+        </div>
+      )}
+
+      {/* logística: transportadora + pagamento */}
+      <div className="glass rounded-2xl p-5 mb-5 grid sm:grid-cols-2 gap-4">
+        <div><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1.5">Transportadora</p><input value={o.carrier || ''} onChange={(e) => onPatch(o.id, { carrier: e.target.value })} placeholder="Ex.: Correios, Jadlog, retirada…" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
+        <div><p className="text-[10px] uppercase tracking-wider text-admin-muted/50 mb-1.5">Pagamento</p><p className="text-admin-text text-sm py-2.5">{o.payment_method || '—'}</p></div>
+      </div>
+
+      {(o.delivery_address || o.notes || o.buyer_name) && (
         <div className="glass rounded-2xl p-5">
+          {o.buyer_name && <div className="mb-2"><p className="text-[10px] uppercase tracking-wider text-admin-champ/60">Comprador</p><p className="text-admin-muted/70 text-sm">{o.buyer_name}{o.buyer_contact ? ` · ${o.buyer_contact}` : ''}</p></div>}
           {o.delivery_address && <div className="mb-2"><p className="text-[10px] uppercase tracking-wider text-admin-champ/60">Entrega</p><p className="text-admin-muted/70 text-sm">{o.delivery_address}</p></div>}
           {o.notes && <div><p className="text-[10px] uppercase tracking-wider text-admin-champ/60">Observações</p><p className="text-admin-muted/70 text-sm">{o.notes}</p></div>}
         </div>
       )}
+
+      {showReceipt && <OrderReceipt orders={o} onClose={() => setShowReceipt(false)} />}
 
       {confirmDel && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDel(false)}>

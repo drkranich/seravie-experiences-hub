@@ -3,20 +3,35 @@ import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect } from '../ui'
 import { SUPPLIER_CATEGORIES, CATEGORY_ICON, brl } from '../../../lib/suppliersMarket'
+import { usePlatformSettings } from '../../../lib/platformSettings'
+import { OrderReceipt } from './OrderReceipt'
 
-// Marketplace de venda direta — produtos marcados como venda direta pelos
-// fornecedores. Comprador monta um carrinho e gera um pedido (buyer_orders).
+// Marketplace de venda direta — vitrine + checkout COMPLETO. Carrega os dados
+// reais dos fornecedores, calcula frete/prazo por fornecedor, comissão da
+// plataforma, coleta entrega e pagamento, cria pedidos (buyer_orders) e gera
+// um comprovante de compra.
+
+const PAYMENTS = [
+  { value: 'pix', label: 'Pix' },
+  { value: 'boleto', label: 'Boleto' },
+  { value: 'cartao', label: 'Cartão' },
+  { value: 'faturado', label: 'Faturado (a combinar)' },
+]
 
 export function DirectMarket({ onOpenSupplier, notify }) {
   const { profile } = useTenant()
   const tenantId = profile?.tenant_id
+  const { settings } = usePlatformSettings()
+  const feePct = settings?.commission_enabled === false ? 0 : Number(settings?.event_fee_percent ?? 5)
+
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState({})
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('')
-  const [cart, setCart] = useState({}) // product_id -> {product, qty}
-  const [cartOpen, setCartOpen] = useState(false)
+  const [cart, setCart] = useState({})       // product_id -> {product, qty}
+  const [checkout, setCheckout] = useState(false)
+  const [receipt, setReceipt] = useState(null)
 
   useEffect(() => {
     let alive = true
@@ -25,8 +40,11 @@ export function DirectMarket({ onOpenSupplier, notify }) {
       try {
         const { data: ps } = await supabase.from('supplier_products').select('*').eq('direct_sale', true).eq('status', 'active').order('created_at', { ascending: false }).limit(300)
         const supIds = [...new Set((ps || []).map((p) => p.supplier_id).filter(Boolean))]
-        let supMap = {}
-        if (supIds.length) { const { data: ss } = await supabase.from('suppliers').select('id,name,logo_url,city').in('id', supIds); (ss || []).forEach((s) => { supMap[s.id] = s }) }
+        const supMap = {}
+        if (supIds.length) {
+          const { data: ss } = await supabase.from('suppliers').select('id,name,logo_url,city,state,cep,address,address_number,phone,whatsapp,email,lead_time,min_order,category').in('id', supIds)
+          ;(ss || []).forEach((s) => { supMap[s.id] = s })
+        }
         if (alive) { setProducts(ps || []); setSuppliers(supMap) }
       } catch { /* noop */ } finally { if (alive) setLoading(false) }
     })()
@@ -40,29 +58,8 @@ export function DirectMarket({ onOpenSupplier, notify }) {
   }, [products, q, cat])
 
   const addToCart = (p) => { setCart((c) => ({ ...c, [p.id]: { product: p, qty: (c[p.id]?.qty || 0) + 1 } })); notify?.(`${p.name} adicionado`, 'success') }
-  const setQty = (id, qty) => setCart((c) => { if (qty <= 0) { const n = { ...c }; delete n[id]; return n } return { ...c, [id]: { ...c[id], qty } } })
   const cartItems = Object.values(cart)
-  const cartTotal = cartItems.reduce((s, { product, qty }) => s + (Number(product.price) || 0) * qty, 0)
   const cartCount = cartItems.reduce((s, { qty }) => s + qty, 0)
-
-  const checkout = async () => {
-    if (!cartItems.length) return
-    // agrupa por fornecedor → um pedido por fornecedor
-    const bySup = {}
-    cartItems.forEach(({ product, qty }) => { const k = product.supplier_id || 'sem'; (bySup[k] ||= []).push({ product, qty }) })
-    let count = 0
-    for (const [supId, list] of Object.entries(bySup)) {
-      const items = list.map(({ product, qty }) => ({ name: product.name, qty, unit_price: Number(product.price) || 0, note: '' }))
-      const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
-      const { error } = await supabase.from('buyer_orders').insert({
-        tenant_id: tenantId, supplier_id: supId === 'sem' ? null : supId, supplier_name: suppliers[supId]?.name || 'Fornecedor',
-        code: 'PC-' + Date.now().toString(36).slice(-5).toUpperCase(), status: 'enviado', items, subtotal, total: subtotal,
-      })
-      if (!error) count++
-    }
-    setCart({}); setCartOpen(false)
-    notify?.(count > 1 ? `${count} pedidos enviados aos fornecedores!` : 'Pedido enviado ao fornecedor!', 'success')
-  }
 
   return (
     <div>
@@ -71,7 +68,7 @@ export function DirectMarket({ onOpenSupplier, notify }) {
         <div className="flex items-center gap-2">
           <div className="w-40"><GlassSelect value={cat} onChange={setCat} options={[{ value: '', label: 'Todas as categorias' }, ...cats.map((c) => ({ value: c, label: SUPPLIER_CATEGORIES[c] || c }))]} /></div>
           <div className="flex items-center gap-2 glass-input rounded-xl px-3 py-2 w-40"><Icon name="search" className="w-4 h-4 text-admin-champ/60" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" className="flex-1 bg-transparent text-sm text-admin-text outline-none" /></div>
-          <button onClick={() => setCartOpen(true)} className="relative flex items-center gap-2 bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors shrink-0"><Icon name="cart" className="w-4 h-4" />Pedido{cartCount > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-admin-champ text-admin-bg text-[10px] flex items-center justify-center">{cartCount}</span>}</button>
+          <button onClick={() => cartCount > 0 && setCheckout(true)} className="relative flex items-center gap-2 bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors shrink-0"><Icon name="cart" className="w-4 h-4" />Carrinho{cartCount > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-admin-champ text-admin-bg text-[10px] flex items-center justify-center">{cartCount}</span>}</button>
         </div>
       </div>
 
@@ -86,43 +83,213 @@ export function DirectMarket({ onOpenSupplier, notify }) {
                   </div>
                   <div className="p-4 flex-1 flex flex-col">
                     <p className="text-admin-text font-medium leading-snug">{p.name}</p>
-                    {sup && <button onClick={() => onOpenSupplier?.(sup)} className="text-admin-champ/60 text-[11px] mt-0.5 hover:underline text-left">{sup.name}{sup.city ? ` · ${sup.city}` : ''}</button>}
-                    {p.description && <p className="text-admin-muted/50 text-xs mt-1 line-clamp-2 flex-1">{p.description}</p>}
+                    {sup ? (
+                      <button onClick={() => onOpenSupplier?.(sup)} className="flex items-center gap-1.5 text-admin-champ/70 text-[11px] mt-1 hover:underline text-left">
+                        {sup.logo_url ? <img src={sup.logo_url} alt="" className="w-4 h-4 rounded object-cover" /> : <Icon name="box" className="w-3 h-3" />}
+                        {sup.name}{sup.city ? ` · ${sup.city}` : ''}
+                      </button>
+                    ) : <p className="text-admin-muted/35 text-[11px] mt-1">Fornecedor</p>}
+                    {p.description && <p className="text-admin-muted/50 text-xs mt-1.5 line-clamp-2 flex-1">{p.description}</p>}
+                    {sup?.lead_time && <p className="text-admin-muted/40 text-[10px] mt-2 flex items-center gap-1"><Icon name="truck" className="w-3 h-3" />Prazo: {sup.lead_time}</p>}
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]">
                       <div><p className="text-admin-champ font-serif">{p.price ? brl(p.price) : 'Sob consulta'}</p>{p.unit && <p className="text-admin-muted/40 text-[10px]">por {p.unit}{p.min_qty ? ` · mín. ${p.min_qty}` : ''}</p>}</div>
-                      <button onClick={() => addToCart(p)} disabled={p.stock != null && p.stock <= 0} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20 disabled:opacity-40 transition-colors flex items-center gap-1.5"><Icon name="plus" className="w-3.5 h-3.5" />Pedir</button>
+                      <button onClick={() => addToCart(p)} disabled={p.stock != null && p.stock <= 0} className="text-xs px-3 py-1.5 rounded-lg bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20 disabled:opacity-40 transition-colors flex items-center gap-1.5"><Icon name="plus" className="w-3.5 h-3.5" />Adicionar</button>
                     </div>
                   </div>
                 </div>
               )})}
             </div>}
 
-      {cartOpen && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setCartOpen(false)}>
-          <div className="glass-pop rounded-2xl p-6 w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Seu pedido</h2><button onClick={() => setCartOpen(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
-            {cartItems.length === 0 ? <p className="text-admin-muted/50 text-sm py-8 text-center">Carrinho vazio.</p>
-              : <>
-                  <div className="space-y-3">
-                    {cartItems.map(({ product: p, qty }) => (
-                      <div key={p.id} className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-lg bg-white/[0.05] overflow-hidden flex items-center justify-center shrink-0">{p.image_url ? <img src={p.image_url} alt="" className="w-full h-full object-cover" /> : <Icon name="box" className="w-4 h-4 text-admin-champ/50" />}</div>
-                        <div className="min-w-0 flex-1"><p className="text-admin-text text-sm truncate">{p.name}</p><p className="text-admin-champ text-xs">{p.price ? brl(p.price) : 'Sob consulta'}</p></div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button onClick={() => setQty(p.id, qty - 1)} className="w-6 h-6 rounded-md glass-input text-admin-muted/70 hover:text-admin-champ flex items-center justify-center">−</button>
-                          <span className="text-admin-text text-sm w-6 text-center">{qty}</span>
-                          <button onClick={() => setQty(p.id, qty + 1)} className="w-6 h-6 rounded-md glass-input text-admin-muted/70 hover:text-admin-champ flex items-center justify-center">+</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="glass-soft rounded-xl p-3 flex items-center justify-between text-sm mt-4"><span className="text-admin-muted/60">Total</span><span className="text-admin-champ font-serif">{brl(cartTotal)}</span></div>
-                  <button onClick={checkout} className="w-full mt-4 py-2.5 rounded-xl bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ text-sm transition-colors flex items-center justify-center gap-2"><Icon name="check" className="w-4 h-4" />Enviar pedido ao fornecedor</button>
-                  <p className="text-admin-muted/40 text-[11px] text-center mt-2">Gera um pedido em Compras para cada fornecedor.</p>
-                </>}
+      {checkout && (
+        <Checkout
+          cart={cart} setCart={setCart} suppliers={suppliers} tenantId={tenantId} feePct={feePct}
+          profile={profile} onClose={() => setCheckout(false)}
+          onDone={(orders) => { setCart({}); setCheckout(false); setReceipt(orders) }} notify={notify}
+        />
+      )}
+      {receipt && <OrderReceipt orders={receipt} settings={settings} onClose={() => setReceipt(null)} />}
+    </div>
+  )
+}
+
+// ─────────────────────────── CHECKOUT ───────────────────────────
+function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose, onDone, notify }) {
+  const [step, setStep] = useState(1) // 1 revisar · 2 entrega/pagamento · 3 confirmar
+  const [delivery, setDelivery] = useState({ address: '', city: '', cep: '', name: profile?.full_name || '', contact: '' })
+  const [payment, setPayment] = useState('pix')
+  // frete por fornecedor
+  const [freight, setFreight] = useState({}) // supplier_id -> valor
+  const [saving, setSaving] = useState(false)
+
+  const setD = (k, v) => setDelivery((s) => ({ ...s, [k]: v }))
+  const setQty = (id, qty) => setCart((c) => { if (qty <= 0) { const n = { ...c }; delete n[id]; return n } return { ...c, [id]: { ...c[id], qty } } })
+
+  // agrupa o carrinho por fornecedor
+  const groups = useMemo(() => {
+    const g = {}
+    Object.values(cart).forEach(({ product, qty }) => { const k = product.supplier_id || 'sem'; (g[k] ||= { supplier: suppliers[k] || null, items: [] }).items.push({ product, qty }) })
+    return g
+  }, [cart, suppliers])
+  const groupKeys = Object.keys(groups)
+
+  const calc = (g, supId) => {
+    const subtotal = g.items.reduce((s, { product, qty }) => s + (Number(product.price) || 0) * qty, 0)
+    const ship = Number(freight[supId]) || 0
+    const commission = subtotal * (feePct / 100)
+    return { subtotal, ship, commission, total: subtotal + ship }
+  }
+  const grand = groupKeys.reduce((acc, k) => { const c = calc(groups[k], k); acc.subtotal += c.subtotal; acc.ship += c.ship; acc.commission += c.commission; acc.total += c.total; return acc }, { subtotal: 0, ship: 0, commission: 0, total: 0 })
+
+  const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
+
+  const confirm = async () => {
+    if (!delivery.name.trim()) { setStep(2); return notify?.('Informe o responsável pela compra', 'error') }
+    if (!delivery.address.trim()) { setStep(2); return notify?.('Informe o endereço de entrega', 'error') }
+    setSaving(true)
+    const created = []
+    for (const k of groupKeys) {
+      const g = groups[k]; const c = calc(g, k); const sup = g.supplier
+      const items = g.items.map(({ product, qty }) => ({ name: product.name, qty, unit_price: Number(product.price) || 0, note: product.unit || '' }))
+      const code = 'PC-' + Date.now().toString(36).slice(-4).toUpperCase() + '-' + created.length
+      const snapshot = sup ? { id: sup.id, name: sup.name, city: sup.city, state: sup.state, phone: sup.phone, whatsapp: sup.whatsapp, email: sup.email, address: [sup.address, sup.address_number].filter(Boolean).join(', '), cep: sup.cep, lead_time: sup.lead_time } : null
+      const payload = {
+        tenant_id: tenantId, supplier_id: k === 'sem' ? null : k, supplier_name: sup?.name || 'Fornecedor',
+        code, status: 'enviado', items, subtotal: c.subtotal, shipping: c.ship, total: c.total,
+        commission_percent: feePct, commission_amount: c.commission, lead_time: sup?.lead_time || null,
+        carrier: null, payment_method: payment, delivery_address: [delivery.address, delivery.city, delivery.cep].filter(Boolean).join(' · '),
+        buyer_name: delivery.name, buyer_contact: delivery.contact || null, supplier_snapshot: snapshot, paid_at: new Date().toISOString(),
+      }
+      const { data, error } = await supabase.from('buyer_orders').insert(payload).select('*').single()
+      if (!error && data) created.push({ ...data, _calc: c })
+    }
+    setSaving(false)
+    if (!created.length) return notify?.('Não foi possível concluir a compra.', 'error')
+    notify?.(created.length > 1 ? `${created.length} pedidos enviados!` : 'Pedido enviado ao fornecedor!', 'success')
+    onDone(created)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        {/* stepper */}
+        <div className="p-6 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center justify-between mb-4"><h2 className="font-serif text-xl text-admin-text">Finalizar compra</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+          <div className="flex items-center gap-2">
+            {['Revisar', 'Entrega & pagamento', 'Confirmar'].map((s, i) => { const n = i + 1; const active = n === step; const done = n < step; return (
+              <div key={s} className="flex items-center gap-2 flex-1">
+                <div className={`flex items-center gap-2 ${active ? 'text-admin-champ' : done ? 'text-admin-sage' : 'text-admin-muted/40'}`}>
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] shrink-0 ${active ? 'bg-admin-champ/20 ring-1 ring-admin-champ/50' : done ? 'bg-admin-sage/20' : 'bg-white/[0.05]'}`}>{done ? <Icon name="check" className="w-3.5 h-3.5" /> : n}</span>
+                  <span className="text-[11px] truncate hidden sm:block">{s}</span>
+                </div>
+                {i < 2 && <div className={`h-px flex-1 ${done ? 'bg-admin-sage/30' : 'bg-white/[0.06]'}`} />}
+              </div>
+            )})}
           </div>
         </div>
-      )}
+
+        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+          {/* PASSO 1 — revisar por fornecedor */}
+          {step === 1 && groupKeys.map((k) => { const g = groups[k]; const sup = g.supplier; const c = calc(g, k); return (
+            <div key={k} className="glass-soft rounded-2xl p-4">
+              <div className="flex items-center gap-3 mb-3 pb-3 border-b border-white/[0.06]">
+                <div className="w-10 h-10 rounded-lg bg-white/[0.05] overflow-hidden flex items-center justify-center shrink-0">{sup?.logo_url ? <img src={sup.logo_url} alt="" className="w-full h-full object-cover" /> : <Icon name="box" className="w-4 h-4 text-admin-champ/60" />}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-admin-text text-sm font-medium">{sup?.name || 'Fornecedor'}</p>
+                  <p className="text-admin-muted/45 text-[11px]">{[sup?.city, sup?.state].filter(Boolean).join('/')}{sup?.lead_time ? ` · prazo ${sup.lead_time}` : ''}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {g.items.map(({ product: p, qty }) => (
+                  <div key={p.id} className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-white/[0.05] overflow-hidden flex items-center justify-center shrink-0">{p.image_url ? <img src={p.image_url} alt="" className="w-full h-full object-cover" /> : <Icon name="box" className="w-4 h-4 text-admin-champ/50" />}</div>
+                    <div className="min-w-0 flex-1"><p className="text-admin-text text-sm truncate">{p.name}</p><p className="text-admin-champ text-xs">{brl(p.price)}{p.unit ? ` / ${p.unit}` : ''}</p></div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={() => setQty(p.id, qty - 1)} className="w-6 h-6 rounded-md glass-input text-admin-muted/70 hover:text-admin-champ flex items-center justify-center">−</button>
+                      <span className="text-admin-text text-sm w-6 text-center">{qty}</span>
+                      <button onClick={() => setQty(p.id, qty + 1)} className="w-6 h-6 rounded-md glass-input text-admin-muted/70 hover:text-admin-champ flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.06] text-sm"><span className="text-admin-muted/55">Subtotal</span><span className="text-admin-text">{brl(c.subtotal)}</span></div>
+            </div>
+          )})}
+
+          {/* PASSO 2 — entrega, frete por fornecedor, pagamento */}
+          {step === 2 && (
+            <>
+              <div className="glass-soft rounded-2xl p-4">
+                <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Dados de entrega</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div><label className={lbl}>Responsável *</label><input value={delivery.name} onChange={(e) => setD('name', e.target.value)} className={cls} /></div>
+                  <div><label className={lbl}>Contato (telefone/e-mail)</label><input value={delivery.contact} onChange={(e) => setD('contact', e.target.value)} className={cls} /></div>
+                  <div className="sm:col-span-2"><label className={lbl}>Endereço de entrega *</label><input value={delivery.address} onChange={(e) => setD('address', e.target.value)} placeholder="Rua, número, complemento" className={cls} /></div>
+                  <div><label className={lbl}>Cidade</label><input value={delivery.city} onChange={(e) => setD('city', e.target.value)} className={cls} /></div>
+                  <div><label className={lbl}>CEP</label><input value={delivery.cep} onChange={(e) => setD('cep', e.target.value)} className={cls} /></div>
+                </div>
+              </div>
+              <div className="glass-soft rounded-2xl p-4">
+                <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Frete por fornecedor</p>
+                <div className="space-y-2">
+                  {groupKeys.map((k) => { const sup = groups[k].supplier; return (
+                    <div key={k} className="flex items-center gap-3">
+                      <span className="text-sm text-admin-text/80 flex-1 truncate">{sup?.name || 'Fornecedor'}</span>
+                      <div className="flex items-center gap-1.5"><span className="text-admin-muted/40 text-xs">R$</span><input type="number" value={freight[k] || ''} onChange={(e) => setFreight((f) => ({ ...f, [k]: e.target.value }))} placeholder="0,00" className="glass-input rounded-lg px-3 py-1.5 text-sm text-admin-text outline-none w-28" /></div>
+                    </div>
+                  )})}
+                </div>
+                <p className="text-admin-muted/40 text-[11px] mt-2">Informe o frete combinado com cada fornecedor (ou deixe 0 para combinar depois).</p>
+              </div>
+              <div className="glass-soft rounded-2xl p-4">
+                <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Forma de pagamento</p>
+                <div className="flex flex-wrap gap-2">
+                  {PAYMENTS.map((p) => <button key={p.value} onClick={() => setPayment(p.value)} className={`text-sm px-4 py-2 rounded-xl transition-colors ${payment === p.value ? 'bg-admin-champ/20 text-admin-champ ring-1 ring-admin-champ/40' : 'bg-white/[0.04] text-admin-muted/60 hover:text-admin-text'}`}>{p.label}</button>)}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* PASSO 3 — confirmação com totais e comissão */}
+          {step === 3 && (
+            <div className="space-y-4">
+              <div className="glass-soft rounded-2xl p-4">
+                <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-2">Entrega</p>
+                <p className="text-admin-text text-sm">{delivery.name}</p>
+                <p className="text-admin-muted/55 text-xs">{[delivery.address, delivery.city, delivery.cep].filter(Boolean).join(' · ')}</p>
+                <p className="text-admin-muted/45 text-xs mt-1">Pagamento: {PAYMENTS.find((p) => p.value === payment)?.label}</p>
+              </div>
+              {groupKeys.map((k) => { const g = groups[k]; const sup = g.supplier; const c = calc(g, k); return (
+                <div key={k} className="glass-soft rounded-2xl p-4">
+                  <p className="text-admin-text text-sm font-medium mb-1">{sup?.name || 'Fornecedor'}</p>
+                  {sup && <p className="text-admin-muted/45 text-[11px] mb-2">{[sup.whatsapp || sup.phone, sup.email].filter(Boolean).join(' · ')}{sup.lead_time ? ` · prazo ${sup.lead_time}` : ''}</p>}
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between text-admin-muted/55"><span>Subtotal ({g.items.length} item/ns)</span><span>{brl(c.subtotal)}</span></div>
+                    {c.ship > 0 && <div className="flex justify-between text-admin-muted/55"><span>Frete</span><span>{brl(c.ship)}</span></div>}
+                    <div className="flex justify-between text-admin-text font-medium"><span>Total</span><span className="text-admin-champ">{brl(c.total)}</span></div>
+                    {feePct > 0 && <div className="flex justify-between text-admin-muted/35 text-[11px] pt-1"><span>Comissão Seravie ({feePct}%) — retida do fornecedor</span><span>{brl(c.commission)}</span></div>}
+                  </div>
+                </div>
+              )})}
+              <div className="glass rounded-2xl p-4 border border-admin-champ/15">
+                <div className="flex justify-between text-sm mb-1"><span className="text-admin-muted/60">Total geral</span><span className="text-admin-champ font-serif text-lg">{brl(grand.total)}</span></div>
+                {feePct > 0 && <p className="text-admin-muted/40 text-[11px]">Comissão da plataforma no total: {brl(grand.commission)} ({feePct}%). O fornecedor recebe o restante.</p>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* footer nav */}
+        <div className="p-6 pt-4 border-t border-white/[0.06] flex items-center justify-between">
+          <div className="text-sm"><span className="text-admin-muted/50">Total: </span><span className="text-admin-champ font-serif">{brl(grand.total)}</span></div>
+          <div className="flex gap-2">
+            <button onClick={step === 1 ? onClose : () => setStep((s) => s - 1)} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">{step === 1 ? 'Cancelar' : 'Voltar'}</button>
+            {step < 3
+              ? <button onClick={() => setStep((s) => s + 1)} className="px-5 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ flex items-center gap-2">Continuar<Icon name="down" className="w-4 h-4 -rotate-90" /></button>
+              : <button onClick={confirm} disabled={saving} className="px-5 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ disabled:opacity-50 flex items-center gap-2"><Icon name="check" className="w-4 h-4" />{saving ? 'Processando…' : 'Confirmar compra'}</button>}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
