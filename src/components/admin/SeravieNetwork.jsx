@@ -116,7 +116,7 @@ function PostCard({ post, me, liked, onLike, onComment }) {
         </div>
       )}
       <div className="flex items-center gap-4 mt-4 pt-3 border-t border-white/[0.05]">
-        <button onClick={() => onLike(post)} className={`flex items-center gap-1.5 text-xs transition-colors ${liked ? 'text-admin-rose' : 'text-admin-muted/50 hover:text-admin-rose'}`}><Icon name="heart" className="w-4 h-4" />{post.likes || 0}</button>
+        <button onClick={() => onLike(post)} className={`flex items-center gap-1.5 text-xs transition-colors ${liked ? 'text-admin-champ' : 'text-admin-muted/50 hover:text-admin-champ'}`}><Icon name="star" className="w-4 h-4" filled={liked} />{post.likes || 0}</button>
         <button onClick={toggleComments} className="flex items-center gap-1.5 text-xs text-admin-muted/50 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />{post.comments || 0}</button>
       </div>
       {showComments && (

@@ -48,6 +48,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
     const payload = {
       name: form.name, description: form.description || null, price: form.price !== '' && form.price != null ? Number(form.price) : null,
       unit: form.unit || null, notes: form.notes || null, image_url: form.image_url || null,
+      gallery: Array.isArray(form.gallery) ? form.gallery : [], videos: Array.isArray(form.videos) ? form.videos : [],
     }
     if (form.id) {
       const { data, error } = await supabase.from('supplier_products').update(payload).eq('id', form.id).select('*').single()
@@ -148,7 +149,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
           {/* Ações */}
           <div className="flex items-center gap-2 pb-1 flex-wrap">
             {isMine && <button onClick={() => setEditOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ transition-colors"><Icon name="pen" className="w-4 h-4" />Editar perfil</button>}
-            <button onClick={onFav} className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm transition-colors ${isFav ? 'bg-admin-rose/15 text-admin-rose' : 'glass-input text-admin-muted/70 hover:text-admin-rose'}`}><Icon name="heart" className="w-4 h-4" filled={isFav} />{isFav ? 'Favoritado' : 'Favoritar'}</button>
+            <button onClick={onFav} className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm transition-colors ${isFav ? 'bg-admin-champ/15 text-admin-champ' : 'glass-input text-admin-muted/70 hover:text-admin-champ'}`}><Icon name="star" className="w-4 h-4" filled={isFav} />{isFav ? 'Salvo' : 'Salvar'}</button>
             <button onClick={() => { const url = `${window.location.origin}/fornecedor/${s.id}`; navigator.clipboard?.writeText(url).then(() => notify?.('Link do fornecedor copiado!', 'success')).catch(() => notify?.('Link: ' + url, 'info')) }} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="share" className="w-4 h-4" />Compartilhar</button>
             <button onClick={() => notify?.('Adicionado ao projeto (em breve: seleção de projeto).', 'success')} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="plus" className="w-4 h-4" />Adicionar ao projeto</button>
             <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Conversar</button>
@@ -214,7 +215,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
                     <div key={p.id} className="group glass rounded-2xl overflow-hidden relative">
                       {isMine && (
                         <div className="absolute top-2 right-2 z-10 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => setProdModal({ id: p.id, name: p.name || '', description: p.description || '', price: p.price ?? '', unit: p.unit || 'un', notes: p.notes || '', image_url: p.image_url || '' })} className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-champ flex items-center justify-center" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setProdModal({ id: p.id, name: p.name || '', description: p.description || '', price: p.price ?? '', unit: p.unit || 'un', notes: p.notes || '', image_url: p.image_url || '', gallery: Array.isArray(p.gallery) ? p.gallery : [], videos: Array.isArray(p.videos) ? p.videos : [] })} className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-champ flex items-center justify-center" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
                           <button onClick={() => deleteProduct(p)} className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md text-white/80 hover:text-admin-rose flex items-center justify-center" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
                         </div>
                       )}
@@ -322,22 +323,55 @@ function QuoteModal({ supplier, tenantId, onClose, notify }) {
   )
 }
 
+const MAX_IMG = 10
+const MAX_VID = 2
 function ProductEditModal({ initial, onClose, onSave, notify }) {
   const [f, setF] = useState(initial)
-  const [uploading, setUploading] = useState(false)
+  // galeria = todas as imagens; a 1ª é a capa (image_url). vídeos = até 2.
+  const [images, setImages] = useState(() => {
+    const g = Array.isArray(initial.gallery) ? initial.gallery : []
+    return initial.image_url && !g.includes(initial.image_url) ? [initial.image_url, ...g] : g
+  })
+  const [videos, setVideos] = useState(Array.isArray(initial.videos) ? initial.videos : [])
+  const [upImg, setUpImg] = useState(false)
+  const [upVid, setUpVid] = useState(false)
   const [saving, setSaving] = useState(false)
-  const fileRef = useRef(null)
+  const imgRef = useRef(null); const vidRef = useRef(null)
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
-  const onFile = async (e) => {
-    const file = e.target.files?.[0]; if (!file) return
-    setUploading(true)
-    const r = await uploadTo(file, { folder: 'suppliers/produtos', accept: 'image', maxMB: 10 })
-    setUploading(false)
-    if (r.error) return notify?.(r.error, 'error')
-    set('image_url', r.url)
+
+  const onImages = async (e) => {
+    const files = Array.from(e.target.files || [])
+    const room = MAX_IMG - images.length
+    if (room <= 0) { notify?.(`Limite de ${MAX_IMG} imagens atingido.`, 'error'); return }
+    const take = files.slice(0, room)
+    if (files.length > room) notify?.(`Enviando ${room} de ${files.length} — limite de ${MAX_IMG} imagens.`, 'info')
+    setUpImg(true)
+    const urls = []
+    for (const file of take) { const r = await uploadTo(file, { folder: 'suppliers/produtos', accept: 'image', maxMB: 10 }); if (r.error) { notify?.(r.error, 'error'); continue } urls.push(r.url) }
+    setUpImg(false); if (imgRef.current) imgRef.current.value = ''
+    if (urls.length) setImages((prev) => [...prev, ...urls])
   }
-  const submit = async () => { setSaving(true); await onSave(f); setSaving(false) }
+  const onVideos = async (e) => {
+    const files = Array.from(e.target.files || [])
+    const room = MAX_VID - videos.length
+    if (room <= 0) { notify?.(`Limite de ${MAX_VID} vídeos atingido.`, 'error'); return }
+    const take = files.slice(0, room)
+    if (files.length > room) notify?.(`Enviando ${room} de ${files.length} — limite de ${MAX_VID} vídeos.`, 'info')
+    setUpVid(true)
+    const urls = []
+    for (const file of take) { const r = await uploadTo(file, { folder: 'suppliers/produtos-video', accept: 'any', maxMB: 100 }); if (r.error) { notify?.(r.error, 'error'); continue } urls.push(r.url) }
+    setUpVid(false); if (vidRef.current) vidRef.current.value = ''
+    if (urls.length) setVideos((prev) => [...prev, ...urls])
+  }
+  const rmImg = (i) => setImages((p) => p.filter((_, j) => j !== i))
+  const rmVid = (i) => setVideos((p) => p.filter((_, j) => j !== i))
+
+  const submit = async () => {
+    setSaving(true)
+    await onSave({ ...f, image_url: images[0] || null, gallery: images, videos })
+    setSaving(false)
+  }
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="glass-pop rounded-2xl p-6 w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -350,10 +384,42 @@ function ProductEditModal({ initial, onClose, onSave, notify }) {
             <input type="number" value={f.price} onChange={(e) => set('price', e.target.value)} placeholder="Preço (R$)" className={cls} />
             <input value={f.unit} onChange={(e) => set('unit', e.target.value)} placeholder="Unidade (un, m²…)" className={cls} />
           </div>
-          <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="w-full glass-input rounded-xl px-4 py-3 text-sm text-admin-muted/70 hover:text-admin-champ flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-            <Icon name={uploading ? 'clock' : f.image_url ? 'check' : 'image'} className="w-4 h-4" />{uploading ? 'Enviando…' : f.image_url ? 'Imagem pronta' : 'Foto do produto'}
-          </button>
+
+          {/* Imagens (até 10) — a 1ª é a capa */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5"><label className="text-[10px] uppercase tracking-wider text-admin-muted/50">Imagens ({images.length}/{MAX_IMG})</label><span className="text-[10px] text-admin-muted/35">a 1ª é a capa</span></div>
+            <div className="grid grid-cols-4 gap-2">
+              {images.map((url, i) => (
+                <div key={i} className="relative group aspect-square rounded-lg overflow-hidden bg-white/[0.04]">
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  {i === 0 && <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-admin-champ/80 text-black px-1 rounded">capa</span>}
+                  <button onClick={() => rmImg(i)} className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white/80 hover:text-admin-rose flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="x" className="w-3 h-3" /></button>
+                </div>
+              ))}
+              {images.length < MAX_IMG && (
+                <button onClick={() => imgRef.current?.click()} disabled={upImg} className="aspect-square rounded-lg glass-input flex items-center justify-center text-admin-muted/50 hover:text-admin-champ transition-colors disabled:opacity-50"><Icon name={upImg ? 'clock' : 'plus'} className="w-4 h-4" /></button>
+              )}
+            </div>
+            <input ref={imgRef} type="file" accept="image/*" multiple onChange={onImages} className="hidden" />
+          </div>
+
+          {/* Vídeos (até 2) */}
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5">Vídeos ({videos.length}/{MAX_VID})</label>
+            <div className="space-y-2">
+              {videos.map((url, i) => (
+                <div key={i} className="flex items-center gap-2 glass-input rounded-lg px-3 py-2 text-xs">
+                  <Icon name="play" className="w-4 h-4 text-admin-champ/70 shrink-0" />
+                  <a href={url} target="_blank" rel="noreferrer" className="flex-1 truncate text-admin-champ/80">Vídeo {i + 1}</a>
+                  <button onClick={() => rmVid(i)} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="x" className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+              {videos.length < MAX_VID && (
+                <button onClick={() => vidRef.current?.click()} disabled={upVid} className="w-full glass-input rounded-lg px-4 py-2.5 text-sm text-admin-muted/60 hover:text-admin-champ flex items-center justify-center gap-2 transition-colors disabled:opacity-50"><Icon name={upVid ? 'clock' : 'play'} className="w-4 h-4" />{upVid ? 'Enviando…' : 'Adicionar vídeo'}</button>
+              )}
+            </div>
+            <input ref={vidRef} type="file" accept="video/*" multiple onChange={onVideos} className="hidden" />
+          </div>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button>

@@ -33,7 +33,7 @@ const NAV = [
   { key: 'library', label: 'Biblioteca Técnica', icon: 'book' },
   { key: 'moodboards', label: 'Moodboards', icon: 'palette' },
   { key: 'analytics', label: 'Analytics', icon: 'chart' },
-  { key: 'favorites', label: 'Favoritos', icon: 'heart' },
+  { key: 'favorites', label: 'Salvos', icon: 'star' },
 ]
 
 function Stars({ value = 0, size = 'text-xs' }) {
@@ -64,8 +64,8 @@ function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp, onShare }) {
           <button onClick={(e) => { e.stopPropagation(); onShare(s) }} className="w-7 h-7 rounded-full flex items-center justify-center text-[#3a3a3a] hover:bg-black/[0.06] transition-colors" title="Compartilhar link">
             <Icon name="share" className="w-4 h-4" />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onFav(s) }} className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${fav ? 'text-admin-rose' : 'text-[#3a3a3a] hover:text-admin-rose hover:bg-black/[0.06]'}`} title={fav ? 'Remover dos favoritos' : 'Favoritar'} aria-pressed={fav}>
-            <Icon name="heart" className="w-4 h-4" filled={fav} />
+          <button onClick={(e) => { e.stopPropagation(); onFav(s) }} className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${fav ? 'text-admin-champ' : 'text-[#3a3a3a] hover:text-admin-champ hover:bg-black/[0.06]'}`} title={fav ? 'Remover dos favoritos' : 'Salvar'} aria-pressed={fav}>
+            <Icon name="star" className="w-4 h-4" filled={fav} />
           </button>
         </div>
       </div>
@@ -246,7 +246,7 @@ export function SuppliersMarketplace({ notify }) {
             <button key={n.key} onClick={() => setView(n.key)} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-colors ${view === n.key ? 'bg-admin-champ/12 text-admin-champ' : 'text-admin-muted/70 hover:text-admin-text hover:bg-white/[0.03]'}`}>
               <Icon name={n.icon} className="w-4 h-4" /><span className="flex-1 text-left">{n.label}</span>
               {n.key === 'compare' && compare.length > 0 && <span className="text-[10px] bg-admin-champ/20 text-admin-champ rounded-full px-1.5 min-w-[18px] text-center">{compare.length}</span>}
-              {n.key === 'favorites' && favorites.size > 0 && <span className="text-[10px] bg-admin-rose/20 text-admin-rose rounded-full px-1.5 min-w-[18px] text-center">{favorites.size}</span>}
+              {n.key === 'favorites' && favorites.size > 0 && <span className="text-[10px] bg-admin-champ/20 text-admin-champ rounded-full px-1.5 min-w-[18px] text-center">{favorites.size}</span>}
             </button>
           ))}
         </div>
