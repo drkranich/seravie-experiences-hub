@@ -66,6 +66,7 @@ import { SeravieNetwork } from '../components/admin/SeravieNetwork'
 import { PersonTypesAdmin } from '../components/admin/network/PersonTypesAdmin'
 import { CommunityThemesAdmin } from '../components/admin/network/CommunityThemesAdmin'
 import { SupplierDashboard } from '../components/admin/suppliers/SupplierDashboard'
+import { CommissionSettings } from '../components/admin/CommissionSettings'
 import { LegalPanel } from '../components/admin/LegalPanel'
 import { FlowPanel } from '../components/admin/FlowPanel'
 import { QuoteStudio } from '../components/admin/QuoteStudio'
@@ -200,6 +201,7 @@ export function AdminDashboard({ onExit }) {
     network_classic: <NetworkHubPanel notify={notify} />,
     network_types: <PersonTypesAdmin notify={notify} />,
     network_communities: <CommunityThemesAdmin notify={notify} />,
+    commission_settings: <CommissionSettings notify={notify} />,
     legal: <LegalPanel notify={notify} />,
     flow: <FlowPanel notify={notify} />,
     quotes: <QuoteStudio notify={notify} />,
@@ -290,7 +292,7 @@ export function AdminDashboard({ onExit }) {
     // CMS do site institucional
     'content', 'services', 'portfolio', 'process', 'segments', 'jornal', 'testimonials', 'pages', 'menus', 'newsletter',
     // Rede Seravie (franqueador)
-    'expansao', 'franqueados', 'royalties', 'implantacoes', 'catalogo_oficial', 'standards', 'certification', 'network_types', 'network_communities',
+    'expansao', 'franqueados', 'royalties', 'implantacoes', 'catalogo_oficial', 'standards', 'certification', 'network_types', 'network_communities', 'commission_settings',
     // Plataforma / sistema
     'plans', 'service_pricing', 'superadmin', 'verticals',
   ])

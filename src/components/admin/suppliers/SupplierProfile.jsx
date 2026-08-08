@@ -373,7 +373,10 @@ function ProductEditModal({ initial, onClose, onSave, notify }) {
 
   const submit = async () => {
     setSaving(true)
-    await onSave({ ...f, image_url: images[0] || null, gallery: images, videos })
+    // capa SEMPRE derivada da lista final de imagens (evita capa órfã de uma
+    // imagem excluída). Se não há imagens, a capa fica nula.
+    const cover = images.find(Boolean) || null
+    await onSave({ ...f, image_url: cover, gallery: images.filter(Boolean), videos: videos.filter(Boolean) })
     setSaving(false)
   }
   return (
