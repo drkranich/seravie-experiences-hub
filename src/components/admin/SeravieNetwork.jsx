@@ -25,7 +25,7 @@ const NAV = [
   { key: 'messages', label: 'Mensagens', icon: 'mail' },
   { key: 'communities', label: 'Comunidades', icon: 'users' },
   { key: 'people', label: 'Pessoas & Empresas', icon: 'user' },
-  { key: 'services', label: 'Marketplace de Serviços', icon: 'tag' },
+  { key: 'services', label: 'Marketplace', icon: 'tag' },
   { key: 'talent', label: 'Banco de Talentos', icon: 'star' },
   { key: 'events', label: 'Eventos', icon: 'calendar' },
   { key: 'projects', label: 'Projetos', icon: 'layout' },
@@ -246,7 +246,7 @@ export function SeravieNetwork({ notify }) {
           <div className="px-3 py-3 mb-1"><p className="font-serif text-lg text-admin-text leading-none">Network</p><p className="text-[10px] uppercase tracking-wider text-admin-champ/60 mt-1">Rede profissional</p></div>
           {NAV.map((n) => (
             <button key={n.key} onClick={() => setView(n.key)} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-colors ${view === n.key ? 'bg-admin-champ/12 text-admin-champ' : 'text-admin-muted/70 hover:text-admin-text hover:bg-white/[0.03]'}`}>
-              <Icon name={n.icon} className="w-4 h-4" />{n.label}
+              <Icon name={n.icon} className="w-4 h-4 shrink-0" /><span className="truncate">{n.label}</span>
             </button>
           ))}
           {me && (
