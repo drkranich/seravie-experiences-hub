@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon } from '../ui'
-import { SUPPLIER_CATEGORIES, CATEGORY_ICON, VERIF_LEVELS, brl } from '../../../lib/suppliersMarket'
+import { Icon, GlassSelect, GlassMulti } from '../ui'
+import { SUPPLIER_CATEGORIES, CATEGORY_ICON, VERIF_LEVELS, STATES, brl } from '../../../lib/suppliersMarket'
 import { SupplierChat } from './SupplierChat'
 import { uploadTo } from '../../../lib/storage'
 
@@ -33,7 +33,15 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
   const [reviewForm, setReviewForm] = useState(null) // { author_name, rating, comment } | null
   const [chatOpen, setChatOpen] = useState(false)
   const [prodModal, setProdModal] = useState(null) // produto em edição/criação | null
-  const isMine = supplier.tenant_id === tenantId
+  const [editOpen, setEditOpen] = useState(false)
+  const [sup, setSup] = useState(supplier)          // cópia local (reflete edições sem recarregar)
+  const isMine = sup.tenant_id === tenantId
+
+  const saveProfile = async (patch) => {
+    const { data, error } = await supabase.from('suppliers').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', sup.id).select('*').single()
+    if (error) return notify?.('Erro ao salvar perfil: ' + error.message, 'error')
+    setSup(data); setEditOpen(false); notify?.('Perfil atualizado', 'success')
+  }
 
   const saveProduct = async (form) => {
     if (!form.name?.trim()) return notify?.('Informe o nome do produto', 'error')
@@ -68,9 +76,9 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
     if (error) return notify?.('Erro ao avaliar: ' + error.message, 'error')
     setReviews((r) => [data, ...r]); setReviewForm(null); notify?.('Avaliação publicada', 'success')
   }
-  const s = supplier
+  const s = sup
   const cat = SUPPLIER_CATEGORIES[s.category] || s.category
-  const [gallery, setGallery] = useState(Array.isArray(s.gallery) ? s.gallery : [])
+  const [gallery, setGallery] = useState(Array.isArray(supplier.gallery) ? supplier.gallery : [])
   const galleryRef = useRef(null)
   const specialties = Array.isArray(s.specialties) ? s.specialties : []
   const states = Array.isArray(s.states) ? s.states : []
@@ -139,8 +147,9 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
           </div>
           {/* Ações */}
           <div className="flex items-center gap-2 pb-1 flex-wrap">
+            {isMine && <button onClick={() => setEditOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ transition-colors"><Icon name="pen" className="w-4 h-4" />Editar perfil</button>}
+            <button onClick={onFav} className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm transition-colors ${isFav ? 'bg-admin-rose/15 text-admin-rose' : 'glass-input text-admin-muted/70 hover:text-admin-rose'}`}><Icon name="heart" className="w-4 h-4" filled={isFav} />{isFav ? 'Favoritado' : 'Favoritar'}</button>
             <button onClick={() => { const url = `${window.location.origin}/fornecedor/${s.id}`; navigator.clipboard?.writeText(url).then(() => notify?.('Link do fornecedor copiado!', 'success')).catch(() => notify?.('Link: ' + url, 'info')) }} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="share" className="w-4 h-4" />Compartilhar</button>
-            <button onClick={onFav} className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm border transition-all duration-200 ${isFav ? 'bg-admin-rose/15 text-admin-rose border-admin-rose/30' : 'text-admin-muted/70 border-white/[0.08] hover:text-admin-rose hover:border-admin-rose/30 hover:bg-admin-rose/[0.06]'}`}><Icon name="heart" className="w-4 h-4" filled={isFav} />{isFav ? 'Favoritado' : 'Favoritar'}</button>
             <button onClick={() => notify?.('Adicionado ao projeto (em breve: seleção de projeto).', 'success')} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="plus" className="w-4 h-4" />Adicionar ao projeto</button>
             <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Conversar</button>
             <button onClick={() => setQuoteOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Solicitar orçamento</button>
@@ -266,6 +275,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
       {quoteOpen && <QuoteModal supplier={s} tenantId={tenantId} onClose={() => setQuoteOpen(false)} notify={notify} />}
       {chatOpen && <SupplierChat supplier={s} onClose={() => setChatOpen(false)} notify={notify} />}
       {prodModal && <ProductEditModal initial={prodModal} onClose={() => setProdModal(null)} onSave={saveProduct} notify={notify} />}
+      {editOpen && <EditProfileModal supplier={s} onClose={() => setEditOpen(false)} onSave={saveProfile} notify={notify} />}
     </div>
   )
 }
@@ -348,6 +358,101 @@ function ProductEditModal({ initial, onClose, onSave, notify }) {
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button>
           <button onClick={submit} disabled={saving} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Edição completa do perfil do fornecedor (cadastro rico que alimenta o link público).
+function EditProfileModal({ supplier, onClose, onSave, notify }) {
+  const s = supplier
+  const [f, setF] = useState({
+    name: s.name || '', category: s.category || '', description: s.description || '', services: s.services || '',
+    specialties: Array.isArray(s.specialties) ? s.specialties : [], states: Array.isArray(s.states) ? s.states : [],
+    whatsapp: s.whatsapp || '', instagram: s.instagram || '', website: s.website || '', catalog_pdf_url: s.catalog_pdf_url || '',
+    email: s.email || '', phone: s.phone || '', min_order: s.min_order || '', lead_time: s.lead_time || '',
+    years_market: s.years_market ?? '', production_type: s.production_type || 'artesanal',
+    customization: !!s.customization, export: !!s.export, logo_url: s.logo_url || '', cover_url: s.cover_url || '',
+    video_url: s.video_url || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [upLogo, setUpLogo] = useState(false)
+  const [upCover, setUpCover] = useState(false)
+  const logoRef = useRef(null); const coverRef = useRef(null)
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
+  const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
+
+  const upload = async (file, kind) => {
+    const setUp = kind === 'logo' ? setUpLogo : setUpCover
+    setUp(true)
+    const r = await uploadTo(file, { folder: `suppliers/${kind}`, accept: 'image', maxMB: 10 })
+    setUp(false)
+    if (r.error) return notify?.(r.error, 'error')
+    set(kind === 'logo' ? 'logo_url' : 'cover_url', r.url)
+  }
+  const submit = async () => {
+    if (!f.name.trim()) return notify?.('Informe o nome', 'error')
+    setSaving(true)
+    await onSave({
+      ...f,
+      years_market: f.years_market !== '' && f.years_market != null ? parseInt(f.years_market) : null,
+    })
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Editar perfil do fornecedor</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+
+        {/* Capa + logo */}
+        <div className="grid grid-cols-[1fr_auto] gap-3 mb-4">
+          <div>
+            <label className={lbl}>Capa</label>
+            <input ref={coverRef} type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], 'cover')} className="hidden" />
+            <button onClick={() => coverRef.current?.click()} disabled={upCover} className="w-full h-20 rounded-xl overflow-hidden glass-input flex items-center justify-center text-admin-muted/60 hover:text-admin-champ transition-colors">
+              {f.cover_url ? <img src={f.cover_url} alt="" className="w-full h-full object-cover" /> : <span className="flex items-center gap-2 text-xs"><Icon name={upCover ? 'clock' : 'image'} className="w-4 h-4" />{upCover ? 'Enviando…' : 'Enviar capa'}</span>}
+            </button>
+          </div>
+          <div>
+            <label className={lbl}>Logo</label>
+            <input ref={logoRef} type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0], 'logo')} className="hidden" />
+            <button onClick={() => logoRef.current?.click()} disabled={upLogo} className="w-20 h-20 rounded-xl overflow-hidden glass-input flex items-center justify-center text-admin-muted/60 hover:text-admin-champ transition-colors">
+              {f.logo_url ? <img src={f.logo_url} alt="" className="w-full h-full object-cover" /> : <Icon name={upLogo ? 'clock' : 'image'} className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2"><label className={lbl}>Nome do fornecedor *</label><input value={f.name} onChange={(e) => set('name', e.target.value)} className={cls} /></div>
+          <div><label className={lbl}>Categoria</label><GlassSelect value={f.category} onChange={(v) => set('category', v)} options={[{ value: '', label: '—' }, ...Object.entries(SUPPLIER_CATEGORIES).map(([value, label]) => ({ value, label }))]} /></div>
+          <div><label className={lbl}>Produção</label><GlassSelect value={f.production_type} onChange={(v) => set('production_type', v)} options={[{ value: 'artesanal', label: 'Artesanal' }, { value: 'industrial', label: 'Industrial' }, { value: 'both', label: 'Artesanal + Industrial' }]} /></div>
+          <div className="sm:col-span-2"><label className={lbl}>Sobre (descrição institucional)</label><textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={3} className={`${cls} resize-none`} /></div>
+          <div className="sm:col-span-2"><label className={lbl}>Serviços</label><textarea value={f.services} onChange={(e) => set('services', e.target.value)} rows={2} className={`${cls} resize-none`} /></div>
+          <div className="sm:col-span-2"><label className={lbl}>Especialidades (separe por vírgula)</label><input value={(f.specialties || []).join(', ')} onChange={(e) => set('specialties', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} className={cls} placeholder="Ex.: Assinatura olfativa, Difusores" /></div>
+          <div className="sm:col-span-2"><label className={lbl}>Regiões atendidas</label><GlassMulti value={f.states} onChange={(v) => set('states', v)} options={STATES.map((x) => ({ value: x, label: x }))} placeholder="Selecione as UFs" /></div>
+
+          <div><label className={lbl}>WhatsApp</label><input value={f.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} className={cls} placeholder="5521999990000" /></div>
+          <div><label className={lbl}>Instagram</label><input value={f.instagram} onChange={(e) => set('instagram', e.target.value)} className={cls} placeholder="@sua.marca" /></div>
+          <div><label className={lbl}>Site</label><input value={f.website} onChange={(e) => set('website', e.target.value)} className={cls} placeholder="suamarca.com.br" /></div>
+          <div><label className={lbl}>E-mail</label><input value={f.email} onChange={(e) => set('email', e.target.value)} className={cls} /></div>
+          <div><label className={lbl}>Catálogo (URL PDF)</label><input value={f.catalog_pdf_url} onChange={(e) => set('catalog_pdf_url', e.target.value)} className={cls} /></div>
+          <div><label className={lbl}>Vídeo institucional (URL)</label><input value={f.video_url} onChange={(e) => set('video_url', e.target.value)} className={cls} /></div>
+
+          <div><label className={lbl}>Pedido mínimo</label><input value={f.min_order} onChange={(e) => set('min_order', e.target.value)} className={cls} placeholder="Ex.: 5 peças" /></div>
+          <div><label className={lbl}>Prazo médio</label><input value={f.lead_time} onChange={(e) => set('lead_time', e.target.value)} className={cls} placeholder="Ex.: 25 dias" /></div>
+          <div><label className={lbl}>Anos de mercado</label><input type="number" value={f.years_market} onChange={(e) => set('years_market', e.target.value)} className={cls} /></div>
+          <div className="flex items-end gap-4 pb-1">
+            <label className="flex items-center gap-2 text-sm text-admin-text/80"><input type="checkbox" checked={f.customization} onChange={(e) => set('customization', e.target.checked)} className="w-4 h-4 accent-admin-champ" />Personaliza</label>
+            <label className="flex items-center gap-2 text-sm text-admin-text/80"><input type="checkbox" checked={f.export} onChange={(e) => set('export', e.target.checked)} className="w-4 h-4 accent-admin-champ" />Exporta</label>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button>
+          <button onClick={submit} disabled={saving} className="px-5 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar perfil'}</button>
         </div>
       </div>
     </div>
