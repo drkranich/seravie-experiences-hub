@@ -6,6 +6,7 @@ import { MarketingDashboard } from './marketing/MarketingDashboard'
 import { JourneysTab } from './marketing/JourneysTab'
 import { AudienceStudio } from './marketing/AudienceStudio'
 import { ChannelsTab, ReferralsTab } from './marketing/CampaignStudio'
+import { AnalyticsTab, AttributionTab } from './marketing/MarketingIntelligence'
 import { MARKETING_EVENTS, EVENT_MAP, eventLabel } from '../../lib/marketingEvents'
 
 // ---- helpers ----
@@ -81,7 +82,7 @@ const STUDIOS = [
   },
   {
     key: 'intelligence', label: 'Intelligence', icon: 'chart',
-    tabs: [['ai', 'IA de Crescimento', 'spark'], ['analytics', 'Analytics', 'chart', true], ['attribution', 'Atribuição', 'layers', true]],
+    tabs: [['ai', 'IA de Crescimento', 'spark'], ['analytics', 'Analytics', 'chart'], ['attribution', 'Atribuição', 'layers']],
   },
 ]
 
@@ -166,7 +167,7 @@ export function MarketingPanel({ notify }) {
 
           {/* Growth Studio */}
           {studio === 'growth' && tab === 'campaigns' && <CampaignsTab campaigns={campaigns} contacts={contacts} notify={notify} reload={loadCampaigns} tenantId={tenantId} />}
-          {studio === 'growth' && tab === 'calendar' && <CampaignCalendar campaigns={campaigns} />}
+          {studio === 'growth' && tab === 'calendar' && <CampaignCalendar campaigns={campaigns} tenantId={tenantId} createdBy={profile?.user_id} notify={notify} reload={loadCampaigns} />}
           {studio === 'growth' && ['content', 'landing', 'forms'].includes(tab) && <ComingSoon tab={tab} />}
 
           {/* Automation Studio */}
@@ -186,7 +187,8 @@ export function MarketingPanel({ notify }) {
 
           {/* Intelligence */}
           {studio === 'intelligence' && tab === 'ai' && <GrowthAI contacts={contacts} campaigns={campaigns} notify={notify} onStudio={selectStudio} />}
-          {studio === 'intelligence' && ['analytics', 'attribution'].includes(tab) && <ComingSoon tab={tab} />}
+          {studio === 'intelligence' && tab === 'analytics' && <AnalyticsTab notify={notify} />}
+          {studio === 'intelligence' && tab === 'attribution' && <AttributionTab notify={notify} />}
         </>
       )}
 
@@ -606,27 +608,51 @@ function AudienceTab({ contacts }) {
 }
 
 // ================= CALENDÁRIO DE CAMPANHAS =================
-function CampaignCalendar({ campaigns }) {
-  const MES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+function CampaignCalendar({ campaigns, tenantId, createdBy, notify, reload }) {
+  const MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+  const MES3 = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
   const now = new Date()
-  const year = now.getFullYear()
-  // agrupa campanhas por mês (usa scheduled_at se houver, senão created_at)
+  const [year, setYear] = useState(now.getFullYear())
+  const [sched, setSched] = useState(null) // {month} para agendar
+
   const byMonth = {}
   for (let i = 0; i < 12; i++) byMonth[i] = []
   campaigns.forEach((c) => {
     const d = new Date(c.scheduled_at || c.created_at)
     if (d.getFullYear() === year) byMonth[d.getMonth()].push(c)
   })
-  const stColor = { draft: 'bg-white/[0.06] text-admin-muted/60', scheduled: 'bg-admin-gold/15 text-admin-gold', running: 'bg-admin-sage/15 text-admin-sage', sent: 'bg-admin-champ/15 text-admin-champ', completed: 'bg-white/[0.04] text-admin-muted/40', paused: 'bg-admin-rose/15 text-admin-rose' }
+  const stColor = { draft: 'bg-white/[0.06] text-admin-muted/60', scheduled: 'bg-admin-gold/15 text-admin-gold', running: 'bg-admin-sage/15 text-admin-sage', completed: 'bg-admin-champ/15 text-admin-champ', paused: 'bg-admin-rose/15 text-admin-rose' }
+
+  const createFor = async (form) => {
+    // agenda uma campanha para o dia escolhido do mês
+    const day = Math.min(Math.max(1, Number(form.day) || 1), 28)
+    const when = new Date(year, sched.month, day, 9, 0, 0)
+    try {
+      const { error } = await supabase.from('campaigns').insert({
+        tenant_id: tenantId, created_by: createdBy, title: form.title.trim(), type: form.type,
+        status: 'scheduled', scheduled_at: when.toISOString(), audience: {},
+      })
+      if (error) throw error
+      notify('Campanha agendada', 'success'); setSched(null); reload && reload()
+    } catch (e) { notify('Erro ao agendar: ' + (e.message || e), 'error') }
+  }
+
   return (
     <div>
-      <p className="text-admin-muted/50 text-xs mb-4">Planejamento anual de campanhas · {year}</p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-admin-muted/50 text-xs">Planejamento anual de campanhas · clique num mês para agendar</p>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setYear((y) => y - 1)} className="w-7 h-7 rounded-lg glass-soft flex items-center justify-center text-admin-muted hover:text-admin-text"><Icon name="down" className="w-3.5 h-3.5 rotate-90" /></button>
+          <span className="text-admin-text text-sm font-medium w-12 text-center">{year}</span>
+          <button onClick={() => setYear((y) => y + 1)} className="w-7 h-7 rounded-lg glass-soft flex items-center justify-center text-admin-muted hover:text-admin-text"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
+        </div>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {MES.map((m, i) => (
-          <div key={i} className={`glass rounded-xl p-3 min-h-[7rem] ${i === now.getMonth() ? 'border border-admin-champ/25' : ''}`}>
+        {MES3.map((m, i) => (
+          <div key={i} className={`glass rounded-xl p-3 min-h-[7.5rem] group cursor-pointer hover:bg-white/[0.03] transition-colors ${i === now.getMonth() && year === now.getFullYear() ? 'border border-admin-champ/25' : 'border border-transparent'}`} onClick={() => setSched({ month: i })}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-admin-text text-sm font-medium">{m}</p>
-              {byMonth[i].length > 0 && <span className="text-[10px] text-admin-muted/40">{byMonth[i].length}</span>}
+              <Icon name="plus" className="w-3.5 h-3.5 text-admin-muted/30 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="space-y-1.5">
               {byMonth[i].slice(0, 4).map((c) => (
@@ -637,6 +663,31 @@ function CampaignCalendar({ campaigns }) {
             </div>
           </div>
         ))}
+      </div>
+
+      {sched && <ScheduleModal monthLabel={MES[sched.month]} year={year} onClose={() => setSched(null)} onCreate={createFor} />}
+    </div>
+  )
+}
+
+function ScheduleModal({ monthLabel, year, onClose, onCreate }) {
+  const [f, setF] = useState({ title: '', type: 'email', day: 1 })
+  const set = (p) => setF((s) => ({ ...s, ...p }))
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Agendar em {monthLabel} {year}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <div className="space-y-4">
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Título *</label><input value={f.title} onChange={(e) => set({ title: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="Ex: Campanha de Natal" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Canal</label><GlassSelect value={f.type} onChange={(v) => set({ type: v })} options={[{ value: 'email', label: 'E-mail' }, { value: 'whatsapp', label: 'WhatsApp' }, { value: 'sms', label: 'SMS' }]} /></div>
+            <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Dia do mês</label><input type="number" min="1" max="28" value={f.day} onChange={(e) => set({ day: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button onClick={() => f.title.trim() && onCreate(f)} disabled={!f.title.trim()} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">Agendar campanha</button>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+        </div>
       </div>
     </div>
   )
