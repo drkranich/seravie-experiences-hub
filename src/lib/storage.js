@@ -82,6 +82,32 @@ export async function removeFromVault(path) {
   return { error: error?.message }
 }
 
+// ---------- Documentos de identidade (bucket privado 'identity-docs') ----------
+// Dados sensíveis: bucket privado, criptografado em repouso. A RLS exige que o
+// path comece com o user id, então o arquivo fica isolado por pessoa.
+export const IDENTITY_BUCKET = 'identity-docs'
+
+export async function uploadIdentityDoc(file, kind = 'doc', maxMB = 20) {
+  if (!file) return { error: 'Nenhum arquivo selecionado.' }
+  if (file.size > maxMB * 1024 * 1024) return { error: `Arquivo muito grande (máx. ${maxMB}MB).` }
+  const { data: sess } = await supabase.auth.getUser()
+  const uid = sess?.user?.id
+  if (!uid) return { error: 'Sessão inválida.' }
+  const ext = (file.name || 'file').split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin'
+  const rand = Math.random().toString(36).slice(2, 8)
+  const path = `${uid}/${kind}-${Date.now()}-${rand}.${ext}`
+  const { error } = await supabase.storage.from(IDENTITY_BUCKET).upload(path, file, { cacheControl: '0', upsert: true })
+  if (error) return { error: error.message }
+  return { path }
+}
+
+export async function identitySignedUrl(path, expiresIn = 600) {
+  if (!path) return { error: 'Sem caminho.' }
+  const { data, error } = await supabase.storage.from(IDENTITY_BUCKET).createSignedUrl(path, expiresIn)
+  if (error) return { error: error.message }
+  return { url: data.signedUrl }
+}
+
 export async function listFiles() {
   const { data, error } = await supabase.storage
     .from(MEDIA_BUCKET)

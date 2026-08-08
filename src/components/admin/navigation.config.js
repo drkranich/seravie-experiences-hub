@@ -101,6 +101,7 @@ export const CORE_SECTIONS = [
       { key: 'network_types', label: 'Tipos de Profissional', icon: 'users', route: 'network_types' },
       { key: 'network_communities', label: 'Comunidades do Ecossistema', icon: 'grid', route: 'network_communities' },
       { key: 'commission_settings', label: 'Comissão do Ecossistema', icon: 'tag', route: 'commission_settings' },
+      { key: 'identity_review', label: 'Verificações de Identidade', icon: 'check', route: 'identity_review' },
     ],
   },
   {

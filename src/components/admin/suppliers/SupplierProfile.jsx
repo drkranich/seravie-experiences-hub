@@ -77,11 +77,25 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
     setProducts((x) => x.filter((y) => y.id !== p.id)); notify?.('Produto excluído', 'info')
   }
 
+  const MAX_REVIEW_IMG = 6
+  const reviewImgRef = useRef(null)
+  const [upReviewImg, setUpReviewImg] = useState(false)
+  const addReviewImages = async (files) => {
+    const cur = reviewForm?.images || []
+    const room = MAX_REVIEW_IMG - cur.length
+    if (room <= 0) return notify?.(`Limite de ${MAX_REVIEW_IMG} imagens.`, 'error')
+    setUpReviewImg(true)
+    const urls = []
+    for (const file of Array.from(files).slice(0, room)) { const r = await uploadTo(file, { folder: 'suppliers/reviews', accept: 'image', maxMB: 8 }); if (!r.error) urls.push(r.url) }
+    setUpReviewImg(false)
+    if (reviewImgRef.current) reviewImgRef.current.value = ''
+    if (urls.length) setReviewForm((f) => ({ ...f, images: [...(f.images || []), ...urls] }))
+  }
   const submitReview = async () => {
     if (!reviewForm?.rating) return notify?.('Escolha uma nota', 'error')
     const { data, error } = await supabase.from('supplier_reviews').insert({
       tenant_id: tenantId, supplier_id: s.id, author_name: reviewForm.author_name || null,
-      rating: reviewForm.rating, comment: reviewForm.comment || null,
+      rating: reviewForm.rating, comment: reviewForm.comment || null, images: reviewForm.images || [],
     }).select('*').single()
     if (error) return notify?.(error.message?.includes('policy') || error.message?.includes('row-level') ? 'Só é possível avaliar após cotar ou comprar deste fornecedor.' : 'Erro ao avaliar: ' + error.message, 'error')
     setReviews((r) => [data, ...r]); setReviewForm(null); notify?.('Avaliação publicada', 'success')
@@ -274,12 +288,28 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
                   </div>
                   <input value={reviewForm.author_name} onChange={(e) => setReviewForm((f) => ({ ...f, author_name: e.target.value }))} placeholder="Seu nome (opcional)" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none mb-3" />
                   <textarea value={reviewForm.comment} onChange={(e) => setReviewForm((f) => ({ ...f, comment: e.target.value }))} rows={3} placeholder="Conte sua experiência…" className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" />
+                  {/* fotos da avaliação (até 6) */}
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between mb-1.5"><span className="text-[10px] uppercase tracking-wider text-admin-muted/50">Fotos ({(reviewForm.images || []).length}/{MAX_REVIEW_IMG})</span></div>
+                    <input ref={reviewImgRef} type="file" accept="image/*" multiple onChange={(e) => e.target.files?.length && addReviewImages(e.target.files)} className="hidden" />
+                    <div className="grid grid-cols-6 gap-2">
+                      {(reviewForm.images || []).map((url, i) => (
+                        <div key={i} className="relative group aspect-square rounded-lg overflow-hidden bg-white/[0.04]">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <button onClick={() => setReviewForm((f) => ({ ...f, images: f.images.filter((_, j) => j !== i) }))} className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white/80 hover:text-admin-rose flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="x" className="w-3 h-3" /></button>
+                        </div>
+                      ))}
+                      {(reviewForm.images || []).length < MAX_REVIEW_IMG && (
+                        <button onClick={() => reviewImgRef.current?.click()} disabled={upReviewImg} className="aspect-square rounded-lg glass-input flex items-center justify-center text-admin-muted/50 hover:text-admin-champ transition-colors disabled:opacity-50"><Icon name={upReviewImg ? 'clock' : 'plus'} className="w-4 h-4" /></button>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex justify-end gap-2 mt-3"><button onClick={() => setReviewForm(null)} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={submitReview} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Publicar avaliação</button></div>
                 </div>
               )}
               {reviews.length === 0 ? <Empty icon="star" text="Ainda sem avaliações. Seja o primeiro." />
                 : <div className="space-y-3">{reviews.map((r) => (
-                    <div key={r.id} className="glass rounded-2xl p-4"><div className="flex items-center justify-between mb-1"><p className="text-admin-text text-sm">{r.author_name || 'Anônimo'}</p><Stars value={r.rating} /></div>{r.comment && <p className="text-admin-muted/60 text-sm">{r.comment}</p>}<p className="text-admin-muted/30 text-[10px] mt-2">{new Date(r.created_at).toLocaleDateString('pt-BR')}</p></div>
+                    <div key={r.id} className="glass rounded-2xl p-4"><div className="flex items-center justify-between mb-1"><p className="text-admin-text text-sm">{r.author_name || 'Anônimo'}</p><Stars value={r.rating} /></div>{r.comment && <p className="text-admin-muted/60 text-sm">{r.comment}</p>}{Array.isArray(r.images) && r.images.length > 0 && <div className="flex flex-wrap gap-2 mt-2">{r.images.map((url, i) => <a key={i} href={url} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-lg overflow-hidden bg-white/[0.04]"><img src={url} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform" /></a>)}</div>}<p className="text-admin-muted/30 text-[10px] mt-2">{new Date(r.created_at).toLocaleDateString('pt-BR')}</p></div>
                   ))}</div>}
             </div>
           )}

@@ -25,6 +25,7 @@ import { ExperienceDNA } from './network/ExperienceDNA'
 import { Passport } from './network/Passport'
 import { Certifications } from './network/Certifications'
 import { ExperienceLab } from './network/ExperienceLab'
+import { IdentityVerification } from './network/IdentityVerification'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Network — plataforma social profissional do ecossistema
@@ -50,6 +51,7 @@ const NAV = [
   { key: 'lab', label: 'Experience Lab', icon: 'spark' },
   { key: 'dna', label: 'Experience DNA', icon: 'leaf' },
   { key: 'passport', label: 'Passaporte', icon: 'star' },
+  { key: 'verify_identity', label: 'Verificar identidade', icon: 'check' },
   { key: 'timeline', label: 'Timeline Viva', icon: 'clock' },
 ]
 
@@ -307,6 +309,7 @@ export function SeravieNetwork({ notify }) {
         {view === 'lab' && <ExperienceLab me={me} notify={notify} />}
         {view === 'dna' && <ExperienceDNA notify={notify} />}
         {view === 'passport' && <Passport me={me} notify={notify} />}
+        {view === 'verify_identity' && <IdentityVerification notify={notify} />}
         {view === 'timeline' && <TimelineViva notify={notify} />}
       </div>
     </div>
