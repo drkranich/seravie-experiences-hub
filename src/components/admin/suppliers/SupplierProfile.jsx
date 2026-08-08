@@ -31,6 +31,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
   const [tab, setTab] = useState('sobre')
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [reviewForm, setReviewForm] = useState(null) // { author_name, rating, comment } | null
+  const [canReview, setCanReview] = useState(false)   // só quem cotou/comprou pode avaliar
   const [chatOpen, setChatOpen] = useState(false)
   const [prodModal, setProdModal] = useState(null) // produto em edição/criação | null
   const [editOpen, setEditOpen] = useState(false)
@@ -74,7 +75,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
       tenant_id: tenantId, supplier_id: s.id, author_name: reviewForm.author_name || null,
       rating: reviewForm.rating, comment: reviewForm.comment || null,
     }).select('*').single()
-    if (error) return notify?.('Erro ao avaliar: ' + error.message, 'error')
+    if (error) return notify?.(error.message?.includes('policy') || error.message?.includes('row-level') ? 'Só é possível avaliar após cotar ou comprar deste fornecedor.' : 'Erro ao avaliar: ' + error.message, 'error')
     setReviews((r) => [data, ...r]); setReviewForm(null); notify?.('Avaliação publicada', 'success')
   }
   const s = sup
@@ -107,6 +108,8 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
       ])
       if (!alive) return
       setProducts(p || []); setReviews(r || [])
+      // elegibilidade para avaliar: teve interação real com o fornecedor?
+      try { const { data: ok } = await supabase.rpc('can_review_supplier', { p_supplier: s.id }); if (alive) setCanReview(!!ok) } catch { /* noop */ }
     })()
     return () => { alive = false }
   }, [s.id])
@@ -251,8 +254,9 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
 
           {tab === 'avaliacoes' && (
             <div className="max-w-2xl">
-              <div className="flex justify-end mb-4">
-                {!reviewForm && <button onClick={() => setReviewForm({ author_name: '', rating: 5, comment: '' })} className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors"><Icon name="star" className="w-4 h-4" />Deixar avaliação</button>}
+              <div className="flex justify-end items-center gap-3 mb-4">
+                {!canReview && !isMine && <p className="text-admin-muted/40 text-[11px] flex items-center gap-1.5"><Icon name="check" className="w-3.5 h-3.5" />Avaliações só de quem já cotou ou comprou deste fornecedor.</p>}
+                {!reviewForm && canReview && <button onClick={() => setReviewForm({ author_name: '', rating: 5, comment: '' })} className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ transition-colors"><Icon name="star" className="w-4 h-4" />Deixar avaliação</button>}
               </div>
               {reviewForm && (
                 <div className="glass rounded-2xl p-5 mb-4">
