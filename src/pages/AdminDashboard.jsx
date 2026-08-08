@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTenant } from '../hooks/useTenant'
 import { useSettings } from '../hooks/useSettings'
 import { Icon } from '../components/admin/ui'
+import { CommandPalette } from '../components/admin/CommandPalette'
 import { Overview } from '../components/admin/Overview'
 import { ContentEditor } from '../components/admin/ContentEditor'
 import { ServicesManager } from '../components/admin/ServicesManager'
@@ -248,6 +249,18 @@ export function AdminDashboard({ onExit }) {
   }, [sections])
 
   function go(key) { setActive(key); setNavOpen(false) }
+
+  // Ctrl+K / Cmd+K — abre o buscador global do ecossistema.
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault(); setPaletteOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const toggle = (key) => setExpanded((e) => ({ ...e, [key]: !e[key] }))
 
   const clickItem = (item) => {
@@ -353,6 +366,11 @@ export function AdminDashboard({ onExit }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => setPaletteOpen(true)} className="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] text-admin-muted/60 border border-white/[0.08] rounded-lg hover:bg-white/[0.04] hover:text-admin-text transition-colors" title="Buscar (Ctrl+K)">
+              <Icon name="search" className="w-3.5 h-3.5" />
+              <span className="hidden md:block">Buscar</span>
+              <kbd className="hidden md:block text-[9px] text-admin-muted/40 border border-white/10 rounded px-1">⌘K</kbd>
+            </button>
             <button onClick={onExit} className="inline-flex items-center gap-2 px-3 py-1.5 text-[10px] tracking-wider uppercase border border-admin-champ/20 text-admin-champ/70 rounded-lg hover:bg-white/[0.04] transition-colors"><Icon name="eye" className="w-3.5 h-3.5" /><span className="hidden sm:block">Ver site</span></button>
             <button onClick={logout} className="inline-flex items-center gap-2 px-3 py-1.5 text-[10px] tracking-wider uppercase text-admin-muted/60 hover:text-admin-rose transition-colors rounded-lg hover:bg-white/[0.03]"><Icon name="logout" className="w-3.5 h-3.5" /><span className="hidden sm:block">Sair</span></button>
           </div>
@@ -377,6 +395,8 @@ export function AdminDashboard({ onExit }) {
 
         <main className={`flex-1 ${FULLSCREEN.includes(active) ? '' : WIDE.includes(active) ? 'p-6 lg:p-10 w-full' : 'p-6 lg:p-10 max-w-6xl w-full'}`}>{needsOnboarding ? <Onboarding onDone={loadVerticals} /> : content}</main>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} sections={sections} onNavigate={go} notify={notify} />
 
       <div className="fixed bottom-6 right-6 z-50 space-y-3 pointer-events-none">
         {toasts.map((t) => (
