@@ -97,49 +97,85 @@ export function BuyerOrders({ suppliers = [], notify }) {
 
 function Stat({ label, value, small }) { return <div className="glass rounded-xl px-4 py-3"><p className={`font-serif text-admin-text ${small ? 'text-base' : 'text-lg'}`}>{value}</p><p className="text-[10px] uppercase tracking-wider text-admin-muted/45 mt-0.5">{label}</p></div> }
 
+// Novo pedido: os itens vêm do CATÁLOGO do fornecedor escolhido. O preço é
+// definido pelo fornecedor (travado) — o comprador só escolhe produtos e
+// quantidades. Nunca digita preço de produto do fornecedor.
 function CreateOrder({ suppliers, onClose, onCreate, notify }) {
-  const [f, setF] = useState({ supplier_id: '', supplier_name: '', notes: '', delivery_address: '', expected_at: '', shipping: '' })
-  const [items, setItems] = useState([{ name: '', qty: 1, unit_price: '', note: '' }])
+  const [f, setF] = useState({ supplier_id: '', notes: '', delivery_address: '', expected_at: '', shipping: '' })
+  const [catalog, setCatalog] = useState([])
+  const [loadingCat, setLoadingCat] = useState(false)
+  const [cart, setCart] = useState({}) // product_id -> { product, qty }
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
-  const setItem = (i, k, v) => setItems((it) => it.map((x, j) => j === i ? { ...x, [k]: v } : x))
-  const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0)
+
+  // ao trocar de fornecedor, carrega o catálogo dele (produtos ativos com preço)
+  useEffect(() => {
+    if (!f.supplier_id) { setCatalog([]); setCart({}); return }
+    let alive = true
+    ;(async () => {
+      setLoadingCat(true)
+      const { data } = await supabase.from('supplier_products').select('*').eq('supplier_id', f.supplier_id).eq('status', 'active').order('name')
+      if (alive) { setCatalog(data || []); setCart({}) }
+      setLoadingCat(false)
+    })()
+    return () => { alive = false }
+  }, [f.supplier_id])
+
+  const addProduct = (p) => setCart((c) => ({ ...c, [p.id]: { product: p, qty: (c[p.id]?.qty || 0) + 1 } }))
+  const setQty = (id, qty) => setCart((c) => { if (qty <= 0) { const n = { ...c }; delete n[id]; return n } return { ...c, [id]: { ...c[id], qty } } })
+  const cartItems = Object.values(cart)
+  const subtotal = cartItems.reduce((s, { product, qty }) => s + (Number(product.price) || 0) * qty, 0)
   const total = subtotal + (Number(f.shipping) || 0)
+
   const submit = () => {
-    if (!f.supplier_id && !f.supplier_name.trim()) return notify?.('Escolha o fornecedor', 'error')
-    const clean = items.filter((it) => it.name.trim()).map((it) => ({ name: it.name, qty: Number(it.qty) || 1, unit_price: Number(it.unit_price) || 0, note: it.note || '' }))
-    if (!clean.length) return notify?.('Adicione ao menos 1 item', 'error')
+    if (!f.supplier_id) return notify?.('Escolha o fornecedor', 'error')
+    if (!cartItems.length) return notify?.('Selecione ao menos 1 produto do catálogo', 'error')
+    const items = cartItems.map(({ product, qty }) => ({ name: product.name, qty, unit_price: Number(product.price) || 0, note: product.unit || '' }))
     const sup = suppliers.find((s) => s.id === f.supplier_id)
-    onCreate({ supplier_id: f.supplier_id || null, supplier_name: sup?.name || f.supplier_name, items: clean, subtotal, shipping: Number(f.shipping) || 0, total, notes: f.notes || null, delivery_address: f.delivery_address || null, expected_at: f.expected_at || null })
+    onCreate({ supplier_id: f.supplier_id, supplier_name: sup?.name || 'Fornecedor', items, subtotal, shipping: Number(f.shipping) || 0, total, notes: f.notes || null, delivery_address: f.delivery_address || null, expected_at: f.expected_at || null })
   }
+
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Novo pedido</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-3">
-          <div><label className={lbl}>Fornecedor</label>{suppliers.length ? <GlassSelect value={f.supplier_id} onChange={(v) => set('supplier_id', v)} options={[{ value: '', label: 'Selecione…' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]} /> : <input value={f.supplier_name} onChange={(e) => set('supplier_name', e.target.value)} placeholder="Nome do fornecedor" className={cls} />}</div>
-          <div>
-            <label className={lbl}>Itens</label>
-            <div className="space-y-2">
-              {items.map((it, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <input value={it.name} onChange={(e) => setItem(i, 'name', e.target.value)} placeholder="Produto / serviço" className={`${cls} flex-1`} />
-                  <input type="number" value={it.qty} onChange={(e) => setItem(i, 'qty', e.target.value)} placeholder="Qtd" className={`${cls} w-16`} />
-                  <input type="number" value={it.unit_price} onChange={(e) => setItem(i, 'unit_price', e.target.value)} placeholder="R$" className={`${cls} w-24`} />
-                  <button onClick={() => setItems((x) => x.filter((_, j) => j !== i))} className="text-admin-muted/40 hover:text-admin-rose shrink-0"><Icon name="x" className="w-4 h-4" /></button>
-                </div>
-              ))}
+          <div><label className={lbl}>Fornecedor *</label><GlassSelect value={f.supplier_id} onChange={(v) => set('supplier_id', v)} options={[{ value: '', label: 'Selecione um fornecedor…' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]} /></div>
+
+          {/* catálogo do fornecedor — preço travado */}
+          {f.supplier_id && (
+            <div>
+              <label className={lbl}>Catálogo do fornecedor</label>
+              {loadingCat ? <p className="text-admin-muted/40 text-xs py-4 text-center">Carregando catálogo…</p>
+                : catalog.length === 0 ? <p className="text-admin-muted/40 text-xs py-4 text-center glass-soft rounded-xl">Este fornecedor ainda não cadastrou produtos com preço.</p>
+                  : <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                      {catalog.map((p) => { const inCart = cart[p.id]; return (
+                        <div key={p.id} className="flex items-center gap-3 glass-soft rounded-xl p-2">
+                          <div className="w-10 h-10 rounded-lg bg-white/[0.05] overflow-hidden flex items-center justify-center shrink-0">{p.image_url ? <img src={p.image_url} alt="" className="w-full h-full object-cover" /> : <Icon name="box" className="w-4 h-4 text-admin-champ/50" />}</div>
+                          <div className="min-w-0 flex-1"><p className="text-admin-text text-sm truncate">{p.name}</p><p className="text-admin-champ text-xs">{p.price ? brl(p.price) : 'Sob consulta'}{p.unit ? ` / ${p.unit}` : ''}</p></div>
+                          {inCart ? (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button onClick={() => setQty(p.id, inCart.qty - 1)} className="w-6 h-6 rounded-md glass-input text-admin-muted/70 hover:text-admin-champ flex items-center justify-center">−</button>
+                              <span className="text-admin-text text-sm w-6 text-center">{inCart.qty}</span>
+                              <button onClick={() => setQty(p.id, inCart.qty + 1)} className="w-6 h-6 rounded-md glass-input text-admin-muted/70 hover:text-admin-champ flex items-center justify-center">+</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => addProduct(p)} className="text-[11px] px-3 py-1.5 rounded-lg bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20 transition-colors shrink-0 flex items-center gap-1"><Icon name="plus" className="w-3.5 h-3.5" />Adicionar</button>
+                          )}
+                        </div>
+                      )})}
+                    </div>}
             </div>
-            <button onClick={() => setItems((x) => [...x, { name: '', qty: 1, unit_price: '', note: '' }])} className="text-[11px] text-admin-champ/80 hover:text-admin-champ flex items-center gap-1 mt-2"><Icon name="plus" className="w-3.5 h-3.5" />Adicionar item</button>
-          </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Frete (R$)</label><input type="number" value={f.shipping} onChange={(e) => set('shipping', e.target.value)} className={cls} /></div>
+            <div><label className={lbl}>Frete (R$)</label><input type="number" value={f.shipping} onChange={(e) => set('shipping', e.target.value)} placeholder="0,00" className={cls} /></div>
             <div><label className={lbl}>Entrega prevista</label><GlassDate value={f.expected_at} onChange={(v) => set('expected_at', v)} placeholder="dd/mm/aaaa" /></div>
           </div>
           <div><label className={lbl}>Endereço de entrega</label><input value={f.delivery_address} onChange={(e) => set('delivery_address', e.target.value)} className={cls} /></div>
           <div><label className={lbl}>Observações</label><textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} rows={2} className={`${cls} resize-none`} /></div>
-          <div className="glass-soft rounded-xl p-3 flex items-center justify-between text-sm"><span className="text-admin-muted/60">Total</span><span className="text-admin-champ font-serif">{brl(total)}</span></div>
+          <div className="glass-soft rounded-xl p-3 flex items-center justify-between text-sm"><span className="text-admin-muted/60">Total ({cartItems.length} item/ns)</span><span className="text-admin-champ font-serif">{brl(total)}</span></div>
         </div>
         <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={submit} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar pedido</button></div>
       </div>

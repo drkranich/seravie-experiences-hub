@@ -69,6 +69,54 @@ export function CommissionSettings({ notify }) {
         <p className="text-[11px] uppercase tracking-wider text-admin-champ/60 mb-2">Prévia (como o usuário vê)</p>
         <CommissionNotice settings={f} />
       </div>
+
+      <div className="mt-8">
+        <h2 className="font-serif text-xl text-admin-text mb-1">Logística — Melhor Envio</h2>
+        <p className="text-admin-muted/50 text-sm mb-3">Conta única da plataforma para cotação de frete no checkout. O token é renovado automaticamente.</p>
+        <MelhorEnvioCard notify={notify} />
+      </div>
+    </div>
+  )
+}
+
+function MelhorEnvioCard({ notify }) {
+  const [status, setStatus] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const check = async () => {
+    const { data } = await supabase.functions.invoke('melhor-envio-auth', { body: { action: 'status' } })
+    setStatus(data || {})
+  }
+  useEffect(() => { check() }, [])
+
+  const refresh = async () => {
+    setBusy(true)
+    const { data, error } = await supabase.functions.invoke('melhor-envio-auth', { body: { action: 'refresh' } })
+    setBusy(false)
+    if (error) return notify?.('Erro: ' + error.message, 'error')
+    if (data?.error === 'oauth_not_configured') return notify?.('Configure ME_CLIENT_ID e ME_CLIENT_SECRET nos Secrets do Supabase.', 'error')
+    if (data?.error) return notify?.(data.detail || data.error, 'error')
+    notify?.('Token renovado com sucesso.', 'success'); check()
+  }
+
+  const connected = status?.connected
+  const valid = status?.valid
+
+  return (
+    <div className="glass rounded-2xl p-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${valid ? 'bg-admin-sage/15' : connected ? 'bg-admin-gold/15' : 'bg-white/[0.05]'}`}><Icon name="truck" className={`w-4 h-4 ${valid ? 'text-admin-sage' : connected ? 'text-admin-gold' : 'text-admin-muted/50'}`} /></div>
+          <div>
+            <p className="text-admin-text text-sm font-medium">{valid ? 'Conectado e ativo' : connected ? 'Conectado — token expirado' : 'Não conectado'}</p>
+            {status?.expires_at && <p className="text-admin-muted/45 text-[11px]">Token válido até {new Date(status.expires_at).toLocaleString('pt-BR')}</p>}
+          </div>
+        </div>
+        <button onClick={refresh} disabled={busy} className="text-sm glass-input text-admin-champ/80 hover:text-admin-champ px-4 py-2 rounded-xl transition-colors flex items-center gap-2 disabled:opacity-50"><Icon name="refresh" className="w-4 h-4" />{busy ? 'Renovando…' : 'Renovar token'}</button>
+      </div>
+      <div className="mt-4 pt-4 border-t border-white/[0.06] text-[11px] text-admin-muted/50 leading-relaxed">
+        <p className="mb-1">Para conectar pela primeira vez, cadastre nos Secrets do Supabase: <span className="text-admin-champ/70">ME_CLIENT_ID</span>, <span className="text-admin-champ/70">ME_CLIENT_SECRET</span> (e opcionalmente <span className="text-admin-champ/70">MELHOR_ENVIO_BASE</span> para sandbox). Depois autorize a aplicação no Melhor Envio e a plataforma troca o código pelos tokens (função <span className="text-admin-champ/70">melhor-envio-auth</span>, ação <span className="text-admin-champ/70">exchange</span>). A partir daí o token é renovado sozinho a cada cotação.</p>
+      </div>
     </div>
   )
 }
