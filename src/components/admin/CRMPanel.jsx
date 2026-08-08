@@ -7,6 +7,8 @@ import { logAudit } from '../../lib/audit'
 import { CRMDashboard } from './crm/CRMDashboard'
 import { Customer360 } from './crm/Customer360'
 import { Companies } from './crm/Companies'
+import { CRMAnalytics } from './crm/CRMAnalytics'
+import { CRMSegments } from './crm/CRMSegments'
 
 const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
@@ -106,7 +108,7 @@ export function CRMPanel({ notify }) {
 
       {/* Navegação */}
       <div className="flex gap-1.5 mb-6 flex-wrap">
-        {[['dashboard', 'Dashboard', 'grid'], ['contacts', 'Contatos', 'user'], ['companies', 'Empresas', 'building']].map(([k, v, ic]) => (
+        {[['dashboard', 'Dashboard', 'grid'], ['contacts', 'Contatos', 'user'], ['companies', 'Empresas', 'building'], ['segments', 'Segmentação', 'search'], ['analytics', 'Analytics', 'chart']].map(([k, v, ic]) => (
           <button key={k} onClick={() => setView(k)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-colors ${view === k ? 'bg-admin-champ/15 text-admin-champ border border-admin-champ/20' : 'text-admin-muted hover:text-admin-text border border-transparent'}`}>
             <Icon name={ic} className="w-4 h-4" />{v}
           </button>
@@ -115,6 +117,8 @@ export function CRMPanel({ notify }) {
 
       {view === 'dashboard' && <CRMDashboard notify={notify} onOpenContact={(c) => setC360(c)} />}
       {view === 'companies' && <Companies notify={notify} onOpenContact={(c) => setC360(c)} />}
+      {view === 'segments' && <CRMSegments notify={notify} onOpenContact={(c) => setC360(c)} />}
+      {view === 'analytics' && <CRMAnalytics notify={notify} />}
 
       {view === 'contacts' && (
       <>
