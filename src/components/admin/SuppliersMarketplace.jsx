@@ -10,6 +10,10 @@ import { SupplierProfile } from './suppliers/SupplierProfile'
 import { Moodboards } from './suppliers/Moodboards'
 import { Comparator } from './suppliers/Comparator'
 import { RfqCenter } from './suppliers/RfqCenter'
+import { Catalogs } from './suppliers/Catalogs'
+import { TechLibrary } from './suppliers/TechLibrary'
+import { BuyerProjects } from './suppliers/BuyerProjects'
+import { PurchasingAnalytics, PurchasingAI } from './suppliers/PurchasingExtras'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Suppliers — marketplace B2B de descoberta (estilo Faire/Archiproducts)
@@ -19,9 +23,14 @@ import { RfqCenter } from './suppliers/RfqCenter'
 
 const NAV = [
   { key: 'discover', label: 'Descobrir', icon: 'search' },
+  { key: 'catalogs', label: 'Catálogos', icon: 'grid' },
   { key: 'compare', label: 'Comparar', icon: 'layers' },
   { key: 'rfq', label: 'Cotações', icon: 'mail' },
+  { key: 'ai', label: 'IA de Compras', icon: 'sparkles' },
+  { key: 'projects', label: 'Projetos', icon: 'layout' },
+  { key: 'library', label: 'Biblioteca Técnica', icon: 'book' },
   { key: 'moodboards', label: 'Moodboards', icon: 'palette' },
+  { key: 'analytics', label: 'Analytics', icon: 'chart' },
   { key: 'favorites', label: 'Favoritos', icon: 'heart' },
 ]
 
@@ -238,6 +247,11 @@ export function SuppliersMarketplace({ notify }) {
         {view === 'rfq' && (
           <RfqCenter suppliers={suppliers} presetSupplierIds={rfqPreset} onConsumePreset={() => setRfqPreset(null)} notify={notify} />
         )}
+        {view === 'catalogs' && <Catalogs suppliers={suppliers} onOpenSupplier={setOpenSupplier} />}
+        {view === 'ai' && <PurchasingAI notify={notify} />}
+        {view === 'projects' && <BuyerProjects suppliers={suppliers} onOpenSupplier={setOpenSupplier} notify={notify} />}
+        {view === 'library' && <TechLibrary suppliers={suppliers} notify={notify} />}
+        {view === 'analytics' && <PurchasingAnalytics suppliers={suppliers} />}
         {view === 'moodboards' && <Moodboards suppliers={suppliers} onOpenSupplier={setOpenSupplier} notify={notify} />}
       </div>
     </div>
