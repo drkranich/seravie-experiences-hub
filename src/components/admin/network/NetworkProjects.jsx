@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../hooks/useAuth'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, GlassSelect } from '../ui'
+import { Icon, GlassSelect, GlassDate } from '../ui'
+import { uploadTo } from '../../../lib/storage'
 import { initials, timeAgo } from '../../../lib/networkSocial'
 
 // Projetos colaborativos — equipe convidada da rede trabalha junto no projeto.
 
 const ROLES = ['Arquiteto', 'Designer', 'Fornecedor', 'Fotógrafo', 'Marceneiro', 'Consultor', 'Gerente']
+const PROJECT_CATS = ['Arquitetura', 'Interiores', 'Branding', 'Evento', 'Reforma', 'Novo negócio', 'Franquia', 'Produto', 'Outro']
 
 function Avatar({ name, url, size = 'w-8 h-8', text = 'text-[11px]' }) {
   return url ? <img src={url} alt={name} className={`${size} rounded-full object-cover`} />
@@ -72,23 +74,51 @@ export function NetworkProjects({ me, notify }) {
               )})}
             </div>}
 
-      {creating && <CreateModal onClose={() => setCreating(false)} onCreate={create} />}
+      {creating && <CreateModal onClose={() => setCreating(false)} onCreate={create} notify={notify} />}
     </div>
   )
 }
 
-function CreateModal({ onClose, onCreate }) {
-  const [f, setF] = useState({ name: '', description: '' })
+function CreateModal({ onClose, onCreate, notify }) {
+  const [f, setF] = useState({ name: '', description: '', client: '', category: '', location: '', budget: '', deadline: '', goals: '', cover_url: '' })
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
+  const [uploading, setUploading] = useState(false)
+  const coverRef = useRef(null)
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
+  const upCover = async (file) => {
+    setUploading(true)
+    const r = await uploadTo(file, { folder: 'network/projects', accept: 'image', maxMB: 10 })
+    setUploading(false)
+    if (r.error) return notify?.(r.error, 'error')
+    set('cover_url', r.url)
+  }
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Novo projeto</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-3">
-          <input value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} placeholder="Nome do projeto (ex.: Boutique Gourmet)" className={cls} />
-          <textarea value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} rows={3} placeholder="Descrição" className={`${cls} resize-none`} />
+          <div>
+            <label className={lbl}>Imagem de capa</label>
+            <input ref={coverRef} type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && upCover(e.target.files[0])} className="hidden" />
+            <button type="button" onClick={() => coverRef.current?.click()} disabled={uploading} className="w-full h-24 rounded-xl overflow-hidden glass-input flex items-center justify-center text-admin-muted/60 hover:text-admin-champ transition-colors disabled:opacity-50">
+              {f.cover_url ? <img src={f.cover_url} alt="" className="w-full h-full object-cover" /> : <span className="flex items-center gap-2 text-sm"><Icon name={uploading ? 'clock' : 'image'} className="w-5 h-5" />{uploading ? 'Enviando…' : 'Enviar capa'}</span>}
+            </button>
+          </div>
+          <div><label className={lbl}>Nome do projeto *</label><input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Ex.: Boutique Gourmet" className={cls} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Cliente</label><input value={f.client} onChange={(e) => set('client', e.target.value)} placeholder="Nome do cliente" className={cls} /></div>
+            <div><label className={lbl}>Categoria</label><GlassSelect value={f.category} onChange={(v) => set('category', v)} options={[{ value: '', label: '—' }, ...PROJECT_CATS.map((c) => ({ value: c, label: c }))]} /></div>
+          </div>
+          <div><label className={lbl}>Descrição</label><textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="Sobre o projeto, contexto e escopo" className={`${cls} resize-none`} /></div>
+          <div><label className={lbl}>Objetivos / entregáveis</label><textarea value={f.goals} onChange={(e) => set('goals', e.target.value)} rows={2} placeholder="O que precisa ser entregue" className={`${cls} resize-none`} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Localização</label><input value={f.location} onChange={(e) => set('location', e.target.value)} placeholder="Cidade / remoto" className={cls} /></div>
+            <div><label className={lbl}>Orçamento (R$)</label><input type="number" value={f.budget} onChange={(e) => set('budget', e.target.value)} placeholder="opcional" className={cls} /></div>
+          </div>
+          <div><label className={lbl}>Prazo</label><GlassDate value={f.deadline} onChange={(v) => set('deadline', v)} placeholder="dd/mm/aaaa" /></div>
         </div>
-        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.name.trim() && onCreate({ name: f.name, description: f.description || null, status: 'active' })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar</button></div>
+        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.name.trim() && onCreate({ name: f.name, description: f.description || null, client: f.client || null, category: f.category || null, location: f.location || null, budget: f.budget ? Number(f.budget) : null, deadline: f.deadline || null, goals: f.goals || null, cover_url: f.cover_url || null, status: 'active' })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar</button></div>
       </div>
     </div>
   )
@@ -124,8 +154,15 @@ function ProjectRoom({ project, team, members, tenantId, onBack, reload, notify 
       <button onClick={onBack} className="flex items-center gap-1.5 text-admin-muted/60 hover:text-admin-text text-sm mb-4 transition-colors"><Icon name="down" className="w-4 h-4 rotate-90" /> Voltar aos projetos</button>
       <div className="glass rounded-2xl p-6 mb-5 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="font-serif text-2xl text-admin-text">{project.name}</h1>
+          <div className="flex items-center gap-2 flex-wrap"><h1 className="font-serif text-2xl text-admin-text">{project.name}</h1>{project.category && <span className="text-[11px] px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/60">{project.category}</span>}</div>
+          {project.client && <p className="text-admin-muted/45 text-xs mt-1">Cliente: {project.client}</p>}
           {project.description && <p className="text-admin-muted/65 text-sm mt-2 max-w-2xl">{project.description}</p>}
+          {project.goals && <div className="mt-2"><p className="text-[10px] uppercase tracking-wider text-admin-champ/60 mb-0.5">Objetivos</p><p className="text-admin-muted/60 text-sm max-w-2xl whitespace-pre-wrap">{project.goals}</p></div>}
+          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 text-[11px] text-admin-muted/50">
+            {project.location && <span className="flex items-center gap-1"><Icon name="map" className="w-3.5 h-3.5" />{project.location}</span>}
+            {project.budget ? <span className="flex items-center gap-1"><Icon name="tag" className="w-3.5 h-3.5" />R$ {Number(project.budget).toLocaleString('pt-BR')}</span> : null}
+            {project.deadline && <span className="flex items-center gap-1"><Icon name="calendar" className="w-3.5 h-3.5" />{new Date(project.deadline).toLocaleDateString('pt-BR')}</span>}
+          </div>
         </div>
         <button onClick={share} className="flex items-center gap-2 glass-input text-admin-muted/70 hover:text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors shrink-0"><Icon name="share" className="w-4 h-4" />Compartilhar link</button>
       </div>

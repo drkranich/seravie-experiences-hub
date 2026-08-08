@@ -463,7 +463,9 @@ export function GlassMulti({ value = [], onChange, options = [], placeholder = '
  */
 const pad2 = (n) => String(n).padStart(2, '0')
 const toYMD = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-const parseYMD = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1) }
+const parseYMD = (s) => { const raw = String(s).split('T')[0]; const [y, m, d] = raw.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1) }
+// Extrai HH:mm de um valor 'YYYY-MM-DDTHH:mm' (ou variações). Default 09:00.
+const parseTime = (s) => { const t = String(s).split('T')[1] || ''; const [h, mi] = t.split(':').map(Number); return { h: Number.isFinite(h) ? h : 9, mi: Number.isFinite(mi) ? mi : 0 } }
 
 // Limites do container rolável mais próximo (ex.: o card/modal), para o
 // popover abrir para o lado com mais espaço e nunca ser truncado.
@@ -486,15 +488,18 @@ function popoverPlacement(el, ideal) {
   return { up, maxH: Math.max(180, Math.floor((up ? above : below) - 14)) }
 }
 
-export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', className = '' }) {
+export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', className = '', withTime = false }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const popRef = useRef(null)
   const selected = value ? parseYMD(value) : null
   const [view, setView] = useState(selected || new Date())
-  const style = useAnchoredPopover(ref, open, setOpen, { width: 256, ideal: 340, popRef })
+  const t0 = parseTime(value)
+  const [hh, setHh] = useState(t0.h)
+  const [mm2, setMm2] = useState(t0.mi)
+  const style = useAnchoredPopover(ref, open, setOpen, { width: withTime ? 340 : 256, ideal: withTime ? 380 : 340, popRef })
 
-  const toggle = () => setOpen((o) => { if (!o) setView(selected || new Date()); return !o })
+  const toggle = () => setOpen((o) => { if (!o) { setView(selected || new Date()); const t = parseTime(value); setHh(t.h); setMm2(t.mi) } return !o })
 
   useEffect(() => {
     if (!open) return
@@ -512,38 +517,61 @@ export function GlassDate({ value, onChange, placeholder = 'dd/mm/aaaa', classNa
   const same = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
   const cells = [...Array(firstDay).fill(null), ...Array.from({ length: days }, (_, i) => new Date(y, m, i + 1))]
   const monthLabel = view.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-  const pick = (d) => { onChange(toYMD(d)); setOpen(false) }
+  const emit = (d, h, mi) => withTime ? `${toYMD(d)}T${pad2(h)}:${pad2(mi)}` : toYMD(d)
+  const pick = (d) => { onChange(emit(d, hh, mm2)); if (!withTime) setOpen(false) }
+  const setTime = (h, mi) => { setHh(h); setMm2(mi); if (selected) onChange(emit(selected, h, mi)) }
+  const label = selected
+    ? `${pad2(selected.getDate())}/${pad2(selected.getMonth() + 1)}/${selected.getFullYear()}${withTime ? ` · ${pad2(hh)}:${pad2(mm2)}` : ''}`
+    : placeholder
 
   return (
     <div ref={ref} className={`relative ${className}`}>
       <button type="button" onClick={toggle}
         className="w-full glass-input rounded-xl px-4 py-2.5 text-sm outline-none flex items-center justify-between gap-2 text-left">
-        <span className={selected ? 'text-admin-text' : 'text-admin-muted/40'}>{selected ? `${pad2(selected.getDate())}/${pad2(selected.getMonth() + 1)}/${selected.getFullYear()}` : placeholder}</span>
-        <Icon name="calendar" className="w-4 h-4 text-admin-champ/60 shrink-0" />
+        <span className={selected ? 'text-admin-text' : 'text-admin-muted/40'}>{label}</span>
+        <Icon name={withTime ? 'clock' : 'calendar'} className="w-4 h-4 text-admin-champ/60 shrink-0" />
       </button>
       {open && style && createPortal(
         <div ref={popRef} style={style} className="glass-pop rounded-xl p-2.5 shadow-2xl overflow-auto">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-admin-champ text-xs font-medium capitalize">{monthLabel}</p>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => setView(new Date(y, m - 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
-              <button type="button" onClick={() => setView(new Date(y, m + 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-admin-champ text-xs font-medium capitalize">{monthLabel}</p>
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => setView(new Date(y, m - 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="up" className="w-3.5 h-3.5 -rotate-90" /></button>
+                  <button type="button" onClick={() => setView(new Date(y, m + 1, 1))} className="w-6 h-6 rounded-lg hover:bg-white/[0.06] text-admin-muted flex items-center justify-center"><Icon name="down" className="w-3.5 h-3.5 -rotate-90" /></button>
+                </div>
+              </div>
+              <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="text-center text-[9px] text-admin-muted/40 py-0.5">{d}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-0.5">
+                {cells.map((d, i) => d ? (
+                  <button key={i} type="button" onClick={() => pick(d)}
+                    className={`h-6 rounded-md text-[11px] transition-colors ${same(d, selected) ? 'bg-admin-champ text-admin-bg font-medium' : same(d, today) ? 'text-admin-champ ring-1 ring-admin-champ/30' : 'text-admin-text hover:bg-white/[0.06]'}`}>
+                    {d.getDate()}
+                  </button>
+                ) : <div key={i} />)}
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-7 gap-0.5 mb-0.5">
-            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => <div key={i} className="text-center text-[9px] text-admin-muted/40 py-0.5">{d}</div>)}
-          </div>
-          <div className="grid grid-cols-7 gap-0.5">
-            {cells.map((d, i) => d ? (
-              <button key={i} type="button" onClick={() => pick(d)}
-                className={`h-6 rounded-md text-[11px] transition-colors ${same(d, selected) ? 'bg-admin-champ text-admin-bg font-medium' : same(d, today) ? 'text-admin-champ ring-1 ring-admin-champ/30' : 'text-admin-text hover:bg-white/[0.06]'}`}>
-                {d.getDate()}
-              </button>
-            ) : <div key={i} />)}
+            {withTime && (
+              <div className="flex gap-1 border-l border-white/[0.06] pl-2">
+                <div className="w-11 h-[176px] overflow-y-auto scrollbar-thin flex flex-col gap-0.5">
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <button key={h} type="button" onClick={() => setTime(h, mm2)} className={`shrink-0 h-6 rounded-md text-[11px] transition-colors ${hh === h ? 'bg-admin-champ/20 text-admin-champ ring-1 ring-admin-champ/40' : 'text-admin-muted/70 hover:bg-white/[0.06]'}`}>{pad2(h)}</button>
+                  ))}
+                </div>
+                <div className="w-11 h-[176px] overflow-y-auto scrollbar-thin flex flex-col gap-0.5">
+                  {Array.from({ length: 12 }, (_, k) => k * 5).map((mi) => (
+                    <button key={mi} type="button" onClick={() => setTime(hh, mi)} className={`shrink-0 h-6 rounded-md text-[11px] transition-colors ${mm2 === mi ? 'bg-admin-champ/20 text-admin-champ ring-1 ring-admin-champ/40' : 'text-admin-muted/70 hover:bg-white/[0.06]'}`}>{pad2(mi)}</button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-white/[0.06]">
             <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-[11px] text-admin-muted/60 hover:text-admin-rose">Limpar</button>
-            <button type="button" onClick={() => pick(new Date())} className="text-[11px] text-admin-champ hover:underline">Hoje</button>
+            <button type="button" onClick={() => { const d = new Date(); pick(d); if (withTime) setOpen(false) }} className="text-[11px] text-admin-champ hover:underline">{withTime ? 'Agora' : 'Hoje'}</button>
           </div>
         </div>, document.body
       )}

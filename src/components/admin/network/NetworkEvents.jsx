@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, GlassSelect } from '../ui'
+import { Icon, GlassSelect, GlassDate } from '../ui'
+import { uploadTo } from '../../../lib/storage'
 
 // Eventos do Network — congressos, lives, workshops, webinars, missões técnicas.
 // Criar, inscrever-se, ver participantes.
@@ -67,7 +68,12 @@ export function NetworkEvents({ me, notify }) {
                   <div className="p-4 flex-1 flex flex-col">
                     <p className="text-admin-text font-medium">{ev.title}</p>
                     <p className="text-admin-muted/45 text-xs mt-1 flex items-center gap-1.5"><Icon name="clock" className="w-3.5 h-3.5" />{fmtDate(ev.starts_at)}{ev.city ? ` · ${ev.city}` : ''}</p>
+                    {ev.speaker && <p className="text-admin-muted/45 text-xs mt-1 flex items-center gap-1.5"><Icon name="user" className="w-3.5 h-3.5" />{ev.speaker}</p>}
                     {ev.description && <p className="text-admin-muted/50 text-xs mt-2 line-clamp-2 flex-1">{ev.description}</p>}
+                    <div className="flex items-center gap-2 mt-2">
+                      {ev.price != null && <span className="text-[10px] px-2 py-0.5 rounded-lg bg-admin-champ/12 text-admin-champ">{ev.price > 0 ? `R$ ${Number(ev.price).toLocaleString('pt-BR')}` : 'Gratuito'}</span>}
+                      {ev.capacity ? <span className="text-[10px] px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/55">{ev.capacity} vagas</span> : null}
+                    </div>
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.05]">
                       <span className="text-admin-muted/40 text-[11px]">{ev.signups_count || 0} inscritos</span>
                       <button onClick={() => toggleSignup(ev)} className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${joined ? 'bg-admin-sage/12 text-admin-sage' : 'bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20'}`}>{joined ? '✓ Inscrito' : 'Inscrever-se'}</button>
@@ -77,30 +83,62 @@ export function NetworkEvents({ me, notify }) {
               )})}
             </div>}
 
-      {creating && <CreateEvent onClose={() => setCreating(false)} onCreate={create} />}
+      {creating && <CreateEvent onClose={() => setCreating(false)} onCreate={create} notify={notify} />}
     </div>
   )
 }
 
-function CreateEvent({ onClose, onCreate }) {
-  const [f, setF] = useState({ title: '', kind: 'workshop', description: '', starts_at: '', city: '', url: '' })
+const MODALITY = [{ value: '', label: 'Modalidade' }, { value: 'presencial', label: 'Presencial' }, { value: 'online', label: 'Online' }, { value: 'hibrido', label: 'Híbrido' }]
+
+function CreateEvent({ onClose, onCreate, notify }) {
+  const [f, setF] = useState({ title: '', kind: 'workshop', description: '', starts_at: '', ends_at: '', city: '', state: '', location: '', modality: '', speaker: '', price: '', capacity: '', url: '', cover_url: '' })
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
+  const [uploading, setUploading] = useState(false)
+  const coverRef = useRef(null)
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
+  const upCover = async (file) => {
+    setUploading(true)
+    const r = await uploadTo(file, { folder: 'network/events', accept: 'image', maxMB: 10 })
+    setUploading(false)
+    if (r.error) return notify?.(r.error, 'error')
+    set('cover_url', r.url)
+  }
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="glass-pop rounded-2xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Criar evento</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-3">
-          <input value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Título do evento *" className={cls} />
-          <div className="grid grid-cols-2 gap-3">
-            <GlassSelect value={f.kind} onChange={(v) => set('kind', v)} options={Object.entries(KINDS).map(([value, label]) => ({ value, label }))} />
-            <input value={f.city} onChange={(e) => set('city', e.target.value)} placeholder="Cidade / Online" className={cls} />
+          {/* capa */}
+          <div>
+            <label className={lbl}>Imagem do evento (capa)</label>
+            <input ref={coverRef} type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && upCover(e.target.files[0])} className="hidden" />
+            <button type="button" onClick={() => coverRef.current?.click()} disabled={uploading} className="w-full h-28 rounded-xl overflow-hidden glass-input flex items-center justify-center text-admin-muted/60 hover:text-admin-champ transition-colors disabled:opacity-50">
+              {f.cover_url ? <img src={f.cover_url} alt="" className="w-full h-full object-cover" /> : <span className="flex items-center gap-2 text-sm"><Icon name={uploading ? 'clock' : 'image'} className="w-5 h-5" />{uploading ? 'Enviando…' : 'Enviar imagem'}</span>}
+            </button>
           </div>
-          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5">Data e hora</label><input type="datetime-local" value={f.starts_at} onChange={(e) => set('starts_at', e.target.value)} className={cls} /></div>
-          <textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="Descrição" className={`${cls} resize-none`} />
-          <input value={f.url} onChange={(e) => set('url', e.target.value)} placeholder="Link (inscrição / transmissão)" className={cls} />
+          <div><label className={lbl}>Título *</label><input value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Título do evento" className={cls} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Tipo</label><GlassSelect value={f.kind} onChange={(v) => set('kind', v)} options={Object.entries(KINDS).map(([value, label]) => ({ value, label }))} /></div>
+            <div><label className={lbl}>Modalidade</label><GlassSelect value={f.modality} onChange={(v) => set('modality', v)} options={MODALITY} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Início (data e hora)</label><GlassDate withTime value={f.starts_at} onChange={(v) => set('starts_at', v)} placeholder="dd/mm/aaaa · hh:mm" /></div>
+            <div><label className={lbl}>Término (opcional)</label><GlassDate withTime value={f.ends_at} onChange={(v) => set('ends_at', v)} placeholder="dd/mm/aaaa · hh:mm" /></div>
+          </div>
+          <div><label className={lbl}>Local / endereço</label><input value={f.location} onChange={(e) => set('location', e.target.value)} placeholder="Ex.: Auditório Seravie, Av. Paulista 1000" className={cls} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Cidade</label><input value={f.city} onChange={(e) => set('city', e.target.value)} placeholder="Cidade / Online" className={cls} /></div>
+            <div><label className={lbl}>Palestrante / anfitrião</label><input value={f.speaker} onChange={(e) => set('speaker', e.target.value)} placeholder="Nome" className={cls} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Valor (R$)</label><input type="number" value={f.price} onChange={(e) => set('price', e.target.value)} placeholder="0 = gratuito" className={cls} /></div>
+            <div><label className={lbl}>Vagas</label><input type="number" value={f.capacity} onChange={(e) => set('capacity', e.target.value)} placeholder="Limite de inscritos" className={cls} /></div>
+          </div>
+          <div><label className={lbl}>Descrição</label><textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="Programação, o que os participantes vão aprender…" className={`${cls} resize-none`} /></div>
+          <div><label className={lbl}>Link (inscrição / transmissão)</label><input value={f.url} onChange={(e) => set('url', e.target.value)} placeholder="https://…" className={cls} /></div>
         </div>
-        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.title.trim() && onCreate({ title: f.title, kind: f.kind, description: f.description || null, starts_at: f.starts_at || null, city: f.city || null, url: f.url || null })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar</button></div>
+        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.title.trim() && onCreate({ title: f.title, kind: f.kind, modality: f.modality || null, description: f.description || null, starts_at: f.starts_at || null, ends_at: f.ends_at || null, city: f.city || null, location: f.location || null, speaker: f.speaker || null, price: f.price ? Number(f.price) : null, capacity: f.capacity ? parseInt(f.capacity) : null, url: f.url || null, cover_url: f.cover_url || null })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar</button></div>
       </div>
     </div>
   )
