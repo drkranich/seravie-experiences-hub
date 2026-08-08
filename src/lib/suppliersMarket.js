@@ -1,24 +1,53 @@
 // suppliersMarket — vocabulário e helpers do marketplace Seravie Suppliers.
 
 export const SUPPLIER_CATEGORIES = {
-  arquitetura: 'Arquitetura', mobiliario: 'Mobiliário', marcenaria: 'Marcenaria',
-  iluminacao: 'Iluminação', paisagismo: 'Paisagismo', embalagens: 'Embalagens',
-  grafica: 'Gráfica', comunicacao_visual: 'Comunicação Visual', uniformes: 'Uniformes',
-  aromatizacao: 'Fragrâncias & Aromas', tecnologia: 'Tecnologia', sinalizacao: 'Sinalização',
-  louças: 'Louças & Utensílios', decoracao: 'Decoração', logistica: 'Logística',
-  ceramica: 'Cerâmica', costura: 'Têxtil & Costura', velas: 'Velas',
-  cafe: 'Cafés Especiais', vinho: 'Vinícola', chocolate: 'Chocolateria',
-  rural: 'Produtor Rural', automacao: 'Automação', brindes: 'Brindes',
+  // Projeto & Espaço
+  arquitetura: 'Arquitetura', interiores: 'Design de Interiores', mobiliario: 'Mobiliário',
+  marcenaria: 'Marcenaria', serralheria: 'Serralheria & Metais', vidracaria: 'Vidraçaria',
+  iluminacao: 'Iluminação', paisagismo: 'Paisagismo', jardinagem: 'Jardinagem & Plantas',
+  revestimentos: 'Revestimentos & Pisos', marmoraria: 'Marmoraria & Pedras', gesso: 'Gesso & Molduras',
+  cenografia: 'Cenografia', acustica: 'Acústica & Isolamento', climatizacao: 'Climatização',
+  // Marca & Comunicação
+  grafica: 'Gráfica', comunicacao_visual: 'Comunicação Visual', sinalizacao: 'Sinalização',
+  fotografia: 'Fotografia', video: 'Vídeo & Audiovisual', design: 'Design & Branding',
+  impressao_3d: 'Impressão 3D', letreiros: 'Letreiros & Neon',
+  // Hospitalidade & Gastronomia
+  louças: 'Louças & Utensílios', cristaleria: 'Cristaleria', talheres: 'Talheres & Metais de Mesa',
+  cozinha_industrial: 'Cozinha Industrial', cafe: 'Cafés Especiais', vinho: 'Vinícola',
+  cervejaria: 'Cervejaria', chocolate: 'Chocolateria', confeitaria: 'Confeitaria & Padaria',
+  destilaria: 'Destilaria & Bar', enxoval: 'Enxoval & Rouparia',
+  // Estética & Sensorial
+  aromatizacao: 'Fragrâncias & Aromas', velas: 'Velas', saboaria: 'Saboaria & Cosmética',
+  perfumaria: 'Perfumaria', sonorizacao: 'Sonorização & Playlists', floricultura: 'Floricultura & Arranjos',
+  // Produção & Artesanato
+  ceramica: 'Cerâmica', costura: 'Têxtil & Costura', tapecaria: 'Tapeçaria & Tecidos',
+  couro: 'Couro & Artefatos', vidro_soprado: 'Vidro Soprado', metais_artisticos: 'Metais Artísticos',
+  papelaria: 'Papelaria Fina', embalagens: 'Embalagens', brindes: 'Brindes', uniformes: 'Uniformes',
+  // Negócio, Tecnologia & Serviços
+  tecnologia: 'Tecnologia', automacao: 'Automação', seguranca: 'Segurança & CFTV',
+  audiovisual_pro: 'Áudio & Vídeo Profissional', energia: 'Energia & Solar', decoracao: 'Decoração',
+  logistica: 'Logística', montagem: 'Montagem & Instalação', limpeza: 'Limpeza & Conservação',
+  eventos: 'Eventos & Locação', rural: 'Produtor Rural', consultoria: 'Consultoria', outros: 'Outros',
 }
 
 // ícone (do set do design system) por categoria — para os chips visuais
 export const CATEGORY_ICON = {
-  arquitetura: 'layout', mobiliario: 'grid', marcenaria: 'box', iluminacao: 'spark',
-  paisagismo: 'leaf', embalagens: 'gift', grafica: 'image', comunicacao_visual: 'palette',
-  uniformes: 'user', aromatizacao: 'sparkles', tecnologia: 'bolt', sinalizacao: 'map',
-  louças: 'cup', decoracao: 'star', logistica: 'truck', ceramica: 'cup', costura: 'layers',
-  velas: 'flame', cafe: 'cup', vinho: 'wine', chocolate: 'heart', rural: 'leaf',
-  automacao: 'bolt', brindes: 'gift',
+  arquitetura: 'layout', interiores: 'palette', mobiliario: 'grid', marcenaria: 'box',
+  serralheria: 'bolt', vidracaria: 'grid', iluminacao: 'spark', paisagismo: 'leaf',
+  jardinagem: 'leaf', revestimentos: 'layers', marmoraria: 'box', gesso: 'layout',
+  cenografia: 'star', acustica: 'bell', climatizacao: 'refresh',
+  grafica: 'image', comunicacao_visual: 'palette', sinalizacao: 'map', fotografia: 'image',
+  video: 'play', design: 'palette', impressao_3d: 'box', letreiros: 'spark',
+  louças: 'cup', cristaleria: 'wine', talheres: 'grip', cozinha_industrial: 'flame',
+  cafe: 'cup', vinho: 'wine', cervejaria: 'cup', chocolate: 'gift', confeitaria: 'cake',
+  destilaria: 'wine', enxoval: 'layers',
+  aromatizacao: 'sparkles', velas: 'flame', saboaria: 'leaf', perfumaria: 'sparkles',
+  sonorizacao: 'bell', floricultura: 'leaf',
+  ceramica: 'cup', costura: 'layers', tapecaria: 'layers', couro: 'box', vidro_soprado: 'wine',
+  metais_artisticos: 'star', papelaria: 'book', embalagens: 'gift', brindes: 'gift', uniformes: 'user',
+  tecnologia: 'bolt', automacao: 'bolt', seguranca: 'eye', audiovisual_pro: 'tv', energia: 'spark',
+  decoracao: 'star', logistica: 'truck', montagem: 'grip', limpeza: 'refresh', eventos: 'calendar',
+  rural: 'leaf', consultoria: 'chart', outros: 'box',
 }
 
 // selos de homologação (níveis)

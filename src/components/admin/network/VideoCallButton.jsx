@@ -28,14 +28,14 @@ export function VideoCallButton({ callKey, compact = false, notify }) {
         <Icon name="tv" className="w-4 h-4" />{!compact && 'Videochamada'}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-56 glass-pop rounded-xl p-1.5 z-50 shadow-2xl">
-          <button onClick={jitsi} className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-white/[0.04] transition-colors">
-            <Icon name="tv" className="w-4 h-4 text-admin-champ/70 shrink-0 mt-0.5" />
-            <div><p className="text-admin-text text-sm">Sala Seravie (Jitsi)</p><p className="text-admin-muted/45 text-[11px]">Gratuito · mesma sala para todos</p></div>
+        <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] glass-pop rounded-xl p-1.5 z-50 shadow-2xl">
+          <button onClick={jitsi} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-white/[0.04] transition-colors">
+            <Icon name="tv" className="w-4 h-4 text-admin-champ/70 shrink-0" />
+            <div className="min-w-0"><p className="text-admin-text text-sm truncate">Sala Seravie (Jitsi)</p><p className="text-admin-muted/45 text-[11px] truncate">Gratuito · mesma sala p/ todos</p></div>
           </button>
-          <button onClick={gmeet} className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-white/[0.04] transition-colors">
-            <Icon name="external" className="w-4 h-4 text-admin-sage/70 shrink-0 mt-0.5" />
-            <div><p className="text-admin-text text-sm">Google Meet</p><p className="text-admin-muted/45 text-[11px]">Nova sala · exige conta Google</p></div>
+          <button onClick={gmeet} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-white/[0.04] transition-colors">
+            <Icon name="external" className="w-4 h-4 text-admin-sage/70 shrink-0" />
+            <div className="min-w-0"><p className="text-admin-text text-sm truncate">Google Meet</p><p className="text-admin-muted/45 text-[11px] truncate">Nova sala · exige conta Google</p></div>
           </button>
         </div>
       )}

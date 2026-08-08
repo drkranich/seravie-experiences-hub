@@ -39,6 +39,7 @@ export function IdentityVerification({ notify }) {
   const [selfiePreview, setSelfiePreview] = useState(null)
   const [frontFile, setFrontFile] = useState(null)
   const [backFile, setBackFile] = useState(null)
+  const [consent, setConsent] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const videoRef = useRef(null); const streamRef = useRef(null)
@@ -74,6 +75,7 @@ export function IdentityVerification({ notify }) {
     if (!f.full_name.trim()) return notify?.('Informe seu nome completo', 'error')
     if (!selfieBlob) { setStep(1); return notify?.('Capture a selfie de verificação', 'error') }
     if (!frontFile) { setStep(2); return notify?.('Envie a frente do documento', 'error') }
+    if (!consent) return notify?.('É necessário aceitar o termo de tratamento de dados (LGPD).', 'error')
     setSaving(true)
     try {
       const selfieFile = new File([selfieBlob], 'selfie.jpg', { type: 'image/jpeg' })
@@ -88,11 +90,18 @@ export function IdentityVerification({ notify }) {
         tenant_id: tenantId, user_id: user?.id || null, full_name: f.full_name, doc_type: f.doc_type,
         doc_number_hash: numHash, doc_front_path: front.path, doc_back_path: back?.path || null,
         selfie_path: selfie.path, liveness_path: selfie.path, status: 'em_analise', provider: 'manual',
+        reviewer_note: 'Consentimento LGPD aceito em ' + new Date().toLocaleString('pt-BR'),
       }
       const { data, error } = await supabase.from('identity_verifications').upsert(payload, { onConflict: 'tenant_id,user_id' }).select('*').single()
       setSaving(false)
       if (error) return notify?.('Erro ao enviar: ' + error.message, 'error')
-      setRec(data); setStep(0); notify?.('Verificação enviada! Você será notificado após a análise.', 'success')
+      setRec(data); setStep(0)
+      // dispara a checagem biométrica (auto se provedor configurado; senão fica manual)
+      supabase.functions.invoke('verify-biometrics', { body: { verification_id: data.id } }).then(({ data: bio }) => {
+        if (bio?.status === 'aprovado') { setRec((r) => ({ ...r, status: 'aprovado' })); notify?.('Identidade verificada automaticamente! ✓', 'success') }
+        else if (bio?.status === 'reprovado') { setRec((r) => ({ ...r, status: 'reprovado' })); notify?.('A verificação automática não confirmou a identidade. Revise as fotos.', 'error') }
+      }).catch(() => { /* fica em análise manual */ })
+      notify?.('Verificação enviada! Você será notificado após a análise.', 'success')
     } catch (e) { setSaving(false); notify?.('Falha: ' + (e?.message || e), 'error') }
   }
 
@@ -169,8 +178,13 @@ export function IdentityVerification({ notify }) {
                 <div className="flex items-center gap-3">{selfiePreview && <img src={selfiePreview} alt="" className="w-14 h-14 rounded-lg object-cover" />}<div><p className="text-admin-text text-sm">{f.full_name}</p><p className="text-admin-muted/45 text-xs">{DOC_TYPES.find((d) => d.value === f.doc_type)?.label}{f.doc_number ? ` · ****${f.doc_number.slice(-3)}` : ''}</p></div></div>
                 <p className="text-admin-muted/50 text-[11px]">✓ Selfie de vivacidade · ✓ Frente do documento{backFile ? ' · ✓ Verso' : ''}</p>
               </div>
-              <p className="text-admin-muted/45 text-[11px] mb-4 leading-relaxed"><Icon name="warning" className="w-3.5 h-3.5 inline mr-1 text-admin-gold" />Seus documentos são armazenados de forma criptografada em ambiente privado e usados exclusivamente para verificação de identidade, conforme a LGPD. O número do documento é guardado apenas como hash.</p>
-              <div className="flex justify-between"><button onClick={() => setStep(2)} className="text-sm text-admin-muted hover:text-admin-text px-4 py-2">Voltar</button><button onClick={submit} disabled={saving} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-5 py-2.5 rounded-xl text-sm disabled:opacity-50 inline-flex items-center gap-2"><Icon name="check" className="w-4 h-4" />{saving ? 'Enviando…' : 'Enviar para verificação'}</button></div>
+              <label className="flex items-start gap-2.5 glass-soft rounded-xl p-4 mb-4 cursor-pointer">
+                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="w-4 h-4 accent-admin-champ mt-0.5 shrink-0" />
+                <span className="text-admin-muted/65 text-[11px] leading-relaxed">
+                  <span className="text-admin-text">Autorizo o tratamento dos meus dados pessoais e biométricos</span> (selfie de vivacidade e documento de identidade) pela Seravie Experiences, <span className="text-admin-text/80">exclusivamente para verificação de identidade</span>, conforme a Lei Geral de Proteção de Dados (LGPD, Lei 13.709/2018). Os arquivos são armazenados de forma <span className="text-admin-text/80">criptografada em ambiente privado</span>, acessíveis apenas para a análise da verificação; o número do documento é guardado apenas como hash. Posso solicitar a exclusão dos meus dados a qualquer momento.
+                </span>
+              </label>
+              <div className="flex justify-between"><button onClick={() => setStep(2)} className="text-sm text-admin-muted hover:text-admin-text px-4 py-2">Voltar</button><button onClick={submit} disabled={saving || !consent} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-5 py-2.5 rounded-xl text-sm disabled:opacity-40 inline-flex items-center gap-2"><Icon name="check" className="w-4 h-4" />{saving ? 'Enviando…' : 'Enviar para verificação'}</button></div>
             </div>
           )}
         </div>

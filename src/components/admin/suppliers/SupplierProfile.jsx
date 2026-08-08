@@ -166,7 +166,7 @@ export function SupplierProfile({ supplier, isFav, onFav, onBack, notify }) {
         </div>
         <div className="flex items-end gap-4 flex-wrap mt-3">
           <div className="flex-1 min-w-[200px]">
-            <h1 className="font-serif text-2xl sm:text-3xl text-admin-text leading-tight">{s.name}</h1>
+            <div className="flex items-center gap-2 flex-wrap"><h1 className="font-serif text-2xl sm:text-3xl text-admin-text leading-tight">{s.name}</h1>{s.identity_verified && <span title="Identidade verificada" className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg bg-admin-sage/15 text-admin-sage"><Icon name="check" className="w-3 h-3" />Verificado</span>}</div>
             <div className="mt-1.5"><Seal level={s.verification_level} /></div>
             <p className="text-admin-muted/55 text-sm mt-2">{cat}{s.city ? ` · ${s.city}${s.state ? '/' + s.state : ''}` : ''}</p>
             {s.rating > 0 && <div className="flex items-center gap-2 mt-1.5"><Stars value={s.rating} /><span className="text-admin-muted/45 text-xs">{Number(s.rating).toFixed(1)} · {s.reviews_count || reviews.length} avaliações</span></div>}

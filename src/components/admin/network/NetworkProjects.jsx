@@ -27,6 +27,8 @@ export function NetworkProjects({ me, notify }) {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null)
   const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,6 +49,18 @@ export function NetworkProjects({ me, notify }) {
     if (error) return notify?.('Erro: ' + error.message, 'error')
     setProjects((p) => [data, ...p]); setCreating(false); notify?.('Projeto criado', 'success')
   }
+  const update = async (id, payload) => {
+    const { data, error } = await supabase.from('network_projects').update(payload).eq('id', id).select('*').single()
+    if (error) return notify?.('Erro: ' + error.message, 'error')
+    setProjects((p) => p.map((x) => x.id === id ? data : x)); setEditing(null); notify?.('Projeto atualizado', 'success')
+  }
+  const remove = async (proj) => {
+    await supabase.from('network_project_members').delete().eq('project_id', proj.id)
+    const { error } = await supabase.from('network_projects').delete().eq('id', proj.id)
+    if (error) return notify?.('Erro ao excluir: ' + error.message, 'error')
+    setProjects((p) => p.filter((x) => x.id !== proj.id)); setConfirmDel(null); setOpen(null); notify?.('Projeto excluído', 'success')
+  }
+  const isOwner = (p) => p.tenant_id === tenantId || p.owner_id === user?.id
 
   if (open) {
     const fresh = projects.find((p) => p.id === open.id) || open
@@ -63,25 +77,48 @@ export function NetworkProjects({ me, notify }) {
       {loading ? <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="glass rounded-2xl h-40 animate-pulse opacity-40" />)}</div>
         : projects.length === 0 ? <div className="glass rounded-2xl p-12 text-center"><Icon name="layout" className="w-10 h-10 text-admin-champ/25 mx-auto mb-3" /><p className="text-admin-muted/60 text-sm">Nenhum projeto colaborativo ainda.</p><p className="text-admin-muted/35 text-xs mt-1">Crie um projeto e convide a equipe da rede.</p></div>
           : <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {projects.map((p) => { const team = teams[p.id] || []; return (
-                <button key={p.id} onClick={() => setOpen(p)} className="group glass rounded-2xl overflow-hidden text-left hover:ring-1 hover:ring-admin-champ/30 transition-all">
-                  <div className="h-28 bg-gradient-to-br from-admin-champ/15 to-admin-copper/10 flex items-center justify-center">{p.cover_url ? <img src={p.cover_url} alt="" className="w-full h-full object-cover" /> : <Icon name="layout" className="w-8 h-8 text-admin-champ/25" />}</div>
-                  <div className="p-4">
-                    <p className="text-admin-text font-medium">{p.name}</p>
-                    {p.description && <p className="text-admin-muted/50 text-xs mt-1 line-clamp-2">{p.description}</p>}
-                    <div className="flex items-center gap-1 mt-3">{team.slice(0, 4).map((t) => { const mem = members.find((m) => m.id === t.member_id); return <Avatar key={t.id} name={mem?.name} url={mem?.avatar_url} size="w-6 h-6" text="text-[9px]" /> })}<span className="text-admin-muted/40 text-[11px] ml-1">{team.length} na equipe</span></div>
-                  </div>
-                </button>
+              {projects.map((p) => { const team = teams[p.id] || []; const mine = isOwner(p); return (
+                <div key={p.id} className="group glass rounded-2xl overflow-hidden hover:ring-1 hover:ring-admin-champ/30 transition-all">
+                  <button onClick={() => setOpen(p)} className="text-left w-full">
+                    <div className="h-28 bg-gradient-to-br from-admin-champ/15 to-admin-copper/10 flex items-center justify-center">{p.cover_url ? <img src={p.cover_url} alt="" className="w-full h-full object-cover" /> : <Icon name="layout" className="w-8 h-8 text-admin-champ/25" />}</div>
+                    <div className="p-4">
+                      <p className="text-admin-text font-medium">{p.name}</p>
+                      {p.description && <p className="text-admin-muted/50 text-xs mt-1 line-clamp-2">{p.description}</p>}
+                      <div className="flex items-center gap-1 mt-3">{team.slice(0, 4).map((t) => { const mem = members.find((m) => m.id === t.member_id); return <Avatar key={t.id} name={mem?.name} url={mem?.avatar_url} size="w-6 h-6" text="text-[9px]" /> })}<span className="text-admin-muted/40 text-[11px] ml-1">{team.length} na equipe</span></div>
+                    </div>
+                  </button>
+                  {mine && (
+                    <div className="flex gap-2 px-4 pb-4 -mt-1">
+                      <button onClick={() => setEditing(p)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/85 hover:bg-white text-[#1c1c1c] backdrop-blur-md shadow-sm transition-colors"><Icon name="pen" className="w-3.5 h-3.5" />Editar</button>
+                      <button onClick={() => setConfirmDel(p)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/85 hover:bg-white text-admin-rose backdrop-blur-md shadow-sm transition-colors"><Icon name="trash" className="w-3.5 h-3.5" />Excluir</button>
+                    </div>
+                  )}
+                </div>
               )})}
             </div>}
 
       {creating && <CreateModal onClose={() => setCreating(false)} onCreate={create} notify={notify} />}
+      {editing && <CreateModal initial={editing} onClose={() => setEditing(null)} onCreate={(payload) => update(editing.id, payload)} notify={notify} />}
+      {confirmDel && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDel(null)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-serif text-lg text-admin-text mb-2">Excluir projeto?</h2>
+            <p className="text-admin-muted/60 text-sm mb-5">O projeto <span className="text-admin-text">"{confirmDel.name}"</span> e a equipe vinculada serão removidos. Esta ação não pode ser desfeita.</p>
+            <div className="flex justify-end gap-2"><button onClick={() => setConfirmDel(null)} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => remove(confirmDel)} className="px-4 py-2 rounded-xl text-sm bg-admin-rose/15 hover:bg-admin-rose/25 text-admin-rose">Excluir projeto</button></div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function CreateModal({ onClose, onCreate, notify }) {
-  const [f, setF] = useState({ name: '', description: '', client: '', category: '', location: '', budget: '', deadline: '', goals: '', cover_url: '' })
+function CreateModal({ onClose, onCreate, notify, initial }) {
+  const [f, setF] = useState({
+    name: initial?.name || '', description: initial?.description || '', client: initial?.client || '',
+    category: initial?.category || '', location: initial?.location || '', budget: initial?.budget ?? '',
+    deadline: initial?.deadline || '', goals: initial?.goals || '', cover_url: initial?.cover_url || '',
+  })
+  const editing = !!initial
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const [uploading, setUploading] = useState(false)
   const coverRef = useRef(null)
@@ -97,7 +134,7 @@ function CreateModal({ onClose, onCreate, notify }) {
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Novo projeto</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">{editing ? 'Editar projeto' : 'Novo projeto'}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-3">
           <div>
             <label className={lbl}>Imagem de capa</label>
@@ -119,7 +156,7 @@ function CreateModal({ onClose, onCreate, notify }) {
           </div>
           <div><label className={lbl}>Prazo</label><GlassDate value={f.deadline} onChange={(v) => set('deadline', v)} placeholder="dd/mm/aaaa" /></div>
         </div>
-        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.name.trim() && onCreate({ name: f.name, description: f.description || null, client: f.client || null, category: f.category || null, location: f.location || null, budget: f.budget ? Number(f.budget) : null, deadline: f.deadline || null, goals: f.goals || null, cover_url: f.cover_url || null, status: 'active' })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Criar</button></div>
+        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.name.trim() && onCreate({ name: f.name, description: f.description || null, client: f.client || null, category: f.category || null, location: f.location || null, budget: f.budget ? Number(f.budget) : null, deadline: f.deadline || null, goals: f.goals || null, cover_url: f.cover_url || null, ...(editing ? {} : { status: 'active' }) })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">{editing ? 'Salvar' : 'Criar'}</button></div>
       </div>
     </div>
   )

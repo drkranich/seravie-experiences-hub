@@ -85,6 +85,7 @@ function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp, onShare }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <p className="text-admin-text font-medium truncate">{s.name}</p>
+              {s.identity_verified && <span title="Identidade verificada" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-admin-sage/20 text-admin-sage shrink-0"><Icon name="check" className="w-2.5 h-2.5" /></span>}
               {s.featured && <span className="shrink-0 text-[9px] uppercase tracking-wider bg-admin-champ/15 text-admin-champ px-1.5 py-0.5 rounded">Destaque</span>}
             </div>
             <p className="text-admin-muted/45 text-xs truncate">{cat}{s.city ? ` · ${s.city}${s.state ? '/' + s.state : ''}` : ''}</p>
@@ -117,7 +118,13 @@ function Discover({ suppliers, favorites, compare, loading, onOpen, onFav, onCmp
 
   const base = onlyFav ? suppliers.filter((s) => favorites.has(s.id)) : suppliers
   const filtered = useMemo(() => sortSuppliers(filterSuppliers(base, { q, cat, uf, level }), sort), [base, q, cat, uf, level, sort])
-  const cats = useMemo(() => { const set = new Set(suppliers.map((s) => s.category).filter(Boolean)); return [...set] }, [suppliers])
+  // chips: categorias presentes nos fornecedores + um conjunto curado de destaques,
+  // para o filtro parecer completo mesmo com poucos fornecedores cadastrados.
+  const FEATURED_CATS = ['arquitetura', 'interiores', 'mobiliario', 'marcenaria', 'iluminacao', 'paisagismo', 'floricultura', 'grafica', 'comunicacao_visual', 'fotografia', 'aromatizacao', 'louças', 'ceramica', 'cafe', 'vinho', 'chocolate', 'decoracao', 'eventos', 'uniformes', 'brindes']
+  const cats = useMemo(() => {
+    const present = suppliers.map((s) => s.category).filter(Boolean)
+    return [...new Set([...present, ...FEATURED_CATS])].filter((c) => SUPPLIER_CATEGORIES[c])
+  }, [suppliers])
 
   return (
     <div>

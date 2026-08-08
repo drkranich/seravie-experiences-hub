@@ -14,6 +14,10 @@ function Avatar({ name, url, size = 'w-12 h-12', text = 'text-base' }) {
     : <div className={`${size} rounded-full bg-admin-champ/15 text-admin-champ flex items-center justify-center shrink-0 ${text} font-medium`}>{initials(name)}</div>
 }
 function Seal({ level }) { const v = VERIF[level] || VERIF.member; return <span className={`text-[10px] px-2 py-0.5 rounded-lg ${v.style}`}>{v.label}</span> }
+export function VerifiedBadge({ verified, size = 'w-4 h-4' }) {
+  if (!verified) return null
+  return <span title="Identidade verificada" className={`inline-flex items-center justify-center ${size} rounded-full bg-admin-sage/20 text-admin-sage shrink-0`}><Icon name="check" className="w-2.5 h-2.5" /></span>
+}
 
 export function People({ notify, onMessage }) {
   const PERSON_TYPES = usePersonTypes()
@@ -61,7 +65,7 @@ export function People({ notify, onMessage }) {
                 <button key={m.id} onClick={() => setOpen(m)} className="glass rounded-2xl p-5 text-left hover:ring-1 hover:ring-admin-champ/30 transition-all">
                   <div className="flex items-center gap-3">
                     <Avatar name={m.name} url={m.avatar_url} />
-                    <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><p className="text-admin-text font-medium truncate">{m.name}</p><Seal level={m.verification_level} /></div><p className="text-admin-muted/45 text-xs truncate">{m.headline || m.role_title || 'Membro'}</p></div>
+                    <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><p className="text-admin-text font-medium truncate">{m.name}</p><VerifiedBadge verified={m.identity_verified} /><Seal level={m.verification_level} /></div><p className="text-admin-muted/45 text-xs truncate">{m.headline || m.role_title || 'Membro'}</p></div>
                   </div>
                   {m.company && <p className="text-admin-muted/50 text-xs mt-3">{m.company}{m.city ? ` · ${m.city}` : ''}</p>}
                   {Array.isArray(m.specialties) && m.specialties.length > 0 && <div className="flex flex-wrap gap-1.5 mt-2">{m.specialties.slice(0, 3).map((s, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.04] text-admin-muted/60">{s}</span>)}</div>}
@@ -106,7 +110,7 @@ function MemberProfile({ member, onBack, onMessage, notify, onUpdated }) {
         <div className="flex items-end gap-4 flex-wrap">
           <Avatar name={m.name} url={m.avatar_url} size="w-24 h-24 ring-4 ring-admin-side" text="text-2xl" />
           <div className="flex-1 min-w-[200px] pb-1">
-            <div className="flex items-center gap-2 flex-wrap"><h1 className="font-serif text-2xl text-admin-text">{m.name}</h1><Seal level={m.verification_level} /></div>
+            <div className="flex items-center gap-2 flex-wrap"><h1 className="font-serif text-2xl text-admin-text">{m.name}</h1><VerifiedBadge verified={m.identity_verified} size="w-5 h-5" /><Seal level={m.verification_level} /></div>
             <p className="text-admin-muted/55 text-sm mt-0.5">{m.headline || m.role_title || 'Membro do ecossistema'}</p>
             {m.company && <p className="text-admin-muted/45 text-xs mt-0.5">{m.company}{m.city ? ` · ${m.city}${m.state ? '/' + m.state : ''}` : ''}</p>}
           </div>

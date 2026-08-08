@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
 import { logAudit } from '../../lib/audit'
+import { VideoCallButton } from './network/VideoCallButton'
 
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const KIND = {
@@ -163,7 +164,10 @@ export function AgendaPanel({ notify }) {
           {/* Dia selecionado + observações + próximos */}
           <div className="space-y-5">
             <div className="glass rounded-2xl p-5">
-              <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-3">{new Date(selected + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <p className="text-[11px] tracking-wider uppercase text-admin-champ/70 pt-1.5">{new Date(selected + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
+                <VideoCallButton callKey={`agenda-${selected}`} compact notify={notify} />
+              </div>
               {dayItems.length === 0 ? <p className="text-admin-muted/40 text-xs mb-3">Nada agendado neste dia</p> : (
                 <div className="space-y-2 mb-3">{dayItems.map((it, i) => (
                   <div key={i} className="flex items-start gap-2"><span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${KIND[it.kind].dot}`} /><div className="min-w-0"><p className="text-admin-text text-sm truncate">{it.title}</p><p className={`text-[10px] ${KIND[it.kind].tone}`}>{KIND[it.kind].label}{it.extra ? ` · ${it.extra}` : ''}</p></div></div>
