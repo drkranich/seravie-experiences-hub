@@ -67,10 +67,10 @@ export function ServiceMarketplace({ me, notify }) {
         : shown.length === 0 ? <div className="glass rounded-2xl p-12 text-center"><Icon name="mail" className="w-10 h-10 text-admin-champ/25 mx-auto mb-3" /><p className="text-admin-muted/60 text-sm">Nenhum briefing ainda.</p><p className="text-admin-muted/35 text-xs mt-1">Publique o que precisa (arquiteto, fotógrafo, fornecedor…) e receba propostas.</p></div>
           : <div className="space-y-3">
               {shown.map((r) => { const st = REQ_STATUS[r.status] || REQ_STATUS.open; const props = r.service_proposals || []; const mine = r.tenant_id === tenantId; return (
-                <div key={r.id} className="group glass rounded-2xl p-5 hover:ring-1 hover:ring-admin-champ/30 transition-all relative">
+                <div key={r.id} className="group glass rounded-2xl p-5 hover:ring-1 hover:ring-admin-champ/30 transition-all">
                   <button onClick={() => setOpen(r)} className="w-full text-left">
                     <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 pr-16">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap"><p className="text-admin-text font-medium">{r.title}</p>{r.role && <span className="text-[10px] px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/60">{r.role}</span>}<span className={`text-[10px] px-2 py-0.5 rounded-lg ${st.s}`}>{st.label}</span>{mine && <span className="text-[10px] text-admin-champ/60">seu</span>}</div>
                         {r.description && <p className="text-admin-muted/55 text-sm mt-2 line-clamp-2">{r.description}</p>}
                         <p className="text-admin-muted/40 text-[11px] mt-2">{props.length} proposta{props.length === 1 ? '' : 's'}{r.location ? ` · ${r.location}` : ''} · {timeAgo(r.created_at)}</p>
@@ -79,9 +79,9 @@ export function ServiceMarketplace({ me, notify }) {
                     </div>
                   </button>
                   {mine && (
-                    <div className="absolute top-4 right-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setEditing(r)} className="w-7 h-7 rounded-full bg-black/40 backdrop-blur-md text-white/80 hover:text-admin-champ flex items-center justify-center" title="Editar briefing"><Icon name="pen" className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setConfirmDel(r)} className="w-7 h-7 rounded-full bg-black/40 backdrop-blur-md text-white/80 hover:text-admin-rose flex items-center justify-center" title="Excluir briefing"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                    <div className="flex gap-2 mt-4 pt-3 border-t border-white/[0.05]">
+                      <button onClick={() => setEditing(r)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/85 hover:bg-white text-[#1c1c1c] backdrop-blur-md shadow-sm transition-colors" title="Editar briefing"><Icon name="pen" className="w-3.5 h-3.5" />Editar</button>
+                      <button onClick={() => setConfirmDel(r)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/85 hover:bg-white text-admin-rose backdrop-blur-md shadow-sm transition-colors" title="Excluir briefing"><Icon name="trash" className="w-3.5 h-3.5" />Excluir</button>
                     </div>
                   )}
                 </div>
@@ -184,9 +184,9 @@ function RequestDetail({ request, tenantId, me, onBack, reload, notify, onEdit, 
             {request.budget ? <p className="text-admin-champ text-lg font-serif">{brl(request.budget)}{request.budget_max ? ` – ${brl(request.budget_max)}` : ''}</p> : null}
             {request.deadline && <p className="text-admin-muted/40 text-xs mt-0.5">Prazo: {new Date(request.deadline).toLocaleDateString('pt-BR')}</p>}
             {isOwner && (
-              <div className="flex items-center justify-end gap-2 mt-2">
-                <button onClick={onEdit} className="text-xs glass-input text-admin-muted/70 hover:text-admin-champ px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"><Icon name="pen" className="w-3.5 h-3.5" />Editar</button>
-                <button onClick={onDelete} className="text-xs glass-input text-admin-muted/60 hover:text-admin-rose px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"><Icon name="trash" className="w-3.5 h-3.5" />Excluir</button>
+              <div className="flex items-center justify-end gap-2 mt-3">
+                <button onClick={onEdit} className="text-xs px-3 py-1.5 rounded-lg bg-white/85 hover:bg-white text-[#1c1c1c] backdrop-blur-md shadow-sm transition-colors flex items-center gap-1.5"><Icon name="pen" className="w-3.5 h-3.5" />Editar</button>
+                <button onClick={onDelete} className="text-xs px-3 py-1.5 rounded-lg bg-white/85 hover:bg-white text-admin-rose backdrop-blur-md shadow-sm transition-colors flex items-center gap-1.5"><Icon name="trash" className="w-3.5 h-3.5" />Excluir</button>
               </div>
             )}
           </div>
