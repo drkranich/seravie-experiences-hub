@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { Icon, GlassSelect } from '../ui'
+import { uploadFile } from '../../../lib/storage'
 
 const BLOCK_TYPES = [
   { type: 'hero', label: 'Cabeçalho (hero)', icon: 'star' },
@@ -45,9 +46,20 @@ export function LandingTab({ tenantId, notify }) {
   }
   useEffect(() => { load() }, [])
 
+  const [confirmDel, setConfirmDel] = useState(null)
   const startNew = () => setEditing({ id: null, name: '', status: 'draft', theme: { accent: '#B89C61' }, blocks: [newBlock('hero'), newBlock('text'), newBlock('cta')] })
-  const remove = async (p) => { try { await supabase.from('landing_pages').delete().eq('id', p.id) } catch { /* noop */ } notify('Página removida', 'success'); load() }
+  const remove = async (p) => { try { await supabase.from('landing_pages').delete().eq('id', p.id) } catch { /* noop */ } setConfirmDel(null); notify('Página removida', 'success'); load() }
   const togglePublish = async (p) => { try { await supabase.from('landing_pages').update({ status: p.status === 'published' ? 'draft' : 'published', updated_at: new Date().toISOString() }).eq('id', p.id) } catch { /* noop */ } load() }
+
+  const pageUrl = (p) => `${window.location.origin}/lp/${p.slug || p.id}`
+  const share = async (p) => {
+    const url = pageUrl(p)
+    if (p.status !== 'published') { notify('Publique a página antes de compartilhar o link', 'info') }
+    try {
+      if (navigator.share) { await navigator.share({ title: p.name || 'Landing page', url }) }
+      else { await navigator.clipboard.writeText(url); notify('Link copiado: ' + url, 'success') }
+    } catch { try { await navigator.clipboard.writeText(url); notify('Link copiado', 'success') } catch { notify(url, 'info') } }
+  }
 
   if (editing) return <LandingBuilder page={editing} forms={forms} tenantId={tenantId} notify={notify} onBack={() => { setEditing(null); load() }} onSaved={() => { setEditing(null); load() }} />
 
@@ -69,15 +81,27 @@ export function LandingTab({ tenantId, notify }) {
                   <span className={`text-[9px] px-2 py-0.5 rounded shrink-0 ${p.status === 'published' ? 'bg-admin-sage/15 text-admin-sage' : 'bg-white/[0.05] text-admin-muted/40'}`}>{p.status === 'published' ? 'publicada' : 'rascunho'}</span>
                 </div>
                 <p className="text-admin-muted/40 text-xs">{(p.blocks || []).length} blocos{p.views ? ` · ${p.views} views` : ''}</p>
-                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/[0.05] text-xs">
-                  <button onClick={() => togglePublish(p)} className={p.status === 'published' ? 'text-admin-rose/70 hover:underline' : 'text-admin-sage hover:underline'}>{p.status === 'published' ? 'despublicar' : 'publicar'}</button>
+                {p.status === 'published' && <p className="text-admin-champ/50 text-[10px] mt-1 truncate font-mono">/lp/{p.slug || p.id}</p>}
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/[0.05] text-xs">
+                  <button onClick={() => togglePublish(p)} className={`px-2.5 py-1 rounded-lg ${p.status === 'published' ? 'bg-admin-rose/10 text-admin-rose/80 hover:bg-admin-rose/20' : 'bg-admin-sage/10 text-admin-sage hover:bg-admin-sage/20'} transition-colors`}>{p.status === 'published' ? 'despublicar' : 'publicar'}</button>
+                  <button onClick={() => share(p)} className="flex items-center gap-1 text-admin-muted/60 hover:text-admin-champ" title="Compartilhar link"><Icon name="share" className="w-3.5 h-3.5" />link</button>
                   <button onClick={() => setEditing(p)} className="ml-auto text-admin-champ/80 hover:underline">editar</button>
-                  <button onClick={() => remove(p)} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setConfirmDel(p)} className="text-admin-muted/40 hover:text-admin-rose" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
                 </div>
               </div>
             ))}
           </div>
         )}
+
+      {confirmDel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDel(null)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-serif text-xl text-admin-text mb-2">Excluir página</h3>
+            <p className="text-admin-muted/70 text-sm mb-6">Remover “{confirmDel.name || 'Sem nome'}”? Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-3"><button onClick={() => remove(confirmDel)} className="flex-1 bg-admin-rose/15 hover:bg-admin-rose/25 text-admin-rose py-2.5 rounded-xl text-sm transition-colors">Excluir</button><button onClick={() => setConfirmDel(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -143,7 +167,7 @@ function LandingBuilder({ page, forms, tenantId, notify, onBack, onSaved }) {
             </div>
           </div>
 
-          {selBlock && <BlockEditor block={selBlock} forms={forms} onChange={(patch) => setBlockProps(selBlock.id, patch)} />}
+          {selBlock && <BlockEditor block={selBlock} forms={forms} notify={notify} onChange={(patch) => setBlockProps(selBlock.id, patch)} />}
         </div>
 
         {/* preview */}
@@ -159,7 +183,40 @@ function LandingBuilder({ page, forms, tenantId, notify, onBack, onSaved }) {
   )
 }
 
-function BlockEditor({ block, forms, onChange }) {
+// Botão de upload de imagem reutilizável → Storage (bucket media)
+function ImageUpload({ value, onChange, notify, label = 'Imagem' }) {
+  const ref = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    const r = await uploadFile(file)
+    setBusy(false)
+    if (r.error) { notify && notify(r.error, 'error'); return }
+    onChange(r.url)
+  }
+  return (
+    <div>
+      <input ref={ref} type="file" accept="image/*" onChange={onFile} className="hidden" />
+      {value ? (
+        <div className="relative group">
+          <img src={value} alt={label} className="rounded-lg max-h-28 w-full object-cover" />
+          <div className="absolute top-1.5 right-1.5 flex gap-1">
+            <button onClick={() => ref.current?.click()} className="w-6 h-6 rounded bg-black/60 text-admin-text flex items-center justify-center hover:bg-black/80" title="Trocar"><Icon name="upload" className="w-3.5 h-3.5" /></button>
+            <button onClick={() => onChange('')} className="w-6 h-6 rounded bg-black/60 text-admin-text flex items-center justify-center hover:bg-admin-rose/60" title="Remover"><Icon name="x" className="w-3.5 h-3.5" /></button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => ref.current?.click()} disabled={busy} className="w-full glass-input rounded-lg py-4 flex flex-col items-center gap-1.5 text-admin-muted/60 hover:text-admin-text transition-colors border border-dashed border-white/10 disabled:opacity-50">
+          <Icon name="upload" className="w-4 h-4" />
+          <span className="text-[11px]">{busy ? 'Enviando…' : 'Enviar imagem'}</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+function BlockEditor({ block, forms, notify, onChange }) {
   const p = block.props || {}
   const L = ({ children }) => <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{children}</label>
   const inp = 'w-full glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
@@ -170,10 +227,12 @@ function BlockEditor({ block, forms, onChange }) {
         <div><L>Título</L><input value={p.title || ''} onChange={(e) => onChange({ title: e.target.value })} className={inp} /></div>
         <div><L>Subtítulo</L><textarea value={p.subtitle || ''} onChange={(e) => onChange({ subtitle: e.target.value })} rows={2} className={inp + ' resize-none'} /></div>
         <div><L>Texto do botão</L><input value={p.cta || ''} onChange={(e) => onChange({ cta: e.target.value })} className={inp} /></div>
+        <div><L>Imagem de fundo (opcional)</L><ImageUpload value={p.bg} onChange={(v) => onChange({ bg: v })} notify={notify} label="fundo" /></div>
       </>}
       {block.type === 'text' && <div><L>Texto</L><textarea value={p.text || ''} onChange={(e) => onChange({ text: e.target.value })} rows={4} className={inp + ' resize-none'} /></div>}
       {block.type === 'image' && <>
-        <div><L>URL da imagem</L><input value={p.url || ''} onChange={(e) => onChange({ url: e.target.value })} className={inp} placeholder="https://…" /></div>
+        <div><L>Imagem</L><ImageUpload value={p.url} onChange={(v) => onChange({ url: v })} notify={notify} /></div>
+        <div><L>Ou colar URL</L><input value={p.url || ''} onChange={(e) => onChange({ url: e.target.value })} className={inp} placeholder="https://…" /></div>
         <div><L>Texto alternativo</L><input value={p.alt || ''} onChange={(e) => onChange({ alt: e.target.value })} className={inp} /></div>
       </>}
       {block.type === 'cta' && <>
@@ -191,7 +250,7 @@ function BlockEditor({ block, forms, onChange }) {
 function PreviewBlock({ block, accent, forms }) {
   const p = block.props || {}
   if (block.type === 'hero') return (
-    <div className="px-6 py-12 text-center" style={{ background: `linear-gradient(160deg, ${accent}22, transparent)` }}>
+    <div className="px-6 py-12 text-center relative overflow-hidden" style={p.bg ? { backgroundImage: `linear-gradient(160deg, rgba(18,21,18,0.55), rgba(18,21,18,0.8)), url(${p.bg})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { background: `linear-gradient(160deg, ${accent}22, transparent)` }}>
       <h1 className="font-serif text-3xl text-admin-text mb-2">{p.title}</h1>
       <p className="text-admin-muted/70 text-sm max-w-md mx-auto mb-5">{p.subtitle}</p>
       <button className="px-6 py-2.5 rounded-xl text-sm font-medium" style={{ backgroundColor: accent, color: '#121512' }}>{p.cta}</button>

@@ -19,7 +19,8 @@ const COLOR = {
 }
 
 // Construtor visual de jornada. `journey` traz {id,name,steps,...}. onBack volta à lista.
-export function JourneyBuilder({ journey, coupons = [], tenantId, notify, onBack, onSaved }) {
+export function JourneyBuilder({ journey, coupons = [], triggerOptions, tenantId, notify, onBack, onSaved }) {
+  const trigOpts = triggerOptions && triggerOptions.length ? triggerOptions : TRIGGER_OPTIONS
   const [name, setName] = useState(journey.name || 'Nova jornada')
   const [nodes, setNodes] = useState(() => Array.isArray(journey.steps) && journey.steps.length ? journey.steps.map(normNode) : [makeNode('trigger', 60, 200, 0)])
   const [selected, setSelected] = useState(null)     // id do nó selecionado
@@ -233,7 +234,7 @@ export function JourneyBuilder({ journey, coupons = [], tenantId, notify, onBack
               <p className="text-admin-muted/50 text-xs leading-relaxed">Selecione um passo para editar, ou arraste os cards no canvas. Use as bolinhas à direita de cada card para conectar.</p>
             </div>
           ) : (
-            <NodeEditor node={sel} coupons={coupons} onChange={updateConfig} />
+            <NodeEditor node={sel} coupons={coupons} triggerOptions={trigOpts} onChange={updateConfig} />
           )}
         </div>
       </div>
@@ -246,7 +247,7 @@ function normNode(n) {
   return { id: n.id, type: n.type, x: Number(n.x) || 0, y: Number(n.y) || 0, config: n.config || {}, next: n.next ?? null, yes: n.yes ?? null, no: n.no ?? null }
 }
 
-function NodeEditor({ node, coupons, onChange }) {
+function NodeEditor({ node, coupons, triggerOptions = TRIGGER_OPTIONS, onChange }) {
   const meta = NODE_TYPES[node.type]
   const c = node.config || {}
   const Label = ({ children }) => <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{children}</label>
@@ -255,7 +256,7 @@ function NodeEditor({ node, coupons, onChange }) {
       <div className="flex items-center gap-2 mb-4"><Icon name={meta.icon} className={`w-4 h-4 ${COLOR[meta.color].text}`} /><p className="text-admin-text text-sm font-medium">{meta.label}</p></div>
       <div className="space-y-4">
         {node.type === 'trigger' && (
-          <div><Label>Evento que inicia</Label><GlassSelect value={c.event} onChange={(v) => onChange({ event: v })} options={TRIGGER_OPTIONS} /></div>
+          <div><Label>Evento que inicia</Label><GlassSelect value={c.event} onChange={(v) => onChange({ event: v })} options={triggerOptions} /></div>
         )}
         {node.type === 'wait' && (
           <div className="grid grid-cols-2 gap-2">

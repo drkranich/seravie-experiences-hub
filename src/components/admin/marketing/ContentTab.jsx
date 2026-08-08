@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { Icon, GlassSelect, GlassDate } from '../ui'
+import { uploadFile } from '../../../lib/storage'
 
 const NETWORKS = [
   { key: 'instagram', label: 'Instagram', color: 'rose' },
@@ -19,8 +20,22 @@ const STATUS = [
 ]
 const STATUS_MAP = Object.fromEntries(STATUS.map((s) => [s.key, s]))
 
-// Growth Studio → Conteúdo. Planejador editorial de redes sociais (kanban por status).
+// Growth Studio → Conteúdo. Planejador editorial + conexões com redes sociais.
 export function ContentTab({ tenantId, createdBy, notify }) {
+  const [sub, setSub] = useState('planner')
+  return (
+    <div>
+      <div className="flex gap-1 mb-5 bg-white/[0.03] p-1 rounded-xl w-fit">
+        {[['planner', 'Planejador', 'grid'], ['connections', 'Conexões', 'link']].map(([k, v, ic]) => (
+          <button key={k} onClick={() => setSub(k)} className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm transition-colors ${sub === k ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted hover:text-admin-text'}`}><Icon name={ic} className="w-3.5 h-3.5" />{v}</button>
+        ))}
+      </div>
+      {sub === 'planner' ? <PlannerBoard tenantId={tenantId} createdBy={createdBy} notify={notify} /> : <SocialConnections tenantId={tenantId} notify={notify} />}
+    </div>
+  )
+}
+
+function PlannerBoard({ tenantId, createdBy, notify }) {
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // post em edição ou {} novo
@@ -83,12 +98,22 @@ export function ContentTab({ tenantId, createdBy, notify }) {
 }
 
 function PostModal({ post, tenantId, createdBy, notify, onClose, onSaved }) {
-  const [f, setF] = useState({ title: post.title || '', content: post.content || '', networks: post.networks || [], status: post.status || 'idea', scheduled_at: post.scheduled_at ? String(post.scheduled_at).slice(0, 10) : '' })
+  const [f, setF] = useState({ title: post.title || '', content: post.content || '', networks: post.networks || [], status: post.status || 'idea', scheduled_at: post.scheduled_at ? String(post.scheduled_at).slice(0, 10) : '', media_url: post.media_url || '' })
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef(null)
   const set = (p) => setF((s) => ({ ...s, ...p }))
   const toggleNet = (k) => set({ networks: f.networks.includes(k) ? f.networks.filter((x) => x !== k) : [...f.networks, k] })
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setUploading(true)
+    const r = await uploadFile(file)
+    setUploading(false)
+    if (r.error) return notify(r.error, 'error')
+    set({ media_url: r.url })
+  }
   const save = async () => {
     if (!f.title.trim()) return notify('Título obrigatório', 'error')
-    const payload = { title: f.title.trim(), content: f.content, networks: f.networks, status: f.status, scheduled_at: f.scheduled_at ? new Date(f.scheduled_at + 'T09:00:00').toISOString() : null, updated_at: new Date().toISOString() }
+    const payload = { title: f.title.trim(), content: f.content, networks: f.networks, status: f.status, scheduled_at: f.scheduled_at ? new Date(f.scheduled_at + 'T09:00:00').toISOString() : null, media_url: f.media_url || null, updated_at: new Date().toISOString() }
     try {
       let error
       if (post.id) { const r = await supabase.from('social_posts').update(payload).eq('id', post.id); error = r.error }
@@ -105,6 +130,21 @@ function PostModal({ post, tenantId, createdBy, notify, onClose, onSaved }) {
           <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Título *</label><input value={f.title} onChange={(e) => set({ title: e.target.value })} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" /></div>
           <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Conteúdo / legenda</label><textarea value={f.content} onChange={(e) => set({ content: e.target.value })} rows={4} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none resize-none" /></div>
           <div>
+            <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Mídia (imagem)</label>
+            <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
+            {f.media_url ? (
+              <div className="relative group">
+                <img src={f.media_url} alt="mídia" className="rounded-xl max-h-40 w-full object-cover" />
+                <button onClick={() => set({ media_url: '' })} className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/60 text-admin-text flex items-center justify-center hover:bg-admin-rose/60"><Icon name="x" className="w-4 h-4" /></button>
+              </div>
+            ) : (
+              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="w-full glass-input rounded-xl py-6 flex flex-col items-center gap-2 text-admin-muted/60 hover:text-admin-text transition-colors border border-dashed border-white/10 disabled:opacity-50">
+                <Icon name="upload" className="w-5 h-5" />
+                <span className="text-xs">{uploading ? 'Enviando…' : 'Enviar imagem'}</span>
+              </button>
+            )}
+          </div>
+          <div>
             <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Redes</label>
             <div className="flex flex-wrap gap-2">
               {NETWORKS.map((n) => (
@@ -119,6 +159,118 @@ function PostModal({ post, tenantId, createdBy, notify, onClose, onSaved }) {
         </div>
         <div className="flex gap-3 mt-6">
           <button onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Salvar</button>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- Conexões com redes sociais (segredos ficam nos Secrets do Supabase) ----
+const CONN_NETWORKS = [
+  { key: 'instagram', label: 'Instagram', color: 'rose', provider: 'meta', secret: 'META_IG_ACCESS_TOKEN', accountLabel: '@usuário / conta business', help: 'Conta Instagram Business vinculada a uma Página do Facebook (Meta Graph API).' },
+  { key: 'facebook', label: 'Facebook', color: 'champ', provider: 'meta', secret: 'META_FB_PAGE_TOKEN', accountLabel: 'Página do Facebook', help: 'Token de página da Meta Graph API.' },
+  { key: 'tiktok', label: 'TikTok', color: 'copper', provider: 'tiktok', secret: 'TIKTOK_ACCESS_TOKEN', accountLabel: 'Conta TikTok Business', help: 'TikTok Content Posting API.' },
+  { key: 'linkedin', label: 'LinkedIn', color: 'sage', provider: 'linkedin', secret: 'LINKEDIN_ACCESS_TOKEN', accountLabel: 'Página / perfil', help: 'LinkedIn Marketing API.' },
+  { key: 'pinterest', label: 'Pinterest', color: 'gold', provider: 'pinterest', secret: 'PINTEREST_ACCESS_TOKEN', accountLabel: 'Conta Pinterest Business', help: 'Pinterest API v5.' },
+]
+const CONN_COLOR = {
+  rose: { bg: 'bg-admin-rose/10', text: 'text-admin-rose', br: 'border-admin-rose/25' },
+  champ: { bg: 'bg-admin-champ/10', text: 'text-admin-champ', br: 'border-admin-champ/25' },
+  copper: { bg: 'bg-admin-copper/10', text: 'text-admin-copper', br: 'border-admin-copper/25' },
+  sage: { bg: 'bg-admin-sage/10', text: 'text-admin-sage', br: 'border-admin-sage/25' },
+  gold: { bg: 'bg-admin-gold/10', text: 'text-admin-gold', br: 'border-admin-gold/25' },
+}
+
+function SocialConnections({ tenantId, notify }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null) // network key
+
+  const load = async () => {
+    setLoading(true)
+    try { const { data } = await supabase.from('social_connections').select('*'); setRows(data || []) }
+    catch { /* noop */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [])
+  const rowFor = (k) => rows.find((r) => r.network === k)
+
+  const connect = async (net, patch) => {
+    const existing = rowFor(net.key)
+    const payload = { status: 'connected', connected_at: new Date().toISOString(), provider: net.provider, secret_ref: net.secret, updated_at: new Date().toISOString(), ...patch }
+    try {
+      if (existing) await supabase.from('social_connections').update(payload).eq('id', existing.id)
+      else await supabase.from('social_connections').insert({ tenant_id: tenantId, network: net.key, ...payload })
+      notify('Conexão salva', 'success'); setEditing(null); load()
+    } catch (e) { notify('Erro: ' + (e.message || e), 'error') }
+  }
+  const disconnect = async (net) => {
+    const existing = rowFor(net.key)
+    if (!existing) return
+    try { await supabase.from('social_connections').update({ status: 'disconnected', connected_at: null, updated_at: new Date().toISOString() }).eq('id', existing.id) } catch { /* noop */ }
+    notify('Rede desconectada', 'info'); load()
+  }
+
+  return (
+    <div>
+      <div className="glass-soft rounded-xl px-4 py-3 mb-5 flex items-start gap-3 bg-admin-champ/[0.04] border border-admin-champ/15">
+        <Icon name="link" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
+        <p className="text-admin-muted/60 text-xs leading-relaxed">Conecte suas contas para publicar direto pela Seravie. Aqui você informa apenas dados públicos (conta/página). <span className="text-admin-champ">O token de acesso NUNCA é digitado neste painel</span> — ele é cadastrado com segurança nos Secrets do Supabase, com o nome indicado em cada rede. Assim seus segredos ficam protegidos.</p>
+      </div>
+
+      {loading ? <p className="text-admin-muted/30 text-sm py-10 text-center">Carregando…</p> : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {CONN_NETWORKS.map((net) => {
+            const r = rowFor(net.key)
+            const connected = r?.status === 'connected'
+            const col = CONN_COLOR[net.color]
+            return (
+              <div key={net.key} className={`glass rounded-2xl p-5 border ${connected ? col.br : 'border-transparent'}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-11 h-11 rounded-xl ${col.bg} flex items-center justify-center shrink-0`}><Icon name="share" className={`w-5 h-5 ${col.text}`} /></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-admin-text text-sm font-medium">{net.label}</p>
+                      <span className={`text-[9px] px-2 py-0.5 rounded ${connected ? 'bg-admin-sage/15 text-admin-sage' : 'bg-white/[0.05] text-admin-muted/40'}`}>{connected ? 'conectado' : 'não conectado'}</span>
+                    </div>
+                    <p className="text-admin-muted/50 text-xs mt-0.5 leading-relaxed">{net.help}</p>
+                    {connected && r?.account_name && <p className="text-admin-muted/40 text-[11px] mt-1">Conta: {r.account_name}</p>}
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-white/[0.05] flex items-center gap-3">
+                  <span className="text-admin-muted/30 text-[10px] font-mono">Secret: {net.secret}</span>
+                  {connected
+                    ? <button onClick={() => disconnect(net)} className="ml-auto text-xs text-admin-rose/80 hover:underline">desconectar</button>
+                    : <button onClick={() => setEditing(net.key)} className="ml-auto text-xs bg-admin-sage/10 text-admin-sage px-3 py-1.5 rounded-lg hover:bg-admin-sage/20 transition-colors">Conectar</button>}
+                  {connected && <button onClick={() => setEditing(net.key)} className="text-xs text-admin-champ/70 hover:underline">editar conta</button>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {editing && <ConnectModal net={CONN_NETWORKS.find((n) => n.key === editing)} row={rowFor(editing)} onClose={() => setEditing(null)} onConnect={connect} />}
+    </div>
+  )
+}
+
+function ConnectModal({ net, row, onClose, onConnect }) {
+  const [accountName, setAccountName] = useState(row?.account_name || '')
+  const [accountId, setAccountId] = useState(row?.account_id || '')
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Conectar {net.label}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <div className="space-y-4">
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{net.accountLabel}</label><input value={accountName} onChange={(e) => setAccountName(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="Ex: @minhaloja" /></div>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">ID da conta / página (opcional)</label><input value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="ID público" /></div>
+          <div className="glass-soft rounded-xl px-4 py-3 bg-admin-gold/[0.05] border border-admin-gold/20">
+            <p className="text-admin-gold/90 text-[11px] leading-relaxed">🔒 O token de acesso não é digitado aqui. Cadastre-o nos Secrets do Supabase com o nome <span className="font-mono text-admin-gold">{net.secret}</span>. A publicação usa esse secret com segurança pelo servidor.</p>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button onClick={() => onConnect(net, { account_name: accountName || null, account_id: accountId || null })} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Salvar conexão</button>
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
         </div>
       </div>

@@ -8,7 +8,7 @@ const triggerLabel = (t) => TRIGGER_OPTIONS.find((o) => o.value === t)?.label ||
 const ST = { draft: ['Rascunho', 'bg-white/[0.06] text-admin-muted/50'], active: ['Ativa', 'bg-admin-sage/15 text-admin-sage'], paused: ['Pausada', 'bg-admin-rose/15 text-admin-rose'] }
 
 // Automation Studio → Jornadas. Lista + templates + abre o construtor visual.
-export function JourneysTab({ tenantId, coupons = [], notify }) {
+export function JourneysTab({ tenantId, coupons = [], triggerOptions, notify }) {
   const [journeys, setJourneys] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)   // objeto jornada em edição (ou 'new'-ish)
@@ -36,7 +36,7 @@ export function JourneysTab({ tenantId, coupons = [], notify }) {
   }
 
   if (editing) {
-    return <JourneyBuilder journey={editing} coupons={coupons} tenantId={tenantId} notify={notify} onBack={() => { setEditing(null); load() }} onSaved={() => { setEditing(null); load() }} />
+    return <JourneyBuilder journey={editing} coupons={coupons} triggerOptions={triggerOptions} tenantId={tenantId} notify={notify} onBack={() => { setEditing(null); load() }} onSaved={() => { setEditing(null); load() }} />
   }
 
   return (

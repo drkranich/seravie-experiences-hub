@@ -194,7 +194,7 @@ export function MarketingPanel({ notify }) {
           {/* Automation Studio */}
           {studio === 'automation' && tab === 'automations' && <AutomationsTab automations={automations} coupons={coupons} triggerOptions={triggerOptions} triggerMeta={triggerMeta} onEdit={setAutoModal} onNew={() => setAutoModal({})} notify={notify} reload={loadAutomations} />}
           {studio === 'automation' && tab === 'triggers' && <TriggersTab tenantId={tenantId} customEvents={customEvents} notify={notify} reload={loadCustomEvents} />}
-          {studio === 'automation' && tab === 'journeys' && <JourneysTab tenantId={tenantId} coupons={coupons} notify={notify} />}
+          {studio === 'automation' && tab === 'journeys' && <JourneysTab tenantId={tenantId} coupons={coupons} triggerOptions={triggerOptions} notify={notify} />}
 
           {/* Audience Studio */}
           {studio === 'audience' && tab === 'audience' && <AudienceTab contacts={contacts} />}
