@@ -12,6 +12,8 @@ import { Messages } from './network/Messages'
 import { NotificationsBell } from './network/Notifications'
 import { NetworkEvents } from './network/NetworkEvents'
 import { ServiceMarketplace } from './network/ServiceMarketplace'
+import { StoriesStrip } from './network/Stories'
+import { TalentPool } from './network/TalentPool'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Network — plataforma social profissional do ecossistema
@@ -24,6 +26,7 @@ const NAV = [
   { key: 'communities', label: 'Comunidades', icon: 'users' },
   { key: 'people', label: 'Pessoas & Empresas', icon: 'user' },
   { key: 'services', label: 'Marketplace de Serviços', icon: 'tag' },
+  { key: 'talent', label: 'Banco de Talentos', icon: 'star' },
   { key: 'events', label: 'Eventos', icon: 'calendar' },
   { key: 'projects', label: 'Projetos', icon: 'layout' },
 ]
@@ -195,6 +198,7 @@ function Feed({ me, notify }) {
 
   return (
     <div className="max-w-2xl mx-auto">
+      <StoriesStrip me={me} notify={notify} />
       <Composer me={me} onPost={addPost} notify={notify} />
       {communities.length > 0 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-2">
@@ -265,6 +269,7 @@ export function SeravieNetwork({ notify }) {
         {view === 'communities' && <Communities me={me} notify={notify} />}
         {view === 'people' && <People notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
         {view === 'services' && <ServiceMarketplace me={me} notify={notify} />}
+        {view === 'talent' && <TalentPool me={me} notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
         {view === 'events' && <NetworkEvents me={me} notify={notify} />}
         {view === 'projects' && <NetworkProjects me={me} notify={notify} />}
       </div>

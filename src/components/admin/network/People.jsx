@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
+import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect } from '../ui'
 import { VERIF, PERSON_TYPES, initials } from '../../../lib/networkSocial'
+import { uploadTo } from '../../../lib/storage'
 
 // Pessoas & Empresas — diretório de perfis profissionais + perfil rico.
 
@@ -71,7 +73,26 @@ export function People({ notify, onMessage }) {
 }
 
 function MemberProfile({ member: m, onBack, onMessage }) {
+  const { profile } = useTenant()
+  const isMine = m.tenant_id === profile?.tenant_id
   const specialties = Array.isArray(m.specialties) ? m.specialties : []
+  const [portfolio, setPortfolio] = useState([])
+  const pfRef = useRef(null)
+
+  useEffect(() => {
+    supabase.from('network_portfolio').select('*').eq('member_id', m.id).order('created_at', { ascending: false }).then(({ data }) => setPortfolio(data || []))
+  }, [m.id])
+
+  const addPortfolio = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    const r = await uploadTo(file, { folder: 'network/portfolio', accept: 'image', maxMB: 15 })
+    if (pfRef.current) pfRef.current.value = ''
+    if (r.error) return
+    const { data } = await supabase.from('network_portfolio').insert({ tenant_id: profile?.tenant_id, member_id: m.id, title: file.name.replace(/\.[^.]+$/, ''), cover_url: r.url, kind: 'projeto' }).select('*').single()
+    if (data) setPortfolio((p) => [data, ...p])
+  }
+  const rmPortfolio = async (id) => { await supabase.from('network_portfolio').delete().eq('id', id); setPortfolio((p) => p.filter((x) => x.id !== id)) }
+
   return (
     <div>
       <button onClick={onBack} className="flex items-center gap-1.5 text-admin-muted/60 hover:text-admin-text text-sm mb-4 transition-colors"><Icon name="down" className="w-4 h-4 rotate-90" /> Voltar</button>
@@ -100,6 +121,20 @@ function MemberProfile({ member: m, onBack, onMessage }) {
           <div className="lg:col-span-2 space-y-5">
             {m.bio && <div className="glass rounded-2xl p-5"><h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-2">Sobre</h3><p className="text-admin-muted/70 text-sm leading-relaxed whitespace-pre-wrap">{m.bio}</p></div>}
             {specialties.length > 0 && <div className="glass rounded-2xl p-5"><h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Especialidades</h3><div className="flex flex-wrap gap-2">{specialties.map((s, i) => <span key={i} className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] text-admin-muted/70">{s}</span>)}</div></div>}
+            {/* Portfólio */}
+            <div className="glass rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70">Portfólio</h3>
+                {isMine && <><button onClick={() => pfRef.current?.click()} className="text-[11px] text-admin-champ/80 hover:text-admin-champ flex items-center gap-1"><Icon name="plus" className="w-3.5 h-3.5" />Adicionar</button><input ref={pfRef} type="file" accept="image/*" onChange={addPortfolio} className="hidden" /></>}
+              </div>
+              {portfolio.length === 0 ? <p className="text-admin-muted/40 text-xs">{isMine ? 'Adicione trabalhos ao seu portfólio.' : 'Sem trabalhos publicados ainda.'}</p>
+                : <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{portfolio.map((p) => (
+                    <div key={p.id} className="group relative rounded-xl overflow-hidden aspect-square bg-white/[0.03]">
+                      {p.cover_url ? <img src={p.cover_url} alt={p.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Icon name="image" className="w-6 h-6 text-admin-champ/20" /></div>}
+                      {isMine && <button onClick={() => rmPortfolio(p.id)} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 text-white/80 hover:text-admin-rose flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="x" className="w-3 h-3" /></button>}
+                    </div>
+                  ))}</div>}
+            </div>
           </div>
           <div className="glass rounded-2xl p-5 space-y-3 h-fit">
             <h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70">Contato</h3>
