@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect, GlassMulti } from './ui'
+import { Icon, GlassSelect, GlassMulti, AddressAutocomplete } from './ui'
 import { ResourceTabs } from './ResourcePanel'
 import { KanbanBoard } from './Kanban'
 import { LegalGate, useLegalGate } from './LegalGate'
@@ -165,7 +165,7 @@ function Directory({ notify }) {
 }
 
 // ---------- Meu Perfil de Fornecedor ----------
-const EMPTY = { name: '', category: '', description: '', city: '', logo_url: '', cover_url: '', whatsapp: '', instagram: '', website: '', catalog_pdf_url: '', products: '', services: '', min_order: '', lead_time: '', years_market: '', production_type: 'artesanal', customization: false, export: false, status: 'draft', specialties: [], subcategories: [], states: [] }
+const EMPTY = { name: '', category: '', description: '', city: '', cep: '', address: '', address_number: '', neighborhood: '', state: '', lat: null, lng: null, logo_url: '', cover_url: '', whatsapp: '', instagram: '', website: '', catalog_pdf_url: '', products: '', services: '', min_order: '', lead_time: '', years_market: '', production_type: 'artesanal', customization: false, export: false, status: 'draft', specialties: [], subcategories: [], states: [] }
 
 function MyProfile({ notify }) {
   const { profile } = useTenant()
@@ -194,6 +194,9 @@ function MyProfile({ notify }) {
     setSaving(true)
     const payload = {
       name: form.name, category: form.category || null, description: form.description, city: form.city,
+      cep: form.cep || null, address: form.address || null, address_number: form.address_number || null,
+      neighborhood: form.neighborhood || null, state: form.state || null, country: form.country || 'BR',
+      lat: form.lat ?? null, lng: form.lng ?? null,
       logo_url: form.logo_url, cover_url: form.cover_url, whatsapp: form.whatsapp, instagram: form.instagram,
       website: form.website, catalog_pdf_url: form.catalog_pdf_url, products: form.products, services: form.services,
       min_order: form.min_order, lead_time: form.lead_time, years_market: form.years_market ? parseInt(form.years_market) : null,
@@ -234,7 +237,14 @@ function MyProfile({ notify }) {
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Categoria</label><GlassSelect value={form.category} onChange={(v) => set('category', v)} options={[{ value: '', label: '—' }, ...Object.entries(SUPPLIER_CATEGORIES).map(([value, label]) => ({ value, label }))]} /></div>
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Produção</label><GlassSelect value={form.production_type} onChange={(v) => set('production_type', v)} options={Object.entries(PROD).map(([value, label]) => ({ value, label }))} /></div>
           <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Descrição institucional</label><textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} className={`${inputCls} resize-none`} /></div>
-          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Cidade</label><input value={form.city} onChange={(e) => set('city', e.target.value)} className={inputCls} /></div>
+          <div className="col-span-2">
+            <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Endereço-sede (GPS)</label>
+            <AddressAutocomplete
+              value={{ cep: form.cep, address: form.address, address_number: form.address_number, neighborhood: form.neighborhood, city: form.city, state: form.state, lat: form.lat, lng: form.lng }}
+              onChange={(a) => setForm((s) => ({ ...s, cep: a.cep, address: a.address, address_number: a.address_number, neighborhood: a.neighborhood, city: a.city, state: a.state, lat: a.lat, lng: a.lng }))}
+              notify={notify}
+            />
+          </div>
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Anos de mercado</label><input type="number" value={form.years_market} onChange={(e) => set('years_market', e.target.value)} className={inputCls} /></div>
           <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Estados atendidos</label><GlassMulti value={form.states} onChange={(v) => set('states', v)} options={STATES.map((s) => ({ value: s, label: s }))} placeholder="Selecione as UFs" /></div>
           <div className="col-span-2"><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Especialidades (separe por vírgula)</label><input value={(form.specialties || []).join(', ')} onChange={(e) => set('specialties', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} className={inputCls} placeholder="Ex: farmhouse, rústico, personalização" /></div>
