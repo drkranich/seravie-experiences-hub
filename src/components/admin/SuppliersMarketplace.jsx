@@ -15,6 +15,9 @@ import { TechLibrary } from './suppliers/TechLibrary'
 import { BuyerProjects } from './suppliers/BuyerProjects'
 import { PurchasingAnalytics, PurchasingAI } from './suppliers/PurchasingExtras'
 import { SeravieMatch } from './suppliers/SeravieMatch'
+import { BuyerOrders } from './suppliers/BuyerOrders'
+import { DirectMarket } from './suppliers/DirectMarket'
+import { SupplierEvents } from './suppliers/SupplierEvents'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Suppliers — marketplace B2B de descoberta (estilo Faire/Archiproducts)
@@ -29,7 +32,10 @@ const NAV = [
   { key: 'rfq', label: 'Cotações', icon: 'mail' },
   { key: 'ai', label: 'IA de Compras', icon: 'sparkles' },
   { key: 'match', label: 'Seravie Match', icon: 'spark' },
+  { key: 'direct', label: 'Venda Direta', icon: 'cart' },
+  { key: 'orders', label: 'Compras', icon: 'truck' },
   { key: 'projects', label: 'Projetos', icon: 'layout' },
+  { key: 'sup_events', label: 'Eventos', icon: 'calendar' },
   { key: 'library', label: 'Biblioteca Técnica', icon: 'book' },
   { key: 'moodboards', label: 'Moodboards', icon: 'palette' },
   { key: 'analytics', label: 'Analytics', icon: 'chart' },
@@ -269,6 +275,9 @@ export function SuppliersMarketplace({ notify }) {
         {view === 'ai' && <PurchasingAI notify={notify} />}
         {view === 'match' && <SeravieMatch onOpenSupplier={setOpenSupplier} notify={notify} />}
         {view === 'projects' && <BuyerProjects suppliers={suppliers} onOpenSupplier={setOpenSupplier} notify={notify} />}
+        {view === 'direct' && <DirectMarket onOpenSupplier={setOpenSupplier} notify={notify} />}
+        {view === 'orders' && <BuyerOrders suppliers={suppliers} notify={notify} />}
+        {view === 'sup_events' && <SupplierEvents notify={notify} />}
         {view === 'library' && <TechLibrary suppliers={suppliers} notify={notify} />}
         {view === 'analytics' && <PurchasingAnalytics suppliers={suppliers} />}
         {view === 'moodboards' && <Moodboards suppliers={suppliers} onOpenSupplier={setOpenSupplier} notify={notify} />}

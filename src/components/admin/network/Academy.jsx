@@ -4,6 +4,7 @@ import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from '../ui'
 import { uploadTo } from '../../../lib/storage'
 import { uploadLessonVideo } from '../../../lib/videoUpload'
+import { CoursePlayer } from './CoursePlayer'
 
 // Seravie Academy — trilhas e cursos do ecossistema. Membros se inscrevem,
 // acompanham progresso; qualquer tenant pode publicar seus próprios cursos.
@@ -20,6 +21,7 @@ export function Academy({ me, notify }) {
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('')
   const [creating, setCreating] = useState(false)
+  const [watching, setWatching] = useState(null)
 
   const load = async () => {
     setLoading(true)
@@ -51,6 +53,18 @@ export function Academy({ me, notify }) {
     if (completed) notify?.('Curso concluído! 🎓', 'success')
   }
   const onCreated = (c) => { setCourses((cs) => [c, ...cs]); setCreating(false); notify?.('Curso publicado', 'success') }
+  const watch = async (course) => {
+    let en = enrollments[course.id]
+    if (!en) {
+      const { data } = await supabase.from('network_academy_enrollments').insert({ tenant_id: tenantId, course_id: course.id, member_id: me?.id, progress: 0 }).select('*').single()
+      if (data) { en = data; setEnrollments((m) => ({ ...m, [course.id]: data })); setCourses((cs) => cs.map((c) => c.id === course.id ? { ...c, enrolled_count: (c.enrolled_count || 0) + 1 } : c)); supabase.from('network_academy_courses').update({ enrolled_count: (course.enrolled_count || 0) + 1 }).eq('id', course.id) }
+    }
+    setWatching({ course, enrollment: en })
+  }
+  const playerProgress = (course, progress) => {
+    const en = enrollments[course.id]
+    setEnrollments((m) => ({ ...m, [course.id]: { ...(en || {}), progress, completed: progress >= 100 } }))
+  }
 
   const cats = useMemo(() => [...new Set(courses.map((c) => c.category).filter(Boolean))], [courses])
   const filtered = useMemo(() => {
@@ -58,6 +72,8 @@ export function Academy({ me, notify }) {
     return courses.filter((c) => (!cat || c.category === cat) && (!nq || [c.title, c.subtitle, c.instructor, c.category].join(' ').toLowerCase().includes(nq)))
   }, [courses, q, cat])
   const mine = filtered.filter((c) => enrollments[c.id])
+
+  if (watching) return <CoursePlayer course={watching.course} enrollment={watching.enrollment} me={me} onBack={() => setWatching(null)} onProgress={playerProgress} notify={notify} />
 
   return (
     <div>
@@ -74,7 +90,7 @@ export function Academy({ me, notify }) {
         <div className="mb-6">
           <p className="text-[11px] uppercase tracking-wider text-admin-champ/60 mb-3">Continuar aprendendo</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mine.map((c) => <CourseCard key={c.id} c={c} enrollment={enrollments[c.id]} onEnroll={enroll} onProgress={setProgress} />)}
+            {mine.map((c) => <CourseCard key={c.id} c={c} enrollment={enrollments[c.id]} onEnroll={enroll} onProgress={setProgress} onWatch={watch} />)}
           </div>
         </div>
       )}
@@ -84,7 +100,7 @@ export function Academy({ me, notify }) {
           : <>
               {mine.length > 0 && <p className="text-[11px] uppercase tracking-wider text-admin-champ/60 mb-3">Todos os cursos</p>}
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filtered.map((c) => <CourseCard key={c.id} c={c} enrollment={enrollments[c.id]} onEnroll={enroll} onProgress={setProgress} />)}
+                {filtered.map((c) => <CourseCard key={c.id} c={c} enrollment={enrollments[c.id]} onEnroll={enroll} onProgress={setProgress} onWatch={watch} />)}
               </div>
             </>}
 
@@ -93,7 +109,7 @@ export function Academy({ me, notify }) {
   )
 }
 
-function CourseCard({ c, enrollment, onEnroll, onProgress }) {
+function CourseCard({ c, enrollment, onEnroll, onProgress, onWatch }) {
   const enrolled = !!enrollment
   const progress = enrollment?.progress || 0
   return (
@@ -120,12 +136,13 @@ function CourseCard({ c, enrollment, onEnroll, onProgress }) {
           <div className="mt-3 pt-3 border-t border-white/[0.05]">
             <div className="flex items-center justify-between text-[11px] mb-1.5"><span className="text-admin-muted/50">{enrollment.completed ? 'Concluído' : 'Progresso'}</span><span className="text-admin-champ">{progress}%</span></div>
             <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden"><div className="h-full bg-gradient-to-r from-admin-champ to-admin-copper transition-all" style={{ width: `${progress}%` }} /></div>
-            <div className="flex gap-1.5 mt-2">
-              {[25, 50, 75, 100].map((p) => <button key={p} onClick={() => onProgress(c, p)} className="flex-1 text-[10px] py-1 rounded-md bg-white/[0.04] text-admin-muted/60 hover:text-admin-champ hover:bg-admin-champ/10 transition-colors">{p === 100 ? '✓ Fim' : `${p}%`}</button>)}
-            </div>
+            <button onClick={() => onWatch(c)} className="mt-2.5 w-full py-2 rounded-xl text-sm bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 transition-colors flex items-center justify-center gap-1.5"><Icon name="play" className="w-3.5 h-3.5" />{progress > 0 ? 'Continuar' : 'Assistir'}</button>
           </div>
         ) : (
-          <button onClick={() => onEnroll(c)} className="mt-3 w-full py-2 rounded-xl text-sm bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20 transition-colors">Inscrever-se {c.enrolled_count ? `· ${c.enrolled_count}` : ''}</button>
+          <div className="mt-3 flex gap-1.5">
+            <button onClick={() => onEnroll(c)} className="flex-1 py-2 rounded-xl text-sm bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20 transition-colors">Inscrever-se {c.enrolled_count ? `· ${c.enrolled_count}` : ''}</button>
+            <button onClick={() => onWatch(c)} className="px-3 py-2 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors flex items-center gap-1.5" title="Assistir"><Icon name="play" className="w-3.5 h-3.5" /></button>
+          </div>
         )}
       </div>
     </div>
