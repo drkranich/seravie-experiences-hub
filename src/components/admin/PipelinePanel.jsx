@@ -149,7 +149,7 @@ export function PipelinePanel({ notify }) {
       </div>
 
       {loading ? <p className="text-admin-muted/30 text-sm py-16 text-center">Carregando…</p> : (
-        <div className="flex gap-3 overflow-x-auto pb-4">
+        <div className="grid gap-3 pb-4" style={{ gridTemplateColumns: `repeat(${Math.max(1, stages.filter((s) => !s.is_lost).length)}, minmax(0, 1fr))` }}>
           {stages.filter((s) => !s.is_lost).map((stage) => {
             const list = byStage[stage.key] || []
             const sum = list.reduce((s, d) => s + Number(d.value || 0), 0)
@@ -157,13 +157,13 @@ export function PipelinePanel({ notify }) {
             return (
               <div
                 key={stage.key}
-                className="shrink-0 w-72"
+                className="min-w-0"
                 onDragOver={(e) => { e.preventDefault() }}
                 onDrop={() => { const d = deals.find((x) => x.id === dragId); if (d) moveStage(d, stage.key); setDragId(null) }}
               >
-                <div className={`flex items-center justify-between px-1 mb-2 border-l-2 pl-2 ${sty.border}`}>
-                  <span className={`text-xs uppercase tracking-wider ${sty.text}`}>{stage.label}</span>
-                  <span className="text-admin-muted/40 text-[11px]">{list.length}{sum > 0 ? ` · ${brl(sum)}` : ''}</span>
+                <div className={`flex items-center justify-between gap-1 px-1 mb-2 border-l-2 pl-2 ${sty.border}`}>
+                  <span className={`text-xs uppercase tracking-wider truncate ${sty.text}`} title={stage.label}>{stage.label}</span>
+                  <span className="text-admin-muted/40 text-[11px] shrink-0">{list.length}</span>
                 </div>
                 <div className={`space-y-2 min-h-[80px] rounded-xl p-1 transition-colors ${dragId ? 'bg-white/[0.02]' : ''}`}>
                   {list.map((d) => (

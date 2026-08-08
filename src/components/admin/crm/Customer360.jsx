@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { Icon } from '../ui'
 import { loadCustomer360, relationshipScore, customerInsights, TIMELINE_KIND } from '../../../lib/customer360'
+import { RelationshipGraph, CopilotPanel } from './RelationshipGraph'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 const dt = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—'
@@ -17,7 +18,7 @@ const TONE = {
 export function Customer360({ contact, onBack, notify }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('timeline')
+  const [tab, setTab] = useState('copilot')
 
   useEffect(() => { (async () => {
     setLoading(true)
@@ -32,6 +33,7 @@ export function Customer360({ contact, onBack, notify }) {
   const initials = (contact.name || '?').split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
 
   const TABS = [
+    ['copilot', 'Copilot & Graph', 'spark', null],
     ['timeline', 'Timeline', 'clock', data?.timeline?.length],
     ['orders', 'Pedidos', 'cart', data?.orders?.length],
     ['deals', 'Negócios', 'chart', data?.deals?.length],
@@ -128,6 +130,12 @@ export function Customer360({ contact, onBack, notify }) {
             ))}
           </div>
 
+          {tab === 'copilot' && (
+            <div className="space-y-4">
+              <CopilotPanel contact={contact} data={data} summary={s} />
+              <RelationshipGraph contact={contact} data={data} />
+            </div>
+          )}
           {tab === 'timeline' && <Timeline items={data.timeline} />}
           {tab === 'orders' && <SimpleList rows={data.orders.map((o) => ({ title: `Pedido #${o.number || ''}`, sub: `${o.status} · ${o.channel || ''}`, right: brl(o.total), date: o.created_at }))} empty="Sem pedidos." />}
           {tab === 'deals' && <SimpleList rows={data.deals.map((d) => ({ title: d.title, sub: `${d.stage} · ${d.status}`, right: brl(d.value), date: d.created_at }))} empty="Sem negócios." />}

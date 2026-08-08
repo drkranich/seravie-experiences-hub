@@ -6,6 +6,7 @@ import { exportCsv, exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
 import { CRMDashboard } from './crm/CRMDashboard'
 import { Customer360 } from './crm/Customer360'
+import { Companies } from './crm/Companies'
 
 const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
@@ -104,8 +105,8 @@ export function CRMPanel({ notify }) {
       </div>
 
       {/* Navegação */}
-      <div className="flex gap-1.5 mb-6">
-        {[['dashboard', 'Dashboard', 'grid'], ['contacts', 'Contatos', 'user']].map(([k, v, ic]) => (
+      <div className="flex gap-1.5 mb-6 flex-wrap">
+        {[['dashboard', 'Dashboard', 'grid'], ['contacts', 'Contatos', 'user'], ['companies', 'Empresas', 'building']].map(([k, v, ic]) => (
           <button key={k} onClick={() => setView(k)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-colors ${view === k ? 'bg-admin-champ/15 text-admin-champ border border-admin-champ/20' : 'text-admin-muted hover:text-admin-text border border-transparent'}`}>
             <Icon name={ic} className="w-4 h-4" />{v}
           </button>
@@ -113,6 +114,7 @@ export function CRMPanel({ notify }) {
       </div>
 
       {view === 'dashboard' && <CRMDashboard notify={notify} onOpenContact={(c) => setC360(c)} />}
+      {view === 'companies' && <Companies notify={notify} onOpenContact={(c) => setC360(c)} />}
 
       {view === 'contacts' && (
       <>
