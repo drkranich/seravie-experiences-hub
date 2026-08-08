@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Icon } from './ui'
 import { navCommands, rankItems, norm } from '../../lib/commandSearch'
+import { setFocus } from '../../lib/focusTarget'
 
 // Ctrl+K / Cmd+K — buscador global do ecossistema Seravie.
 // Encontra: navegação (painéis/abas), dados reais (clientes, empresas, unidades,
@@ -29,7 +30,7 @@ const HELP_ITEMS = [
 // Fontes de dados: cada uma vira um grupo de resultados ao pesquisar.
 const DATA_SOURCES = [
   { key: 'contacts', table: 'contacts', label: 'Clientes', icon: 'user', route: 'crm', cols: 'id,name,email,phone', text: (r) => [r.name, r.email, r.phone], title: (r) => r.name || r.email || 'Cliente', sub: (r) => r.email || r.phone || '' },
-  { key: 'companies', table: 'contacts', label: 'Empresas', icon: 'building', route: 'crm_companies', filter: (q) => q.eq('type', 'company'), cols: 'id,name,email,phone,type', text: (r) => [r.name, r.email], title: (r) => r.name || 'Empresa', sub: (r) => r.email || '' },
+  { key: 'companies', table: 'contacts', label: 'Empresas', icon: 'building', route: 'crm', filter: (q) => q.eq('type', 'company'), cols: 'id,name,email,phone,type', text: (r) => [r.name, r.email], title: (r) => r.name || 'Empresa', sub: (r) => r.email || '' },
   { key: 'units', table: 'units', label: 'Unidades', icon: 'map', route: 'franchise', cols: 'id,name,city,state', text: (r) => [r.name, r.city, r.state], title: (r) => r.name || 'Unidade', sub: (r) => [r.city, r.state].filter(Boolean).join(', ') },
   { key: 'orders', table: 'orders', label: 'Pedidos', icon: 'cart', route: 'pos', cols: 'id,code,total,status,created_at', text: (r) => [r.code, r.id], title: (r) => 'Pedido ' + (r.code || String(r.id).slice(0, 8)), sub: (r) => (r.status || '') + (r.total ? ' · R$ ' + Number(r.total).toFixed(2) : '') },
   { key: 'conversations', table: 'conversations', label: 'Conversas', icon: 'mail', route: 'conversations', cols: 'id,subject,channel', text: (r) => [r.subject, r.channel], title: (r) => r.subject || 'Conversa', sub: (r) => r.channel || '' },
@@ -80,6 +81,7 @@ export function CommandPalette({ open, onClose, sections = [], onNavigate, notif
               label: src.title(r),
               sublabel: src.sub(r),
               _raw: r,
+              _source: src.key,
             }))
           } catch { return [] }
         }))
@@ -122,11 +124,11 @@ export function CommandPalette({ open, onClose, sections = [], onNavigate, notif
   const run = useCallback((item) => {
     if (!item) return
     if (item.kind === 'help') { notify?.('Use ↑ ↓ para navegar e Enter para abrir.', 'info'); return }
-    if (item.route && onNavigate) onNavigate(item.route)
-    if (item.kind === 'data' && item._raw) {
-      // guarda o alvo pra tela de destino poder focar (best-effort, via sessionStorage evitado)
-      notify?.(`Abrindo ${item.label}…`, 'info')
+    // Deep-link: registra o alvo ANTES de navegar, para a tela de destino abrir o registro.
+    if (item.kind === 'data' && item._raw && item._source) {
+      setFocus(item._source, item._raw.id, item._raw)
     }
+    if (item.route && onNavigate) onNavigate(item.route)
     onClose?.()
   }, [onNavigate, onClose, notify])
 
@@ -148,10 +150,10 @@ export function CommandPalette({ open, onClose, sections = [], onNavigate, notif
   let running = -1 // índice global crescente para casar com `sel`
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[12vh] px-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-xl glass-pop rounded-2xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xl glass-pop rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[75vh]" onClick={(e) => e.stopPropagation()}>
         {/* campo de busca */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.07]">
-          <Icon name="search" className="w-4.5 h-4.5 text-admin-champ/60 shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.07] shrink-0">
+          <span className="w-4 h-4 shrink-0 flex items-center justify-center text-admin-champ/60"><Icon name="search" className="w-4 h-4" /></span>
           <input
             ref={inputRef}
             value={q}
@@ -165,7 +167,7 @@ export function CommandPalette({ open, onClose, sections = [], onNavigate, notif
         </div>
 
         {/* resultados */}
-        <div ref={listRef} className="max-h-[56vh] overflow-y-auto py-2">
+        <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto py-2">
           {flat.length === 0 ? (
             <div className="px-4 py-10 text-center text-admin-muted/40 text-sm">
               Nada encontrado para “{q}”.
@@ -204,7 +206,7 @@ export function CommandPalette({ open, onClose, sections = [], onNavigate, notif
         </div>
 
         {/* rodapé */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] text-[10px] text-admin-muted/40">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] text-[10px] text-admin-muted/40 shrink-0">
           <span>{flat.length} resultado{flat.length === 1 ? '' : 's'}</span>
           <span className="flex items-center gap-2"><kbd className="border border-white/10 rounded px-1">↑↓</kbd> navegar <kbd className="border border-white/10 rounded px-1">↵</kbd> abrir</span>
         </div>

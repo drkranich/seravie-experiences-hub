@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { Icon } from './ui'
 import { AttachButton, PendingAttachments, AttachmentList } from './AttachmentField'
+import { consumeFocus } from '../../lib/focusTarget'
 
 const CHANNELS = ['email','whatsapp','instagram','messenger','chat','internal']
 const CHANNEL_ICONS = { email:'mail', whatsapp:'mail', instagram:'star', messenger:'mail', chat:'mail', internal:'user', phone:'user', telegram:'mail', google_business:'leaf' }
@@ -39,6 +40,18 @@ export function ConversationsInbox({ notify }) {
 
   useEffect(() => { loadConversations() }, [filterStatus, filterChannel])
   useEffect(() => { if (active) loadMessages(active.id) }, [active])
+
+  // Deep-link do Ctrl+K: abre direto a conversa buscada.
+  useEffect(() => {
+    const f = consumeFocus('conversations')
+    if (!f) return
+    let alive = true
+    ;(async () => {
+      const { data } = await supabase.from('conversations').select('*, contacts(name, email)').eq('id', f.id).maybeSingle()
+      if (alive && data) { setFilterStatus(''); setActive(data) }
+    })()
+    return () => { alive = false }
+  }, [])
 
   const send = async () => {
     if ((!newMsg.trim() && attachments.length === 0) || !active) return

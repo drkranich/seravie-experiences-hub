@@ -12,6 +12,7 @@ import { CRMSegments } from './crm/CRMSegments'
 import { Omnichannel } from './crm/Omnichannel'
 import { Projects } from './crm/Projects'
 import { CustomerMap, Subscriptions } from './crm/MapAndSubs'
+import { consumeFocus } from '../../lib/focusTarget'
 
 const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
@@ -45,6 +46,22 @@ export function CRMPanel({ notify }) {
   }
 
   useEffect(() => { load() }, [search, filterType])
+
+  // Deep-link do Ctrl+K: abre direto a visão 360° do contato/empresa buscado.
+  useEffect(() => {
+    const f = consumeFocus('contacts') || consumeFocus('companies')
+    if (!f) return
+    let alive = true
+    ;(async () => {
+      let row = f.raw
+      if (!row || row.id !== f.id) {
+        const { data } = await supabase.from('contacts').select('*').eq('id', f.id).maybeSingle()
+        row = data || row
+      }
+      if (alive && row) { setView('contacts'); setC360(row) }
+    })()
+    return () => { alive = false }
+  }, [])
 
   const save = async () => {
     if (!form.name.trim()) { notify('Nome obrigatório', 'error'); return }

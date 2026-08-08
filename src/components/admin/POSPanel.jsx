@@ -8,6 +8,7 @@ import { uploadTo } from '../../lib/storage'
 import { exportPdf, exportCsv } from '../../lib/export'
 import { printProductLabels, printThermalReceipt, LABEL_TEMPLATES, LABEL_TEMPLATE_MAP, labelCellHtml } from '../../lib/labels'
 import { emitSaleEvents, emitMarketingEvent } from '../../lib/marketingEvents'
+import { consumeFocus } from '../../lib/focusTarget'
 
 const PAYMENT_METHODS = [
   { value: 'dinheiro', label: 'Dinheiro' },
@@ -182,6 +183,26 @@ export function POSPanel({ notify }) {
     setTables(tbs || [])
   }
   useEffect(() => { loadSession(); loadProducts(); loadAux(); loadProfile() }, [])
+
+  // Deep-link do Ctrl+K: ao buscar um pedido, carrega o cliente dele no PDV
+  // (apenas se não houver venda em andamento, para não atrapalhar o caixa).
+  useEffect(() => {
+    const f = consumeFocus('orders')
+    if (!f) return
+    let alive = true
+    ;(async () => {
+      const { data: ord } = await supabase.from('orders').select('id, code, contact_id').eq('id', f.id).maybeSingle()
+      if (!alive || !ord) return
+      const ref = ord.code || String(ord.id).slice(0, 8)
+      if (ord.contact_id) {
+        const { data: ct } = await supabase.from('contacts').select('id, name').eq('id', ord.contact_id).maybeSingle()
+        if (alive && ct && cart.length === 0) { setCustomer({ id: ct.id, name: ct.name }); notify?.(`Pedido ${ref} — cliente ${ct.name || ''} carregado.`, 'info') }
+        else if (alive) notify?.(`Pedido ${ref} de ${ct?.name || 'cliente'} (venda em andamento — não alterei o caixa).`, 'info')
+      } else if (alive) notify?.(`Pedido ${ref} encontrado.`, 'info')
+    })()
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ---------- Cadastro rápido de produtos (widget product_admin) ----------
   const saveProduct = async (form) => {
