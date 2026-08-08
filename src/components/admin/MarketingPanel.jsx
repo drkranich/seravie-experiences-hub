@@ -7,6 +7,10 @@ import { JourneysTab } from './marketing/JourneysTab'
 import { AudienceStudio } from './marketing/AudienceStudio'
 import { ChannelsTab, ReferralsTab } from './marketing/CampaignStudio'
 import { AnalyticsTab, AttributionTab } from './marketing/MarketingIntelligence'
+import { LoyaltyTab } from './marketing/LoyaltyTab'
+import { FormsTab } from './marketing/FormsTab'
+import { ContentTab } from './marketing/ContentTab'
+import { LandingTab } from './marketing/LandingTab'
 import { MARKETING_EVENTS, EVENT_MAP, eventLabel } from '../../lib/marketingEvents'
 
 // ---- helpers ----
@@ -66,7 +70,7 @@ const STUDIOS = [
   { key: 'dashboard', label: 'Dashboard', icon: 'grid' },
   {
     key: 'growth', label: 'Growth Studio', icon: 'spark',
-    tabs: [['campaigns', 'Campanhas', 'mail'], ['calendar', 'Calendário', 'calendar', true], ['content', 'Conteúdo', 'star', true], ['landing', 'Landing Pages', 'layers', true], ['forms', 'Formulários', 'check', true]],
+    tabs: [['campaigns', 'Campanhas', 'mail'], ['calendar', 'Calendário', 'calendar'], ['content', 'Conteúdo', 'star'], ['landing', 'Landing Pages', 'layers'], ['forms', 'Formulários', 'check']],
   },
   {
     key: 'automation', label: 'Automation Studio', icon: 'spark',
@@ -74,7 +78,7 @@ const STUDIOS = [
   },
   {
     key: 'audience', label: 'Audience Studio', icon: 'user',
-    tabs: [['audience', 'Público', 'user'], ['segments', 'Segmentação', 'search'], ['loyalty', 'Fidelidade', 'star', true]],
+    tabs: [['audience', 'Público', 'user'], ['segments', 'Segmentação', 'search'], ['loyalty', 'Fidelidade', 'star']],
   },
   {
     key: 'campaign', label: 'Campaign Studio', icon: 'mail',
@@ -168,7 +172,9 @@ export function MarketingPanel({ notify }) {
           {/* Growth Studio */}
           {studio === 'growth' && tab === 'campaigns' && <CampaignsTab campaigns={campaigns} contacts={contacts} notify={notify} reload={loadCampaigns} tenantId={tenantId} />}
           {studio === 'growth' && tab === 'calendar' && <CampaignCalendar campaigns={campaigns} tenantId={tenantId} createdBy={profile?.user_id} notify={notify} reload={loadCampaigns} />}
-          {studio === 'growth' && ['content', 'landing', 'forms'].includes(tab) && <ComingSoon tab={tab} />}
+          {studio === 'growth' && tab === 'content' && <ContentTab tenantId={tenantId} createdBy={profile?.user_id} notify={notify} />}
+          {studio === 'growth' && tab === 'landing' && <LandingTab tenantId={tenantId} notify={notify} />}
+          {studio === 'growth' && tab === 'forms' && <FormsTab tenantId={tenantId} notify={notify} />}
 
           {/* Automation Studio */}
           {studio === 'automation' && tab === 'automations' && <AutomationsTab automations={automations} coupons={coupons} onEdit={setAutoModal} notify={notify} reload={loadAutomations} />}
@@ -178,7 +184,7 @@ export function MarketingPanel({ notify }) {
           {/* Audience Studio */}
           {studio === 'audience' && tab === 'audience' && <AudienceTab contacts={contacts} />}
           {studio === 'audience' && tab === 'segments' && <AudienceStudio tenantId={tenantId} notify={notify} />}
-          {studio === 'audience' && tab === 'loyalty' && <ComingSoon tab={tab} />}
+          {studio === 'audience' && tab === 'loyalty' && <LoyaltyTab notify={notify} />}
 
           {/* Campaign Studio */}
           {studio === 'campaign' && tab === 'coupons' && <CouponsTab coupons={coupons} reload={loadCoupons} />}
