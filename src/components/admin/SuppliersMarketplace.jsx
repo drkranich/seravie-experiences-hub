@@ -8,6 +8,8 @@ import {
 } from '../../lib/suppliersMarket'
 import { SupplierProfile } from './suppliers/SupplierProfile'
 import { Moodboards } from './suppliers/Moodboards'
+import { Comparator } from './suppliers/Comparator'
+import { RfqCenter } from './suppliers/RfqCenter'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Suppliers — marketplace B2B de descoberta (estilo Faire/Archiproducts)
@@ -17,6 +19,8 @@ import { Moodboards } from './suppliers/Moodboards'
 
 const NAV = [
   { key: 'discover', label: 'Descobrir', icon: 'search' },
+  { key: 'compare', label: 'Comparar', icon: 'layers' },
+  { key: 'rfq', label: 'Cotações', icon: 'mail' },
   { key: 'moodboards', label: 'Moodboards', icon: 'palette' },
   { key: 'favorites', label: 'Favoritos', icon: 'heart' },
 ]
@@ -32,7 +36,7 @@ export function VerifSeal({ level, className = '' }) {
 }
 
 // ---- Card grande do fornecedor (descoberta visual) ----
-function SupplierCard({ s, fav, onOpen, onFav }) {
+function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp }) {
   const cat = SUPPLIER_CATEGORIES[s.category] || s.category
   const specialties = Array.isArray(s.specialties) ? s.specialties : []
   return (
@@ -65,10 +69,9 @@ function SupplierCard({ s, fav, onOpen, onFav }) {
         )}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/[0.05]">
           <div className="flex items-center gap-1.5">{s.rating > 0 ? <><Stars value={s.rating} /><span className="text-admin-muted/40 text-[11px]">{Number(s.rating).toFixed(1)}</span></> : <span className="text-admin-muted/30 text-[11px]">Novo</span>}</div>
-          <div className="flex items-center gap-3 text-[11px] text-admin-muted/40">
-            {s.years_market ? <span>{s.years_market} anos</span> : null}
-            {s.projects_count ? <span>{s.projects_count} projetos</span> : null}
-          </div>
+          <span onClick={(e) => { e.stopPropagation(); onCmp(s) }} className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg cursor-pointer transition-colors ${cmp ? 'bg-admin-champ/15 text-admin-champ' : 'text-admin-muted/50 hover:text-admin-champ'}`} title="Adicionar ao comparador">
+            <Icon name="layers" className="w-3.5 h-3.5" />{cmp ? 'Comparando' : 'Comparar'}
+          </span>
         </div>
       </div>
     </button>
@@ -76,7 +79,7 @@ function SupplierCard({ s, fav, onOpen, onFav }) {
 }
 
 // ---- Tela Descobrir ----
-function Discover({ suppliers, favorites, loading, onOpen, onFav, onlyFav = false }) {
+function Discover({ suppliers, favorites, compare, loading, onOpen, onFav, onCmp, onlyFav = false }) {
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('')
   const [uf, setUf] = useState('')
@@ -149,7 +152,7 @@ function Discover({ suppliers, favorites, loading, onOpen, onFav, onlyFav = fals
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
-              {filtered.map((s) => <SupplierCard key={s.id} s={s} fav={favorites.has(s.id)} onOpen={onOpen} onFav={onFav} />)}
+              {filtered.map((s) => <SupplierCard key={s.id} s={s} fav={favorites.has(s.id)} cmp={compare.includes(s.id)} onOpen={onOpen} onFav={onFav} onCmp={onCmp} />)}
             </div>
           )}
         </div>
@@ -164,8 +167,18 @@ export function SuppliersMarketplace({ notify }) {
   const [view, setView] = useState('discover')
   const [suppliers, setSuppliers] = useState([])
   const [favorites, setFavorites] = useState(new Set())
+  const [compare, setCompare] = useState([])          // ids selecionados p/ comparar (máx 5)
+  const [rfqPreset, setRfqPreset] = useState(null)    // ids vindos do comparador p/ criar RFQ
   const [loading, setLoading] = useState(true)
   const [openSupplier, setOpenSupplier] = useState(null)
+
+  const toggleCompare = useCallback((s) => {
+    setCompare((prev) => {
+      if (prev.includes(s.id)) return prev.filter((x) => x !== s.id)
+      if (prev.length >= 5) { notify?.('Você pode comparar até 5 fornecedores.', 'info'); return prev }
+      return [...prev, s.id]
+    })
+  }, [notify])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -204,7 +217,9 @@ export function SuppliersMarketplace({ notify }) {
           </div>
           {NAV.map((n) => (
             <button key={n.key} onClick={() => setView(n.key)} className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-colors ${view === n.key ? 'bg-admin-champ/12 text-admin-champ' : 'text-admin-muted/70 hover:text-admin-text hover:bg-white/[0.03]'}`}>
-              <Icon name={n.icon} className="w-4 h-4" />{n.label}
+              <Icon name={n.icon} className="w-4 h-4" /><span className="flex-1 text-left">{n.label}</span>
+              {n.key === 'compare' && compare.length > 0 && <span className="text-[10px] bg-admin-champ/20 text-admin-champ rounded-full px-1.5 min-w-[18px] text-center">{compare.length}</span>}
+              {n.key === 'favorites' && favorites.size > 0 && <span className="text-[10px] bg-admin-rose/20 text-admin-rose rounded-full px-1.5 min-w-[18px] text-center">{favorites.size}</span>}
             </button>
           ))}
         </div>
@@ -215,7 +230,13 @@ export function SuppliersMarketplace({ notify }) {
         <div className="md:hidden mb-4"><GlassSelect value={view} onChange={setView} options={NAV.map((n) => ({ value: n.key, label: n.label }))} /></div>
 
         {(view === 'discover' || view === 'favorites') && (
-          <Discover suppliers={suppliers} favorites={favorites} loading={loading} onOpen={setOpenSupplier} onFav={toggleFav} onlyFav={view === 'favorites'} />
+          <Discover suppliers={suppliers} favorites={favorites} compare={compare} loading={loading} onOpen={setOpenSupplier} onFav={toggleFav} onCmp={toggleCompare} onlyFav={view === 'favorites'} />
+        )}
+        {view === 'compare' && (
+          <Comparator suppliers={suppliers} selected={compare} onToggle={(id) => setCompare((p) => p.filter((x) => x !== id))} onOpen={setOpenSupplier} onClear={() => setCompare([])} onRfq={(ids) => { setRfqPreset(ids || compare); setView('rfq') }} />
+        )}
+        {view === 'rfq' && (
+          <RfqCenter suppliers={suppliers} presetSupplierIds={rfqPreset} onConsumePreset={() => setRfqPreset(null)} notify={notify} />
         )}
         {view === 'moodboards' && <Moodboards suppliers={suppliers} onOpenSupplier={setOpenSupplier} notify={notify} />}
       </div>
