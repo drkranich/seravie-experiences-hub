@@ -10,9 +10,9 @@ import { SupplierChat } from './SupplierChat'
 
 function Seal({ level }) {
   const v = VERIF_LEVELS[level] || VERIF_LEVELS.bronze
-  // fundo escuro sólido + blur + sombra clara no texto = legível sobre qualquer imagem
-  const glow = { textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(255,255,255,0.25)' }
-  return <span style={glow} className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg font-medium bg-black/65 backdrop-blur-md ring-1 ring-white/15 ${v.text}`}><span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} style={{ boxShadow: '0 0 4px rgba(255,255,255,0.5)' }} />Fornecedor Homologado · Seravie {v.label}</span>
+  // película glassmorphism clara (branca translúcida) + texto escuro = legível sobre qualquer imagem
+  const film = { background: 'rgba(255,255,255,0.85)', boxShadow: '0 2px 10px rgba(0,0,0,0.25)' }
+  return <span style={film} className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg font-semibold backdrop-blur-md ring-1 ring-black/5 text-[#1c1c1c]"><span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />Fornecedor Homologado · Seravie {v.label}</span>
 }
 function Stars({ value = 0 }) {
   const full = Math.round(value)
