@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect } from './ui'
+import { Icon, GlassSelect, AvatarUpload } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
 import { CRMDashboard } from './crm/CRMDashboard'
@@ -9,6 +9,9 @@ import { Customer360 } from './crm/Customer360'
 import { Companies } from './crm/Companies'
 import { CRMAnalytics } from './crm/CRMAnalytics'
 import { CRMSegments } from './crm/CRMSegments'
+import { Omnichannel } from './crm/Omnichannel'
+import { Projects } from './crm/Projects'
+import { CustomerMap, Subscriptions } from './crm/MapAndSubs'
 
 const TYPE_LABELS = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 const STATUS_COLORS = { active: 'text-admin-sage', inactive: 'text-admin-muted', blocked: 'text-admin-rose' }
@@ -23,7 +26,7 @@ export function CRMPanel({ notify }) {
   const [filterType, setFilterType] = useState('')
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', phone: '', type: 'person', notes: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', type: 'person', notes: '', avatar_url: '' })
   const [detail, setDetail] = useState(null)
   const [dOrders, setDOrders] = useState([])
   const [dLoading, setDLoading] = useState(false)
@@ -50,7 +53,7 @@ export function CRMPanel({ notify }) {
       : await supabase.from('contacts').insert(payload)
     if (error) { notify('Erro ao salvar', 'error'); return }
     notify(selected ? 'Contato atualizado' : 'Contato criado', 'success')
-    setShowForm(false); setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '' })
+    setShowForm(false); setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '', avatar_url: '' })
     load()
   }
 
@@ -61,7 +64,7 @@ export function CRMPanel({ notify }) {
   }
 
   const openEdit = (c) => {
-    setSelected(c); setForm({ name: c.name, email: c.email || '', phone: c.phone || '', type: c.type, notes: c.notes || '' }); setShowForm(true)
+    setSelected(c); setForm({ name: c.name, email: c.email || '', phone: c.phone || '', type: c.type, notes: c.notes || '', avatar_url: c.avatar_url || '' }); setShowForm(true)
   }
 
   const openDetail = async (c) => {
@@ -108,7 +111,7 @@ export function CRMPanel({ notify }) {
 
       {/* Navegação */}
       <div className="flex gap-1.5 mb-6 flex-wrap">
-        {[['dashboard', 'Dashboard', 'grid'], ['contacts', 'Contatos', 'user'], ['companies', 'Empresas', 'building'], ['segments', 'Segmentação', 'search'], ['analytics', 'Analytics', 'chart']].map(([k, v, ic]) => (
+        {[['dashboard', 'Dashboard', 'grid'], ['contacts', 'Contatos', 'user'], ['companies', 'Empresas', 'building'], ['omni', 'Conversas', 'mail'], ['projects', 'Projetos', 'layers'], ['subs', 'Assinaturas', 'star'], ['segments', 'Segmentação', 'search'], ['map', 'Mapa', 'building'], ['analytics', 'Analytics', 'chart']].map(([k, v, ic]) => (
           <button key={k} onClick={() => setView(k)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-colors ${view === k ? 'bg-admin-champ/15 text-admin-champ border border-admin-champ/20' : 'text-admin-muted hover:text-admin-text border border-transparent'}`}>
             <Icon name={ic} className="w-4 h-4" />{v}
           </button>
@@ -117,7 +120,11 @@ export function CRMPanel({ notify }) {
 
       {view === 'dashboard' && <CRMDashboard notify={notify} onOpenContact={(c) => setC360(c)} />}
       {view === 'companies' && <Companies notify={notify} onOpenContact={(c) => setC360(c)} />}
+      {view === 'omni' && <Omnichannel notify={notify} />}
+      {view === 'projects' && <Projects notify={notify} onOpenContact={(c) => setC360(c)} />}
+      {view === 'subs' && <Subscriptions notify={notify} onOpenContact={(c) => setC360(c)} />}
       {view === 'segments' && <CRMSegments notify={notify} onOpenContact={(c) => setC360(c)} />}
+      {view === 'map' && <CustomerMap notify={notify} />}
       {view === 'analytics' && <CRMAnalytics notify={notify} />}
 
       {view === 'contacts' && (
@@ -132,7 +139,7 @@ export function CRMPanel({ notify }) {
             className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors">
             <Icon name="upload" className="w-4 h-4" /> PDF
           </button>
-          {mayEdit && <button onClick={() => { setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '' }); setShowForm(true) }}
+          {mayEdit && <button onClick={() => { setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '', avatar_url: '' }); setShowForm(true) }}
             className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors">
             <Icon name="spark" className="w-4 h-4" /> Novo contato
           </button>}
@@ -197,6 +204,7 @@ export function CRMPanel({ notify }) {
               <button onClick={() => setShowForm(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4">
+              <AvatarUpload value={form.avatar_url} onChange={(v) => setForm((f) => ({ ...f, avatar_url: v }))} notify={notify} fallbackIcon={form.type === 'company' ? 'building' : 'user'} />
               <div>
                 <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome *</label>
                 <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}

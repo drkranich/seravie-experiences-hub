@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon } from '../ui'
+import { Icon, AvatarUpload } from '../ui'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
 
@@ -79,7 +79,7 @@ export function Companies({ notify, onOpenContact }) {
 
 function CompanyModal({ company, tenantId, notify, onClose, onSaved }) {
   const editing = company?.id
-  const [f, setF] = useState({ name: company?.name || '', document: company?.document || '', email: company?.email || '', phone: company?.phone || '', city: company?.city || '' })
+  const [f, setF] = useState({ name: company?.name || '', document: company?.document || '', email: company?.email || '', phone: company?.phone || '', city: company?.city || '', avatar_url: company?.avatar_url || '' })
   const [busy, setBusy] = useState(false)
   const set = (p) => setF((s) => ({ ...s, ...p }))
   const save = async () => {
@@ -101,6 +101,7 @@ function CompanyModal({ company, tenantId, notify, onClose, onSaved }) {
       <div className="glass-pop rounded-2xl p-7 w-full max-w-md">
         <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">{editing ? 'Editar empresa' : 'Nova empresa'}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-4">
+          <AvatarUpload value={f.avatar_url} onChange={(v) => set({ avatar_url: v })} notify={notify} fallbackIcon="building" />
           <div><L>Nome / Razão social *</L><input value={f.name} onChange={(e) => set({ name: e.target.value })} className={inp} /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><L>CNPJ</L><input value={f.document} onChange={(e) => set({ document: e.target.value })} className={inp} /></div>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { uploadFile } from '../../lib/storage'
 
 /**
  * useAnchoredPopover — abre um popover em position:fixed via portal no <body>,
@@ -659,5 +660,31 @@ export function Spinner({ className = 'w-5 h-5' }) {
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
       <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
+  )
+}
+
+// Uploader de foto reutilizável (avatar de contato/empresa) → Storage bucket media
+export function AvatarUpload({ value, onChange, notify, fallbackIcon = 'user' }) {
+  const ref = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const onFile = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    const r = await uploadFile(file)
+    setBusy(false)
+    if (r.error) { notify && notify(r.error, 'error'); return }
+    onChange(r.url)
+  }
+  return (
+    <div className="flex items-center gap-3">
+      <input ref={ref} type="file" accept="image/*" onChange={onFile} className="hidden" />
+      <div className="w-16 h-16 rounded-2xl bg-admin-champ/10 flex items-center justify-center overflow-hidden shrink-0">
+        {value ? <img src={value} alt="" className="w-full h-full object-cover" /> : <Icon name={fallbackIcon} className="w-7 h-7 text-admin-champ/50" />}
+      </div>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="text-xs bg-admin-champ/10 text-admin-champ px-3 py-1.5 rounded-lg hover:bg-admin-champ/20 transition-colors disabled:opacity-50">{busy ? 'Enviando…' : (value ? 'Trocar foto' : 'Enviar foto')}</button>
+        {value && <button type="button" onClick={() => onChange('')} className="text-xs text-admin-muted/60 hover:text-admin-rose px-2 py-1.5">Remover</button>}
+      </div>
+    </div>
   )
 }

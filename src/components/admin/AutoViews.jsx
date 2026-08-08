@@ -1,7 +1,25 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassMonth, GlassSelect, matchPeriod } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
+
+// Setores da empresa para compartilhar/atribuir um lead
+const SETORES = [
+  { value: '', label: '— nenhum —' },
+  { value: 'vendas', label: 'Vendas' },
+  { value: 'atendimento', label: 'Atendimento' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'financeiro', label: 'Financeiro' },
+  { value: 'suporte', label: 'Suporte' },
+  { value: 'diretoria', label: 'Diretoria' },
+]
+const SETOR_LABEL = Object.fromEntries(SETORES.map((s) => [s.value, s.label]))
+const waLink = (phone, msg) => {
+  const digits = String(phone || '').replace(/\D/g, '')
+  const withDdi = digits.length <= 11 ? '55' + digits : digits
+  return `https://wa.me/${withDdi}${msg ? `?text=${encodeURIComponent(msg)}` : ''}`
+}
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const ym = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -75,18 +93,34 @@ const SEGMENTS = {
 const TYPE_LABEL = { person: 'Pessoa', company: 'Empresa', family: 'Família', partner: 'Parceiro', supplier: 'Fornecedor' }
 
 export function ContactsView({ segment = 'customers', notify }) {
+  const { profile } = useTenant()
+  const tenantId = profile?.tenant_id
   const cfg = SEGMENTS[segment] || SEGMENTS.customers
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [editing, setEditing] = useState(null)   // lead em edição
+  const [confirmDel, setConfirmDel] = useState(null)
+  const [sharing, setSharing] = useState(null)    // lead a compartilhar
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true)
-      const { data } = await supabase.from('contacts').select('id, name, email, phone, type, status, ltv, created_at').order('created_at', { ascending: false }).limit(2000)
-      setContacts(data || []); setLoading(false)
-    })()
-  }, [])
+  const load = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('contacts').select('id, name, email, phone, type, status, ltv, created_at, metadata').order('created_at', { ascending: false }).limit(2000)
+    setContacts(data || []); setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const remove = async (c) => {
+    setConfirmDel(null)
+    try { await supabase.from('contacts').delete().eq('id', c.id) } catch (e) { return notify('Erro ao excluir: ' + (e.message || e), 'error') }
+    notify('Contato excluído', 'success'); setContacts((xs) => xs.filter((x) => x.id !== c.id))
+  }
+  const share = async (c, setor) => {
+    const meta = { ...(c.metadata || {}), setor }
+    try { await supabase.from('contacts').update({ metadata: meta }).eq('id', c.id) } catch (e) { return notify('Erro: ' + (e.message || e), 'error') }
+    notify(setor ? `Compartilhado com ${SETOR_LABEL[setor]}` : 'Compartilhamento removido', 'success')
+    setContacts((xs) => xs.map((x) => x.id === c.id ? { ...x, metadata: meta } : x)); setSharing(null)
+  }
 
   const list = useMemo(() => {
     let l = contacts.filter(cfg.filter)
@@ -116,15 +150,91 @@ export function ContactsView({ segment = 'customers', notify }) {
       {loading ? <p className="text-admin-muted/30 text-sm py-8 text-center">Carregando…</p> : list.length === 0 ? (
         <div className="glass rounded-2xl p-12 text-center"><Icon name="user" className="w-10 h-10 text-admin-champ/25 mx-auto mb-3" /><p className="text-admin-muted/40 text-sm">Nenhum contato aqui ainda. Cadastre em CRM — esta lista se atualiza sozinha.</p></div>
       ) : (
-        <div className="grid gap-2">{list.slice(0, 300).map((c) => (
-          <div key={c.id} className="glass rounded-xl px-5 py-3 flex items-center gap-4">
+        <div className="grid gap-2">{list.slice(0, 300).map((c) => {
+          const setor = c.metadata?.setor
+          return (
+          <div key={c.id} className="glass rounded-xl px-5 py-3 flex items-center gap-4 group">
             <div className="w-8 h-8 rounded-full bg-admin-champ/15 flex items-center justify-center shrink-0"><span className="text-admin-champ font-serif text-sm">{(c.name || '?')[0].toUpperCase()}</span></div>
             <div className="flex-1 min-w-0"><p className="text-admin-text text-sm truncate">{c.name}</p><p className="text-admin-muted/40 text-xs truncate">{c.email || c.phone || '—'}</p></div>
-            <span className="text-[10px] text-admin-muted/40 hidden sm:block">{TYPE_LABEL[c.type] || c.type}</span>
-            {c.ltv > 0 && <span className="text-admin-gold text-sm shrink-0">{brl(c.ltv)}</span>}
+            {setor && <span className="text-[9px] px-2 py-0.5 rounded-lg bg-admin-sage/15 text-admin-sage hidden sm:block">{SETOR_LABEL[setor] || setor}</span>}
+            <span className="text-[10px] text-admin-muted/40 hidden md:block">{TYPE_LABEL[c.type] || c.type}</span>
+            {c.ltv > 0 && <span className="text-admin-gold text-sm shrink-0 hidden sm:block">{brl(c.ltv)}</span>}
+            <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              {c.phone && <a href={waLink(c.phone, `Olá ${c.name || ''}!`)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-sage hover:bg-white/[0.05] transition-colors" title="Conversar no WhatsApp"><Icon name="chart" className="w-3.5 h-3.5" /></a>}
+              <button onClick={() => setSharing(c)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Compartilhar com setor"><Icon name="share" className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setEditing(c)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-champ hover:bg-white/[0.05] transition-colors" title="Editar"><Icon name="pen" className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setConfirmDel(c)} className="p-1.5 rounded-lg text-admin-muted hover:text-admin-rose hover:bg-white/[0.05] transition-colors" title="Excluir"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+            </div>
           </div>
-        ))}</div>
+          )
+        })}</div>
       )}
+
+      {editing && <LeadEditModal lead={editing} notify={notify} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
+      {sharing && <ShareModal lead={sharing} onClose={() => setSharing(null)} onShare={share} />}
+      {confirmDel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDel(null)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-serif text-xl text-admin-text mb-2">Excluir contato</h3>
+            <p className="text-admin-muted/70 text-sm mb-6">Remover “{confirmDel.name || 'este contato'}” definitivamente? Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-3"><button onClick={() => remove(confirmDel)} className="flex-1 bg-admin-rose/15 hover:bg-admin-rose/25 text-admin-rose py-2.5 rounded-xl text-sm transition-colors">Excluir</button><button onClick={() => setConfirmDel(null)} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button></div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LeadEditModal({ lead, notify, onClose, onSaved }) {
+  const [f, setF] = useState({ name: lead.name || '', email: lead.email || '', phone: lead.phone || '', status: lead.status || 'active' })
+  const [busy, setBusy] = useState(false)
+  const set = (p) => setF((s) => ({ ...s, ...p }))
+  const save = async () => {
+    if (!f.name.trim()) return notify('Nome obrigatório', 'error')
+    setBusy(true)
+    try {
+      const { error } = await supabase.from('contacts').update({ name: f.name.trim(), email: f.email || null, phone: f.phone || null, status: f.status }).eq('id', lead.id)
+      if (error) throw error
+      notify('Contato atualizado', 'success'); onSaved()
+    } catch (e) { notify('Erro: ' + (e.message || e), 'error') } finally { setBusy(false) }
+  }
+  const L = ({ children }) => <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{children}</label>
+  const inp = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Editar contato</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <div className="space-y-4">
+          <div><L>Nome *</L><input value={f.name} onChange={(e) => set({ name: e.target.value })} className={inp} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><L>E-mail</L><input value={f.email} onChange={(e) => set({ email: e.target.value })} className={inp} /></div>
+            <div><L>Telefone</L><input value={f.phone} onChange={(e) => set({ phone: e.target.value })} className={inp} /></div>
+          </div>
+          <div><L>Status</L><GlassSelect value={f.status} onChange={(v) => set({ status: v })} options={[{ value: 'active', label: 'Ativo' }, { value: 'inactive', label: 'Inativo' }, { value: 'blocked', label: 'Bloqueado' }]} /></div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button disabled={busy} onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar'}</button>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ShareModal({ lead, onClose, onShare }) {
+  const [setor, setSetor] = useState(lead.metadata?.setor || '')
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3"><h2 className="font-serif text-2xl text-admin-text">Compartilhar lead</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <p className="text-admin-muted/60 text-xs mb-4">Atribua “{lead.name || 'este lead'}” a um setor da empresa. Ele passa a aparecer marcado para esse time.</p>
+        <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Setor</label>
+        <GlassSelect value={setor} onChange={setSetor} options={SETORES} />
+        <div className="flex gap-3 mt-6">
+          <button onClick={() => onShare(lead, setor)} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Compartilhar</button>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
+        </div>
+      </div>
     </div>
   )
 }
