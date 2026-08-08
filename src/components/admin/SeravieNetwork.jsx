@@ -31,7 +31,7 @@ const NAV = [
   { key: 'messages', label: 'Mensagens', icon: 'mail' },
   { key: 'communities', label: 'Comunidades', icon: 'users' },
   { key: 'people', label: 'Pessoas & Empresas', icon: 'user' },
-  { key: 'smart', label: 'Networking Inteligente', icon: 'sparkles' },
+  { key: 'smart', label: 'Networking', icon: 'sparkles' },
   { key: 'map', label: 'Mapa do Ecossistema', icon: 'map' },
   { key: 'services', label: 'Marketplace', icon: 'tag' },
   { key: 'talent', label: 'Banco de Talentos', icon: 'star' },

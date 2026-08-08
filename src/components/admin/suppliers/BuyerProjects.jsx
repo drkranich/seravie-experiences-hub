@@ -25,6 +25,7 @@ export function BuyerProjects({ suppliers, onOpenSupplier, notify }) {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null)
   const [creating, setCreating] = useState(false)
+  const [listDel, setListDel] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,6 +53,16 @@ export function BuyerProjects({ suppliers, onOpenSupplier, notify }) {
     if (error) return notify?.('Erro ao excluir: ' + error.message, 'error')
     setProjects((ps) => ps.filter((x) => x.id !== p.id))
     setOpen(null); notify?.('Projeto excluído', 'success')
+  }
+  const shareProject = async (p) => {
+    let token = p.share_token
+    if (!token || !p.is_public) {
+      token = 'p' + Math.abs(p.id.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 7)).toString(36) + p.id.slice(0, 8)
+      await supabase.from('buyer_projects').update({ share_token: token, is_public: true }).eq('id', p.id)
+      setProjects((ps) => ps.map((x) => x.id === p.id ? { ...x, share_token: token, is_public: true } : x))
+    }
+    const url = `${window.location.origin}/projeto/${token}`
+    try { await navigator.clipboard.writeText(url); notify?.('Link do projeto copiado!', 'success') } catch { notify?.('Link: ' + url, 'info') }
   }
 
   if (open) {
@@ -83,16 +94,32 @@ export function BuyerProjects({ suppliers, onOpenSupplier, notify }) {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {projects.map((p) => { const rows = links[p.id] || []; const seg = SEGMENTS[p.segment]; return (
-              <button key={p.id} onClick={() => setOpen(p)} className="group glass rounded-2xl p-5 text-left hover:ring-1 hover:ring-admin-champ/30 transition-all">
-                <div className="flex items-center justify-between mb-3"><div className="w-11 h-11 rounded-xl bg-admin-champ/10 flex items-center justify-center"><Icon name={CATEGORY_ICON[seg?.cats?.[0]] || 'grid'} className="w-5 h-5 text-admin-champ/70" /></div><span className="text-[10px] uppercase tracking-wider text-admin-muted/40">{p.status}</span></div>
-                <p className="text-admin-text font-medium">{p.name}</p>
-                <p className="text-admin-muted/45 text-xs mt-1">{seg?.label || p.segment || 'Projeto'} · {rows.length} fornecedores</p>
-              </button>
+              <div key={p.id} className="group glass rounded-2xl p-5 hover:ring-1 hover:ring-admin-champ/30 transition-all relative">
+                <button onClick={() => setOpen(p)} className="text-left w-full">
+                  {p.cover_url && <div className="h-24 -mx-5 -mt-5 mb-3 overflow-hidden rounded-t-2xl"><img src={p.cover_url} alt="" className="w-full h-full object-cover" /></div>}
+                  <div className="flex items-center justify-between mb-3"><div className="w-11 h-11 rounded-xl bg-admin-champ/10 flex items-center justify-center"><Icon name={CATEGORY_ICON[seg?.cats?.[0]] || 'grid'} className="w-5 h-5 text-admin-champ/70" /></div><span className="text-[10px] uppercase tracking-wider text-admin-muted/40">{p.status}</span></div>
+                  <p className="text-admin-text font-medium">{p.name}</p>
+                  <p className="text-admin-muted/45 text-xs mt-1">{seg?.label || p.segment || 'Projeto'} · {rows.length} fornecedores</p>
+                </button>
+                <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-white/[0.05]">
+                  <button onClick={() => shareProject(p)} className="flex-1 text-[11px] px-3 py-1.5 rounded-lg glass-input text-admin-muted/70 hover:text-admin-champ transition-colors flex items-center justify-center gap-1.5"><Icon name="share" className="w-3.5 h-3.5" />Compartilhar</button>
+                  <button onClick={() => setListDel(p)} className="text-[11px] px-3 py-1.5 rounded-lg glass-input text-admin-muted/60 hover:text-admin-rose transition-colors flex items-center justify-center" title="Excluir projeto"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
             )})}
           </div>
         )}
 
       {creating && <CreateProject onClose={() => setCreating(false)} onCreate={create} notify={notify} />}
+      {listDel && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setListDel(null)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-serif text-lg text-admin-text mb-2">Excluir projeto?</h2>
+            <p className="text-admin-muted/60 text-sm mb-5">O projeto <span className="text-admin-text">"{listDel.name}"</span> e os fornecedores vinculados serão removidos. Esta ação não pode ser desfeita.</p>
+            <div className="flex justify-end gap-2"><button onClick={() => setListDel(null)} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => { const p = listDel; setListDel(null); deleteProject(p) }} className="px-4 py-2 rounded-xl text-sm bg-admin-rose/15 hover:bg-admin-rose/25 text-admin-rose">Excluir projeto</button></div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

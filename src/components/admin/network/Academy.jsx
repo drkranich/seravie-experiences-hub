@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from '../ui'
 import { uploadTo } from '../../../lib/storage'
+import { uploadLessonVideo } from '../../../lib/videoUpload'
 
 // Seravie Academy — trilhas e cursos do ecossistema. Membros se inscrevem,
 // acompanham progresso; qualquer tenant pode publicar seus próprios cursos.
@@ -136,7 +137,7 @@ const CATS = ['Branding', 'Arquitetura', 'Visual Merchandising', 'Hospitalidade 
 const FORMATS = [{ value: 'gravado', label: 'Gravado (on-demand)' }, { value: 'ao_vivo', label: 'Ao vivo' }, { value: 'hibrido', label: 'Híbrido (ao vivo + gravado)' }]
 const VIDEO_KINDS = [{ value: 'upload', label: 'Upload de vídeo' }, { value: 'youtube', label: 'YouTube' }, { value: 'vimeo', label: 'Vimeo' }, { value: 'link', label: 'Outro link' }]
 let _lidSeq = 0
-const newLesson = () => ({ _id: `l${++_lidSeq}`, module: '', title: '', description: '', video_url: '', video_kind: 'upload', duration: '', material_url: '', is_preview: false })
+const newLesson = () => ({ _id: `l${++_lidSeq}`, module: '', title: '', description: '', video_url: '', video_kind: 'upload', video_provider: 'supabase', stream_uid: '', duration: '', material_url: '', is_preview: false })
 
 function CreateCourse({ tenantId, onClose, onCreated, notify }) {
   const [tab, setTab] = useState('detalhes')
@@ -183,6 +184,7 @@ function CreateCourse({ tenantId, onClose, onCreated, notify }) {
       const rows = lessons.map((l, i) => ({
         tenant_id: tenantId, course_id: course.id, module: l.module || null, title: l.title || `Aula ${i + 1}`,
         description: l.description || null, video_url: l.video_url || null, video_kind: l.video_kind,
+        video_provider: l.video_provider || 'supabase', stream_uid: l.stream_uid || null,
         duration: l.duration || null, material_url: l.material_url || null, is_preview: l.is_preview, sort: i,
       }))
       const { error: le } = await supabase.from('network_academy_lessons').insert(rows)
@@ -250,7 +252,7 @@ function CreateCourse({ tenantId, onClose, onCreated, notify }) {
             <div className="space-y-3">
               {lessons.length === 0 && <div className="glass-soft rounded-xl p-8 text-center"><Icon name="play" className="w-8 h-8 text-admin-champ/25 mx-auto mb-2" /><p className="text-admin-muted/55 text-sm">Monte o currículo: adicione aulas com vídeo (upload ou link), material de apoio e amostra grátis.</p></div>}
               {lessons.map((l, i) => (
-                <LessonEditor key={l._id} lesson={l} index={i} total={lessons.length} onChange={(patch) => setLesson(l._id, patch)} onRemove={() => rmLesson(l._id)} onMove={(d) => moveLesson(i, d)} notify={notify} cls={cls} lbl={lbl} />
+                <LessonEditor key={l._id} lesson={l} index={i} total={lessons.length} tenantId={tenantId} onChange={(patch) => setLesson(l._id, patch)} onRemove={() => rmLesson(l._id)} onMove={(d) => moveLesson(i, d)} notify={notify} cls={cls} lbl={lbl} />
               ))}
               <button onClick={addLesson} className="w-full py-3 rounded-xl border border-dashed border-admin-champ/30 text-admin-champ/80 hover:bg-admin-champ/5 text-sm transition-colors flex items-center justify-center gap-2"><Icon name="plus" className="w-4 h-4" />Adicionar aula</button>
             </div>
@@ -266,15 +268,16 @@ function CreateCourse({ tenantId, onClose, onCreated, notify }) {
   )
 }
 
-function LessonEditor({ lesson: l, index, total, onChange, onRemove, onMove, notify, cls, lbl }) {
+function LessonEditor({ lesson: l, index, total, tenantId, onChange, onRemove, onMove, notify, cls, lbl }) {
   const [up, setUp] = useState(false)
   const vidRef = useRef(null); const matRef = useRef(null)
-  const upVideo = async (file) => {
+  const upVideo = async (file, tenantId, courseId) => {
     setUp(true)
-    const r = await uploadTo(file, { folder: 'network/academy/videos', accept: 'any', maxMB: 500 })
+    const r = await uploadLessonVideo(file, { tenantId, courseId })
     setUp(false)
     if (r.error) return notify?.(r.error, 'error')
-    onChange({ video_url: r.url, video_kind: 'upload' })
+    onChange({ video_url: r.url || '', video_kind: 'upload', video_provider: r.provider || 'supabase', stream_uid: r.uid || '' })
+    if (r.provider === 'cloudflare_stream') notify?.('Vídeo enviado ao Cloudflare Stream', 'success')
   }
   const upMaterial = async (file) => {
     const r = await uploadTo(file, { folder: 'network/academy/material', accept: 'any', maxMB: 50 })
@@ -300,7 +303,7 @@ function LessonEditor({ lesson: l, index, total, onChange, onRemove, onMove, not
         <GlassSelect value={l.video_kind} onChange={(v) => onChange({ video_kind: v, video_url: '' })} options={VIDEO_KINDS} />
         {l.video_kind === 'upload' ? (
           <>
-            <input ref={vidRef} type="file" accept="video/*" onChange={(e) => e.target.files?.[0] && upVideo(e.target.files[0])} className="hidden" />
+            <input ref={vidRef} type="file" accept="video/*" onChange={(e) => e.target.files?.[0] && upVideo(e.target.files[0], tenantId)} className="hidden" />
             <button type="button" onClick={() => vidRef.current?.click()} disabled={up} className="glass-input rounded-xl px-4 py-2.5 text-sm text-admin-muted/60 hover:text-admin-champ flex items-center justify-center gap-2 transition-colors disabled:opacity-50 truncate">
               <Icon name={up ? 'clock' : (l.video_url ? 'check' : 'upload')} className="w-4 h-4 shrink-0" />{up ? 'Enviando…' : l.video_url ? 'Vídeo enviado' : 'Enviar vídeo'}
             </button>

@@ -16,6 +16,7 @@ import { AcceptInvite } from './pages/AcceptInvite'
 import { RecoverPassword } from './pages/RecoverPassword'
 import { ProjectPublic } from './pages/ProjectPublic'
 import { SupplierPublic } from './pages/SupplierPublic'
+import { CollectionPublic } from './pages/CollectionPublic'
 
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth()
@@ -66,6 +67,9 @@ export default function App() {
 
   // Fornecedor público (/fornecedor/<id>)
   if (pub('fornecedor')) return <SupplierPublic />
+
+  // Coleção pública compartilhada (/colecao/<token>)
+  if (pub('colecao')) return <CollectionPublic />
 
   // Seravie Document Studio — proposta "viva" pública (/p/<slug>)
   if (pub('p')) return <DocumentView />
