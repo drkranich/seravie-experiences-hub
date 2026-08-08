@@ -110,7 +110,7 @@ function MemberProfile({ member, onBack, onMessage, notify, onUpdated }) {
             <p className="text-admin-muted/55 text-sm mt-0.5">{m.headline || m.role_title || 'Membro do ecossistema'}</p>
             {m.company && <p className="text-admin-muted/45 text-xs mt-0.5">{m.company}{m.city ? ` · ${m.city}${m.state ? '/' + m.state : ''}` : ''}</p>}
           </div>
-          <div className="flex gap-2 pb-1">
+          <div className="flex gap-2 pb-1 flex-wrap">
             {isMine ? (
               <button onClick={() => setEditOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 transition-colors"><Icon name="pen" className="w-4 h-4" />Editar meu perfil</button>
             ) : (
@@ -119,6 +119,7 @@ function MemberProfile({ member, onBack, onMessage, notify, onUpdated }) {
                 <button onClick={() => onMessage?.(m.id)} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Mensagem</button>
               </>
             )}
+            {m.supplier_id && <a href={`/fornecedor/${m.supplier_id}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="box" className="w-4 h-4" />Ver catálogo</a>}
           </div>
         </div>
 

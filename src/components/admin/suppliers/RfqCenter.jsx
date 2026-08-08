@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, GlassSelect, GlassMulti } from '../ui'
+import { Icon, GlassSelect, GlassMulti, GlassDate } from '../ui'
 import { SUPPLIER_CATEGORIES, CATEGORY_ICON, brl } from '../../../lib/suppliersMarket'
 
 // RFQ Center — Solicitação de Cotação a vários fornecedores:
@@ -134,7 +134,7 @@ function CreateRfq({ suppliers, tenantId, presetSupplierIds, onClose, onCreated,
           <textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="Descreva o que precisa…" className={`${cls} resize-none`} />
           <div className="grid grid-cols-2 gap-3">
             <input type="number" value={f.budget} onChange={(e) => set('budget', e.target.value)} placeholder="Orçamento (R$)" className={cls} />
-            <input type="date" value={f.deadline} onChange={(e) => set('deadline', e.target.value)} className={cls} />
+            <GlassDate value={f.deadline} onChange={(v) => set('deadline', v)} placeholder="Prazo (dd/mm/aaaa)" />
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5">Convidar fornecedores *</label>

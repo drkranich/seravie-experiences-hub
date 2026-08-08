@@ -14,6 +14,11 @@ import { NetworkEvents } from './network/NetworkEvents'
 import { ServiceMarketplace } from './network/ServiceMarketplace'
 import { StoriesStrip } from './network/Stories'
 import { TalentPool } from './network/TalentPool'
+import { Academy } from './network/Academy'
+import { ExperienceMap } from './network/ExperienceMap'
+import { SmartNetworking } from './network/SmartNetworking'
+import { NetworkDashboard } from './network/NetworkDashboard'
+import { Collections } from './network/Collections'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Seravie Network — plataforma social profissional do ecossistema
@@ -21,14 +26,19 @@ import { TalentPool } from './network/TalentPool'
 // ═══════════════════════════════════════════════════════════════════════════
 
 const NAV = [
+  { key: 'dashboard', label: 'Visão geral', icon: 'chart' },
   { key: 'feed', label: 'Feed', icon: 'grid' },
   { key: 'messages', label: 'Mensagens', icon: 'mail' },
   { key: 'communities', label: 'Comunidades', icon: 'users' },
   { key: 'people', label: 'Pessoas & Empresas', icon: 'user' },
+  { key: 'smart', label: 'Networking Inteligente', icon: 'sparkles' },
+  { key: 'map', label: 'Mapa do Ecossistema', icon: 'map' },
   { key: 'services', label: 'Marketplace', icon: 'tag' },
   { key: 'talent', label: 'Banco de Talentos', icon: 'star' },
   { key: 'events', label: 'Eventos', icon: 'calendar' },
   { key: 'projects', label: 'Projetos', icon: 'layout' },
+  { key: 'academy', label: 'Academy', icon: 'book' },
+  { key: 'collections', label: 'Coleções', icon: 'layers' },
 ]
 
 export function Avatar({ name, url, size = 'w-10 h-10', text = 'text-sm' }) {
@@ -218,9 +228,12 @@ export function SeravieNetwork({ notify }) {
   const { profile } = useTenant()
   const { user } = useAuth()
   const tenantId = profile?.tenant_id
-  const [view, setView] = useState('feed')
+  const [view, setView] = useState('dashboard')
   const [me, setMe] = useState(null)
   const [dmTarget, setDmTarget] = useState(null)  // membro para iniciar DM (do "Mensagem" no perfil)
+
+  // Deep-link Suppliers ↔ Network: abre a página pública do fornecedor.
+  const openSupplier = (s) => { if (s?.id) window.open(`/fornecedor/${s.id}`, '_blank', 'noopener') }
 
   // garante um perfil de membro para o usuário atual (auto-provisiona)
   useEffect(() => {
@@ -264,14 +277,19 @@ export function SeravieNetwork({ notify }) {
           <div className="flex-1 hidden md:block" />
           <NotificationsBell onNavigate={setView} notify={notify} />
         </div>
+        {view === 'dashboard' && <NetworkDashboard me={me} notify={notify} onNavigate={setView} />}
         {view === 'feed' && <Feed me={me} notify={notify} />}
         {view === 'messages' && <Messages me={me} notify={notify} startWith={dmTarget} />}
         {view === 'communities' && <Communities me={me} notify={notify} />}
         {view === 'people' && <People notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
+        {view === 'smart' && <SmartNetworking me={me} notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
+        {view === 'map' && <ExperienceMap notify={notify} onOpenSupplier={openSupplier} />}
         {view === 'services' && <ServiceMarketplace me={me} notify={notify} />}
         {view === 'talent' && <TalentPool me={me} notify={notify} onMessage={(memberId) => { setDmTarget(memberId); setView('messages') }} />}
         {view === 'events' && <NetworkEvents me={me} notify={notify} />}
         {view === 'projects' && <NetworkProjects me={me} notify={notify} />}
+        {view === 'academy' && <Academy me={me} notify={notify} />}
+        {view === 'collections' && <Collections me={me} notify={notify} onOpenSupplier={openSupplier} />}
       </div>
     </div>
   )

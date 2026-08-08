@@ -40,7 +40,13 @@ export function MemberProfileEdit({ member, onClose, onSaved, notify }) {
   const save = async () => {
     if (!f.name.trim()) return notify?.('Informe seu nome', 'error')
     setSaving(true)
-    const { data, error } = await supabase.from('network_members').update({ ...f, ...addr }).eq('id', m.id).select('*').single()
+    // vincula automaticamente o catálogo de fornecedor do mesmo tenant, se houver
+    let supplier_id = m.supplier_id || null
+    if (!supplier_id) {
+      const { data: sup } = await supabase.from('suppliers').select('id').eq('tenant_id', m.tenant_id).order('created_at', { ascending: true }).limit(1).maybeSingle()
+      if (sup?.id) supplier_id = sup.id
+    }
+    const { data, error } = await supabase.from('network_members').update({ ...f, ...addr, supplier_id }).eq('id', m.id).select('*').single()
     setSaving(false)
     if (error) return notify?.('Erro ao salvar: ' + error.message, 'error')
     notify?.('Perfil atualizado', 'success'); onSaved?.(data)

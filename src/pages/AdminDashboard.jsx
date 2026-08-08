@@ -65,6 +65,7 @@ import { NetworkHubPanel } from '../components/admin/NetworkHubPanel'
 import { SeravieNetwork } from '../components/admin/SeravieNetwork'
 import { PersonTypesAdmin } from '../components/admin/network/PersonTypesAdmin'
 import { CommunityThemesAdmin } from '../components/admin/network/CommunityThemesAdmin'
+import { SupplierDashboard } from '../components/admin/suppliers/SupplierDashboard'
 import { LegalPanel } from '../components/admin/LegalPanel'
 import { FlowPanel } from '../components/admin/FlowPanel'
 import { QuoteStudio } from '../components/admin/QuoteStudio'
@@ -194,6 +195,7 @@ export function AdminDashboard({ onExit }) {
     certification: <CertificationPanel notify={notify} />,
     suppliers: <SuppliersMarketplace notify={notify} />,
     suppliers_profile: <SuppliersPanel notify={notify} />,
+    suppliers_dashboard: <SupplierDashboard notify={notify} onNavigate={setActive} />,
     network_hub: <SeravieNetwork notify={notify} />,
     network_classic: <NetworkHubPanel notify={notify} />,
     network_types: <PersonTypesAdmin notify={notify} />,

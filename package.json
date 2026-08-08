@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "check:calendars": "node scripts/check-no-native-date.mjs",
+    "prebuild": "node scripts/check-no-native-date.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },

@@ -109,6 +109,7 @@ export const CORE_SECTIONS = [
       { key: 'quotes', label: 'Seravie Quote Studio', icon: 'chart', route: 'quotes' },
       { key: 'documents', label: 'Seravie Document Studio', icon: 'book', route: 'documents' },
       { key: 'suppliers', label: 'Seravie Suppliers', icon: 'box', route: 'suppliers', pages: [
+        { key: 'sup.dashboard', label: 'Painel do fornecedor', route: 'suppliers_dashboard' },
         { key: 'sup.discover', label: 'Descobrir', route: 'suppliers' },
         { key: 'sup.moodboards', label: 'Moodboards', route: 'suppliers' },
         { key: 'sup.profile', label: 'Meu perfil de fornecedor', route: 'suppliers_profile' },
