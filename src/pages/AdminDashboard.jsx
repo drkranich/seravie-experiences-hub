@@ -60,6 +60,7 @@ import { SalesView, ContactsView, StockView } from '../components/admin/AutoView
 import { ExpansaoPanel, FranqueadosPanel, ImplantacoesPanel, StandardsPanel, CertificationPanel } from '../components/admin/NetworkPanels'
 import { OfficialCatalogPanel } from '../components/admin/OfficialCatalogPanel'
 import { SuppliersPanel } from '../components/admin/SuppliersPanel'
+import { SuppliersMarketplace } from '../components/admin/SuppliersMarketplace'
 import { NetworkHubPanel } from '../components/admin/NetworkHubPanel'
 import { LegalPanel } from '../components/admin/LegalPanel'
 import { FlowPanel } from '../components/admin/FlowPanel'
@@ -79,7 +80,7 @@ import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.con
 const FULLSCREEN = ['conversations', 'helpdesk', 'pos']
 // Rotas que usam a largura total da tela (sem o limite max-w-6xl), mas mantendo
 // o respiro das margens — ideal para painéis operacionais largos como o KDS.
-const WIDE = ['kds', 'documents', 'quotes']
+const WIDE = ['kds', 'documents', 'quotes', 'suppliers', 'suppliers_profile']
 const ROUTE_LABELS = { catalog: 'Catálogo', messages: 'Formulários', franchise: 'Franquias' }
 
 export function AdminDashboard({ onExit }) {
@@ -188,7 +189,8 @@ export function AdminDashboard({ onExit }) {
     catalogo_oficial: <OfficialCatalogPanel notify={notify} />,
     standards: <StandardsPanel notify={notify} />,
     certification: <CertificationPanel notify={notify} />,
-    suppliers: <SuppliersPanel notify={notify} />,
+    suppliers: <SuppliersMarketplace notify={notify} />,
+    suppliers_profile: <SuppliersPanel notify={notify} />,
     network_hub: <NetworkHubPanel notify={notify} />,
     legal: <LegalPanel notify={notify} />,
     flow: <FlowPanel notify={notify} />,
