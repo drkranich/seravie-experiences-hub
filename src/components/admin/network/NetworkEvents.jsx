@@ -20,6 +20,7 @@ export function NetworkEvents({ me, notify }) {
   const [signups, setSignups] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,6 +39,35 @@ export function NetworkEvents({ me, notify }) {
     if (error) return notify?.('Erro: ' + error.message, 'error')
     setEvents((e) => [data, ...e].sort((a, b) => new Date(a.starts_at || 0) - new Date(b.starts_at || 0))); setCreating(false); notify?.('Evento criado', 'success')
   }
+  const shareEvent = async (ev) => {
+    let token = ev.share_token
+    if (!token || !ev.is_public) {
+      token = 'e' + Math.abs(ev.id.split('').reduce((a, c) => a * 31 + c.charCodeAt(0), 7)).toString(36) + ev.id.slice(0, 8)
+      await supabase.from('network_events').update({ share_token: token, is_public: true }).eq('id', ev.id)
+      setEvents((p) => p.map((x) => x.id === ev.id ? { ...x, share_token: token, is_public: true } : x))
+    }
+    const url = `${window.location.origin}/evento/${token}`
+    try { await navigator.clipboard.writeText(url); notify?.('Link do evento copiado!', 'success') } catch { notify?.('Link: ' + url, 'info') }
+  }
+  const deleteEvent = async (ev) => {
+    await supabase.from('network_event_signups').delete().eq('event_id', ev.id)
+    const { error } = await supabase.from('network_events').delete().eq('id', ev.id)
+    if (error) return notify?.('Erro ao excluir: ' + error.message, 'error')
+    setEvents((p) => p.filter((x) => x.id !== ev.id)); notify?.('Evento excluído', 'success')
+  }
+  const startConnectOnboard = async () => {
+    notify?.('Abrindo configuração de recebimentos (Stripe)…', 'info')
+    try {
+      const { data, error } = await supabase.functions.invoke('stripe-connect-onboard', {
+        body: { tenant_id: tenantId, return_url: window.location.href, refresh_url: window.location.href },
+      })
+      if (error) return notify?.('Erro: ' + error.message, 'error')
+      if (data?.error === 'stripe_not_configured') return notify?.('Configure STRIPE_SECRET_KEY nos Secrets do Supabase.', 'error')
+      if (data?.status && data?.charges_enabled) return notify?.('Sua conta de recebimentos já está ativa!', 'success')
+      if (data?.url) { window.open(data.url, '_blank', 'noopener'); notify?.('Conclua o cadastro na janela do Stripe e volte para gerar o link.', 'info') }
+      else notify?.('Não foi possível iniciar o onboarding.', 'error')
+    } catch (e) { notify?.('Falha: ' + (e?.message || e), 'error') }
+  }
   const genPaymentLink = async (ev) => {
     if (!ev.price || ev.price <= 0) return notify?.('Este evento é gratuito.', 'info')
     notify?.('Gerando link de pagamento…', 'info')
@@ -46,12 +76,13 @@ export function NetworkEvents({ me, notify }) {
         body: { event_id: ev.id, tenant_id: tenantId, amount: Number(ev.price), title: ev.title, quantity_adjustable: true },
       })
       if (error) return notify?.('Erro ao gerar link: ' + error.message, 'error')
-      if (data?.error === 'stripe_not_configured') return notify?.('Configure sua chave Stripe (STRIPE_SECRET_KEY) nos Secrets do Supabase para gerar links de pagamento.', 'error')
+      if (data?.error === 'stripe_not_configured') return notify?.('Configure sua chave Stripe (STRIPE_SECRET_KEY) nos Secrets do Supabase.', 'error')
+      if (data?.error === 'connect_required') { notify?.('Você precisa conectar sua conta Stripe para receber os pagamentos direto. Abrindo o cadastro…', 'info'); return startConnectOnboard() }
       if (data?.error) return notify?.('Erro Stripe: ' + (data.detail || data.error), 'error')
       if (!data?.url) return notify?.('Não foi possível gerar o link.', 'error')
       await supabase.from('network_events').update({ payment_url: data.url }).eq('id', ev.id)
       setEvents((p) => p.map((x) => x.id === ev.id ? { ...x, payment_url: data.url } : x))
-      try { await navigator.clipboard.writeText(data.url); notify?.('Link de pagamento gerado e copiado!', 'success') } catch { notify?.('Link gerado: ' + data.url, 'success') }
+      try { await navigator.clipboard.writeText(data.url); notify?.(`Link gerado! Comissão da plataforma: ${data.fee_percent}%. Copiado.`, 'success') } catch { notify?.('Link gerado: ' + data.url, 'success') }
     } catch (e) { notify?.('Falha: ' + (e?.message || e), 'error') }
   }
   const toggleSignup = async (ev) => {
@@ -97,8 +128,14 @@ export function NetworkEvents({ me, notify }) {
                         <button onClick={() => toggleSignup(ev)} className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${joined ? 'bg-admin-sage/12 text-admin-sage' : 'bg-admin-champ/12 text-admin-champ hover:bg-admin-champ/20'}`}>{joined ? '✓ Inscrito' : 'Inscrever-se'}</button>
                       </div>
                     </div>
-                    {ev.tenant_id === tenantId && ev.price > 0 && (
-                      <button onClick={() => genPaymentLink(ev)} className="mt-2 w-full text-[11px] px-3 py-1.5 rounded-lg glass-input text-admin-champ/80 hover:text-admin-champ transition-colors flex items-center justify-center gap-1.5"><Icon name="link" className="w-3.5 h-3.5" />{ev.payment_url ? 'Regenerar link de pagamento' : 'Gerar link de pagamento'}</button>
+                    {ev.tenant_id === tenantId && (
+                      <div className="mt-2 space-y-1.5">
+                        {ev.price > 0 && <button onClick={() => genPaymentLink(ev)} className="w-full text-[11px] px-3 py-1.5 rounded-lg glass-input text-admin-champ/80 hover:text-admin-champ transition-colors flex items-center justify-center gap-1.5"><Icon name="link" className="w-3.5 h-3.5" />{ev.payment_url ? 'Regenerar link de pagamento' : 'Gerar link de pagamento'}</button>}
+                        <div className="flex gap-1.5">
+                          <button onClick={() => shareEvent(ev)} className="flex-1 text-[11px] px-3 py-1.5 rounded-lg glass-input text-admin-muted/70 hover:text-admin-champ transition-colors flex items-center justify-center gap-1.5"><Icon name="share" className="w-3.5 h-3.5" />Compartilhar</button>
+                          <button onClick={() => setConfirmDel(ev)} className="text-[11px] px-3 py-1.5 rounded-lg glass-input text-admin-muted/60 hover:text-admin-rose transition-colors flex items-center justify-center" title="Excluir evento"><Icon name="trash" className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -106,6 +143,15 @@ export function NetworkEvents({ me, notify }) {
             </div>}
 
       {creating && <CreateEvent onClose={() => setCreating(false)} onCreate={create} notify={notify} />}
+      {confirmDel && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDel(null)}>
+          <div className="glass-pop rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-serif text-lg text-admin-text mb-2">Excluir evento?</h2>
+            <p className="text-admin-muted/60 text-sm mb-5">O evento <span className="text-admin-text">"{confirmDel.title}"</span> e todas as inscrições serão removidos. Esta ação não pode ser desfeita.</p>
+            <div className="flex justify-end gap-2"><button onClick={() => setConfirmDel(null)} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => { const ev = confirmDel; setConfirmDel(null); deleteEvent(ev) }} className="px-4 py-2 rounded-xl text-sm bg-admin-rose/15 hover:bg-admin-rose/25 text-admin-rose">Excluir evento</button></div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
