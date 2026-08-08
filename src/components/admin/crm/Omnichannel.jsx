@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon } from '../ui'
+import { uploadTo } from '../../../lib/storage'
 
 const CHANNELS = {
   whatsapp: { label: 'WhatsApp', icon: 'chart', color: 'sage' },
@@ -26,6 +27,9 @@ export function Omnichannel({ notify }) {
   const [messages, setMessages] = useState([])
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
+  const [attachments, setAttachments] = useState([]) // {name, url, type}
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef(null)
 
   const load = async () => {
     setLoading(true)
@@ -37,15 +41,26 @@ export function Omnichannel({ notify }) {
   useEffect(() => { load() }, [])
 
   const openConv = async (c) => {
-    setActive(c); setMessages([])
+    setActive(c); setMessages([]); setAttachments([]); setReply('')
     try { const { data } = await supabase.from('messages').select('*').eq('conversation_id', c.id).order('created_at'); setMessages(data || []) } catch { /* noop */ }
   }
+  const onFile = async (e) => {
+    const files = Array.from(e.target.files || []); if (!files.length) return
+    setUploading(true)
+    for (const file of files) {
+      const isImg = file.type.startsWith('image/')
+      const r = await uploadTo(file, { folder: 'conversas', accept: 'any', maxMB: 20 })
+      if (r.error) { notify(r.error, 'error'); continue }
+      setAttachments((a) => [...a, { name: file.name, url: r.url, type: isImg ? 'image' : 'file' }])
+    }
+    setUploading(false); if (fileRef.current) fileRef.current.value = ''
+  }
   const send = async () => {
-    if (!reply.trim() || !active) return
+    if ((!reply.trim() && attachments.length === 0) || !active) return
     setSending(true)
     try {
-      const { data } = await supabase.from('messages').insert({ tenant_id: tenantId, conversation_id: active.id, sender_type: 'agent', sender_id: profile?.user_id, content: reply.trim(), content_type: 'text' }).select('*').single()
-      setMessages((m) => [...m, data]); setReply('')
+      const { data } = await supabase.from('messages').insert({ tenant_id: tenantId, conversation_id: active.id, sender_type: 'agent', sender_id: profile?.user_id, content: reply.trim() || (attachments.length ? '📎 Anexo' : ''), content_type: attachments.length ? 'file' : 'text', attachments }).select('*').single()
+      setMessages((m) => [...m, data]); setReply(''); setAttachments([])
       await supabase.from('conversations').update({ last_message_at: new Date().toISOString(), status: 'open' }).eq('id', active.id)
     } catch (e) { notify('Erro ao enviar: ' + (e.message || e), 'error') } finally { setSending(false) }
   }
@@ -111,16 +126,39 @@ export function Omnichannel({ notify }) {
                       return (
                         <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${mine ? 'bg-admin-champ/15 text-admin-text' : 'glass text-admin-text/90'}`}>
-                            <p className="whitespace-pre-wrap">{m.content}</p>
+                            {(m.attachments || []).length > 0 && (
+                              <div className="space-y-1.5 mb-1.5">
+                                {m.attachments.map((att, i) => att.type === 'image'
+                                  ? <a key={i} href={att.url} target="_blank" rel="noreferrer"><img src={att.url} alt={att.name} className="rounded-lg max-h-40 object-cover" /></a>
+                                  : <a key={i} href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] transition-colors"><Icon name="book" className="w-4 h-4 text-admin-champ/70 shrink-0" /><span className="truncate text-xs">{att.name}</span></a>
+                                )}
+                              </div>
+                            )}
+                            {m.content && m.content !== '📎 Anexo' && <p className="whitespace-pre-wrap">{m.content}</p>}
                             <p className={`text-[9px] mt-1 ${mine ? 'text-admin-champ/50' : 'text-admin-muted/30'}`}>{new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
                           </div>
                         </div>
                       )
                     })}
                   </div>
-                  <div className="p-3 border-t border-white/[0.06] flex gap-2">
-                    <input value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} placeholder="Escreva uma resposta…" className="flex-1 glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" />
-                    <button disabled={sending || !reply.trim()} onClick={send} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-4 rounded-xl text-sm transition-colors disabled:opacity-50">Enviar</button>
+                  <div className="p-3 border-t border-white/[0.06]">
+                    {attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {attachments.map((att, i) => (
+                          <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/[0.05] text-xs text-admin-text/80">
+                            <Icon name={att.type === 'image' ? 'image' : 'book'} className="w-3.5 h-3.5 text-admin-champ/60" />
+                            <span className="truncate max-w-[8rem]">{att.name}</span>
+                            <button onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="x" className="w-3 h-3" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <input ref={fileRef} type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple onChange={onFile} className="hidden" />
+                      <button onClick={() => fileRef.current?.click()} disabled={uploading} className="glass-input rounded-xl px-3 flex items-center justify-center text-admin-muted hover:text-admin-champ transition-colors disabled:opacity-50" title="Anexar arquivo ou imagem"><Icon name={uploading ? 'clock' : 'plus'} className="w-4 h-4" /></button>
+                      <input value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} placeholder="Escreva uma resposta…" className="flex-1 glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" />
+                      <button disabled={sending || (!reply.trim() && attachments.length === 0)} onClick={send} className="bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ px-4 rounded-xl text-sm transition-colors disabled:opacity-50">Enviar</button>
+                    </div>
                   </div>
                 </>
               )}

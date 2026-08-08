@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSettings } from '../../hooks/useSettings'
 import { useTenant } from '../../hooks/useTenant'
 import { supabase } from '../../lib/supabase'
-import { Card, Field, TextInput, TextArea, AdminBtn, Spinner } from './ui'
+import { Card, Field, TextInput, TextArea, AdminBtn, Spinner, AddressAutocomplete } from './ui'
 import { ImageUpload } from './ImageUpload'
 
 export function SettingsPanel({ notify }) {
@@ -134,6 +134,11 @@ export function SettingsPanel({ notify }) {
               <TextInput value={d.social?.pinterest || ''} onChange={(e) => set('social.pinterest', e.target.value)} />
             </Field>
           </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-[11px] tracking-widerx uppercase text-gold mb-5">Endereço da empresa</h2>
+          <AddressAutocomplete value={d.address || {}} onChange={(a) => set('address', a)} notify={() => {}} />
         </Card>
 
         <Card className="p-6">

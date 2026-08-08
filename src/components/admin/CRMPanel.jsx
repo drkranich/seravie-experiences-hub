@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect, AvatarUpload } from './ui'
+import { Icon, GlassSelect, AvatarUpload, AddressAutocomplete, addressFromContact } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 import { logAudit } from '../../lib/audit'
 import { CRMDashboard } from './crm/CRMDashboard'
@@ -27,6 +27,7 @@ export function CRMPanel({ notify }) {
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', phone: '', type: 'person', notes: '', avatar_url: '' })
+  const [addr, setAddr] = useState(addressFromContact(null))
   const [detail, setDetail] = useState(null)
   const [dOrders, setDOrders] = useState([])
   const [dLoading, setDLoading] = useState(false)
@@ -47,13 +48,13 @@ export function CRMPanel({ notify }) {
 
   const save = async () => {
     if (!form.name.trim()) { notify('Nome obrigatório', 'error'); return }
-    const payload = { ...form, tenant_id: profile?.tenant_id }
+    const payload = { ...form, ...addr, tenant_id: profile?.tenant_id }
     const { error } = selected
       ? await supabase.from('contacts').update(payload).eq('id', selected.id)
       : await supabase.from('contacts').insert(payload)
     if (error) { notify('Erro ao salvar', 'error'); return }
     notify(selected ? 'Contato atualizado' : 'Contato criado', 'success')
-    setShowForm(false); setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '', avatar_url: '' })
+    setShowForm(false); setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '', avatar_url: '' }); setAddr(addressFromContact(null))
     load()
   }
 
@@ -64,7 +65,7 @@ export function CRMPanel({ notify }) {
   }
 
   const openEdit = (c) => {
-    setSelected(c); setForm({ name: c.name, email: c.email || '', phone: c.phone || '', type: c.type, notes: c.notes || '', avatar_url: c.avatar_url || '' }); setShowForm(true)
+    setSelected(c); setForm({ name: c.name, email: c.email || '', phone: c.phone || '', type: c.type, notes: c.notes || '', avatar_url: c.avatar_url || '' }); setAddr(addressFromContact(c)); setShowForm(true)
   }
 
   const openDetail = async (c) => {
@@ -139,7 +140,7 @@ export function CRMPanel({ notify }) {
             className="flex items-center gap-2 border border-admin-champ/20 text-admin-champ/80 px-3 py-2 rounded-xl text-sm hover:bg-white/[0.04] transition-colors">
             <Icon name="upload" className="w-4 h-4" /> PDF
           </button>
-          {mayEdit && <button onClick={() => { setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '', avatar_url: '' }); setShowForm(true) }}
+          {mayEdit && <button onClick={() => { setSelected(null); setForm({ name: '', email: '', phone: '', type: 'person', notes: '', avatar_url: '' }); setAddr(addressFromContact(null)); setShowForm(true) }}
             className="flex items-center gap-2 bg-admin-champ/10 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors">
             <Icon name="spark" className="w-4 h-4" /> Novo contato
           </button>}
@@ -198,7 +199,7 @@ export function CRMPanel({ notify }) {
       {/* Modal form */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="glass rounded-2xl p-7 w-full max-w-md">
+          <div className="glass rounded-2xl p-7 w-full max-w-md max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-serif text-2xl text-admin-text">{selected ? 'Editar contato' : 'Novo contato'}</h2>
               <button onClick={() => setShowForm(false)} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
@@ -227,6 +228,7 @@ export function CRMPanel({ notify }) {
                 <GlassSelect value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))}
                   options={Object.entries(TYPE_LABELS).map(([value, label]) => ({value,label}))} />
               </div>
+              <div className="pt-2 border-t border-white/[0.05]"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-3">Endereço</p><AddressAutocomplete value={addr} onChange={setAddr} notify={notify} /></div>
               <div>
                 <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Notas</label>
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3}

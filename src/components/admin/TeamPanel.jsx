@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassSelect, GlassDate } from './ui'
+import { Icon, GlassSelect, GlassDate, AddressAutocomplete } from './ui'
 import { FlowImageField } from './FlowImageField'
 import { AttachButton, PendingAttachments, AttachmentList } from './AttachmentField'
 import { exportCsv } from '../../lib/export'
@@ -218,12 +218,16 @@ export function TeamPanel({ notify }) {
             </div>
 
             <Section title="Contato & Endereço" />
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <div><label className={lbl}>E-mail</label><input type="email" value={modal.form.email} onChange={(e) => setF('email', e.target.value)} className={inputCls} /></div>
               <div><label className={lbl}>Telefone</label><input value={modal.form.phone} onChange={(e) => setF('phone', e.target.value)} className={inputCls} /></div>
-              <div className="col-span-2"><label className={lbl}>Endereço</label><input value={modal.form.address} onChange={(e) => setF('address', e.target.value)} className={inputCls} placeholder="Rua, número, complemento, bairro" /></div>
-              <div><label className={lbl}>Cidade</label><input value={modal.form.city} onChange={(e) => setF('city', e.target.value)} className={inputCls} /></div>
-              <div className="grid grid-cols-2 gap-3"><div><label className={lbl}>UF</label><input value={modal.form.state} onChange={(e) => setF('state', e.target.value)} className={inputCls} maxLength={2} /></div><div><label className={lbl}>CEP</label><input value={modal.form.postal_code} onChange={(e) => setF('postal_code', e.target.value)} className={inputCls} /></div></div>
+            </div>
+            <div className="mb-4">
+              <AddressAutocomplete
+                value={{ cep: modal.form.postal_code, address: modal.form.address, city: modal.form.city, state: modal.form.state, neighborhood: modal.form.neighborhood, address_number: modal.form.address_number }}
+                onChange={(a) => { setF('postal_code', a.cep || ''); setF('address', a.address || ''); setF('city', a.city || ''); setF('state', a.state || ''); setF('neighborhood', a.neighborhood || ''); setF('address_number', a.address_number || '') }}
+                notify={notify}
+              />
             </div>
 
             <Section title="Contato de emergência" />

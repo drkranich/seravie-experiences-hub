@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
 import { useAuth } from '../../hooks/useAuth'
-import { Icon, GlassSelect, GlassDate } from './ui'
+import { Icon, GlassSelect, GlassDate, AddressAutocomplete } from './ui'
 import { POS_WIDGETS, POS_WIDGET_MAP, POS_PROFILES, POS_SEGMENTS, POS_SEGMENT_MAP, defaultWidgetsForSegment, POS_PACKS, POS_PACK_MAP, isPackActive, applyPack } from '../../lib/posConfig'
 import { uploadTo } from '../../lib/storage'
 import { exportPdf, exportCsv } from '../../lib/export'
@@ -318,10 +318,12 @@ export function POSPanel({ notify }) {
     const name = (form.name || '').trim()
     if (!name) { notify('Informe o nome do cliente', 'error'); return }
     setBusy(true)
+    const a = form.addr || {}
     const { data, error } = await supabase.from('contacts').insert({
       tenant_id: tenantId, type: 'customer', name, phone: form.phone?.trim() || null, email: form.email?.trim() || null,
       birthdate: form.birthdate || null, notes: form.notes?.trim() || null, source: 'pdv', status: 'active',
-      metadata: form.address?.trim() ? { address: form.address.trim() } : {},
+      cep: a.cep || null, address: a.address || null, address_number: a.address_number || null, neighborhood: a.neighborhood || null,
+      city: a.city || null, state: a.state || null, country: a.country || 'BR', lat: a.lat || null, lng: a.lng || null,
     }).select('id, name').single()
     setBusy(false)
     if (error) { notify('Erro ao cadastrar cliente: ' + error.message, 'error'); return }
@@ -2473,7 +2475,7 @@ function Modal({ title, onClose, children }) {
 
 function CustomerModal({ query, setQuery, results, onPick, onFree, onCreate, busy, onClose }) {
   const [tab, setTab] = useState('search') // search | new
-  const [f, setF] = useState({ name: '', phone: '', email: '', address: '', birthdate: '', notes: '' })
+  const [f, setF] = useState({ name: '', phone: '', email: '', birthdate: '', notes: '', addr: {} })
   const set = (patch) => setF((x) => ({ ...x, ...patch }))
   const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   return (
@@ -2511,12 +2513,9 @@ function CustomerModal({ query, setQuery, results, onPick, onFree, onCreate, bus
               <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">E-mail</label>
                 <input value={f.email} onChange={(e) => set({ email: e.target.value })} className={inputCls} placeholder="email@exemplo.com" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Endereço</label>
-                <input value={f.address} onChange={(e) => set({ address: e.target.value })} className={inputCls} placeholder="Rua, nº, bairro" /></div>
-              <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Aniversário</label>
-                <GlassDate value={f.birthdate} onChange={(v) => set({ birthdate: v })} /></div>
-            </div>
+            <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Aniversário</label>
+              <GlassDate value={f.birthdate} onChange={(v) => set({ birthdate: v })} /></div>
+            <div className="pt-1 border-t border-white/[0.05]"><p className="text-[10px] tracking-wider uppercase text-admin-champ/70 mb-2">Endereço</p><AddressAutocomplete value={f.addr} onChange={(v) => set({ addr: v })} notify={() => {}} /></div>
             <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Observação</label>
               <textarea value={f.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} className={`${inputCls} resize-none`} placeholder="Preferências, aniversário, como conheceu…" /></div>
           </div>

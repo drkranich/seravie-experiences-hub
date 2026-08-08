@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, AvatarUpload } from '../ui'
+import { Icon, AvatarUpload, AddressAutocomplete, addressFromContact } from '../ui'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
 
@@ -79,13 +79,14 @@ export function Companies({ notify, onOpenContact }) {
 
 function CompanyModal({ company, tenantId, notify, onClose, onSaved }) {
   const editing = company?.id
-  const [f, setF] = useState({ name: company?.name || '', document: company?.document || '', email: company?.email || '', phone: company?.phone || '', city: company?.city || '', avatar_url: company?.avatar_url || '' })
+  const [f, setF] = useState({ name: company?.name || '', document: company?.document || '', email: company?.email || '', phone: company?.phone || '', avatar_url: company?.avatar_url || '' })
+  const [addr, setAddr] = useState(addressFromContact(company))
   const [busy, setBusy] = useState(false)
   const set = (p) => setF((s) => ({ ...s, ...p }))
   const save = async () => {
     if (!f.name.trim()) return notify('Nome obrigatório', 'error')
     setBusy(true)
-    const payload = { ...f, name: f.name.trim(), type: 'company', status: 'active' }
+    const payload = { ...f, ...addr, name: f.name.trim(), type: 'company', status: 'active' }
     try {
       let error
       if (editing) { const r = await supabase.from('contacts').update(payload).eq('id', company.id); error = r.error }
@@ -105,12 +106,10 @@ function CompanyModal({ company, tenantId, notify, onClose, onSaved }) {
           <div><L>Nome / Razão social *</L><input value={f.name} onChange={(e) => set({ name: e.target.value })} className={inp} /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><L>CNPJ</L><input value={f.document} onChange={(e) => set({ document: e.target.value })} className={inp} /></div>
-            <div><L>Cidade</L><input value={f.city} onChange={(e) => set({ city: e.target.value })} className={inp} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><L>E-mail</L><input value={f.email} onChange={(e) => set({ email: e.target.value })} className={inp} /></div>
             <div><L>Telefone</L><input value={f.phone} onChange={(e) => set({ phone: e.target.value })} className={inp} /></div>
           </div>
+          <div><L>E-mail</L><input value={f.email} onChange={(e) => set({ email: e.target.value })} className={inp} /></div>
+          <div className="pt-2 border-t border-white/[0.05]"><p className="text-[11px] tracking-wider uppercase text-admin-champ/70 mb-3">Endereço</p><AddressAutocomplete value={addr} onChange={setAddr} notify={notify} /></div>
         </div>
         <div className="flex gap-3 mt-6">
           <button disabled={busy} onClick={save} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors disabled:opacity-50">{busy ? 'Salvando…' : (editing ? 'Salvar' : 'Criar empresa')}</button>

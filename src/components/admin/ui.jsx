@@ -688,3 +688,134 @@ export function AvatarUpload({ value, onChange, notify, fallbackIcon = 'user' })
     </div>
   )
 }
+
+// ===================================================================
+//  AddressAutocomplete — endereço com CEP (ViaCEP) + busca textual
+//  (Nominatim / OpenStreetMap). Grátis, sem chave. Preenche os campos
+//  estruturados e coordenadas. `value` é um objeto de endereço; onChange
+//  recebe o objeto atualizado.
+//  Formato: { cep, address, address_number, neighborhood, city, state, country, lat, lng }
+// ===================================================================
+const onlyDigits = (s) => String(s || '').replace(/\D/g, '')
+
+export function AddressAutocomplete({ value = {}, onChange, notify }) {
+  const [query, setQuery] = useState('')
+  const [suggestions, setSuggestions] = useState([])
+  const [open, setOpen] = useState(false)
+  const [loadingCep, setLoadingCep] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const boxRef = useRef(null)
+  const timer = useRef(null)
+  const set = (patch) => onChange({ ...value, ...patch })
+
+  // fecha o dropdown ao clicar fora
+  useEffect(() => {
+    const h = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  // ---- busca por CEP (ViaCEP) ----
+  const lookupCep = async (cepRaw) => {
+    const cep = onlyDigits(cepRaw)
+    if (cep.length !== 8) return
+    setLoadingCep(true)
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const d = await r.json()
+      if (d.erro) { notify && notify('CEP não encontrado', 'error'); return }
+      set({
+        cep: cepRaw, address: d.logradouro || value.address || '', neighborhood: d.bairro || '',
+        city: d.localidade || '', state: d.uf || '', country: 'BR',
+      })
+    } catch { notify && notify('Erro ao buscar CEP', 'error') } finally { setLoadingCep(false) }
+  }
+
+  // ---- busca textual (Nominatim / OpenStreetMap) ----
+  const searchAddress = (q) => {
+    setQuery(q)
+    if (timer.current) clearTimeout(timer.current)
+    if (!q || q.length < 4) { setSuggestions([]); setOpen(false); return }
+    timer.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=${encodeURIComponent(q)}`, { headers: { 'Accept-Language': 'pt-BR' } })
+        const data = await r.json()
+        setSuggestions(Array.isArray(data) ? data : [])
+        setOpen(true)
+      } catch { setSuggestions([]) } finally { setSearching(false) }
+    }, 500)
+  }
+
+  const pick = (s) => {
+    const a = s.address || {}
+    set({
+      address: [a.road, a.pedestrian, a.footway].filter(Boolean)[0] || s.display_name?.split(',')[0] || '',
+      neighborhood: a.suburb || a.neighbourhood || a.quarter || '',
+      city: a.city || a.town || a.village || a.municipality || '',
+      state: a.state_code || ufFromState(a.state) || '',
+      cep: a.postcode || value.cep || '',
+      country: (a.country_code || 'br').toUpperCase(),
+      lat: Number(s.lat) || null, lng: Number(s.lon) || null,
+    })
+    setQuery(''); setSuggestions([]); setOpen(false)
+  }
+
+  const inp = 'w-full glass-input rounded-xl px-3 py-2 text-sm text-admin-text outline-none'
+  const L = ({ children }) => <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{children}</label>
+
+  return (
+    <div className="space-y-3">
+      {/* Busca textual mundial */}
+      <div className="relative" ref={boxRef}>
+        <L>Buscar endereço</L>
+        <div className="relative">
+          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-admin-muted/40" />
+          <input value={query} onChange={(e) => searchAddress(e.target.value)} onFocus={() => suggestions.length && setOpen(true)} placeholder="Digite rua, cidade… (ex: Av. Paulista, São Paulo)" className="w-full glass-input rounded-xl pl-9 pr-4 py-2.5 text-sm text-admin-text outline-none" />
+          {searching && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-admin-muted/40 text-xs">…</span>}
+        </div>
+        {open && suggestions.length > 0 && (
+          <div className="absolute z-[70] mt-1 w-full glass-pop rounded-xl p-1 max-h-56 overflow-y-auto shadow-xl">
+            {suggestions.map((s) => (
+              <button key={s.place_id} type="button" onClick={() => pick(s)} className="w-full text-left px-3 py-2 rounded-lg text-sm text-admin-text/80 hover:bg-white/[0.05] transition-colors">
+                <p className="truncate">{s.display_name}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* CEP + campos estruturados */}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <L>CEP</L>
+          <div className="relative">
+            <input value={value.cep || ''} onChange={(e) => set({ cep: e.target.value })} onBlur={(e) => lookupCep(e.target.value)} placeholder="00000-000" className={inp} />
+            {loadingCep && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-admin-muted/40 text-[10px]">…</span>}
+          </div>
+        </div>
+        <div className="col-span-2"><L>Endereço</L><input value={value.address || ''} onChange={(e) => set({ address: e.target.value })} className={inp} placeholder="Rua / Avenida" /></div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div><L>Número</L><input value={value.address_number || ''} onChange={(e) => set({ address_number: e.target.value })} className={inp} /></div>
+        <div className="col-span-2"><L>Bairro</L><input value={value.neighborhood || ''} onChange={(e) => set({ neighborhood: e.target.value })} className={inp} /></div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-2"><L>Cidade</L><input value={value.city || ''} onChange={(e) => set({ city: e.target.value })} className={inp} /></div>
+        <div><L>UF</L><input value={value.state || ''} onChange={(e) => set({ state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} className={inp} /></div>
+      </div>
+      {value.lat && value.lng && <p className="text-admin-muted/30 text-[10px]">📍 {Number(value.lat).toFixed(4)}, {Number(value.lng).toFixed(4)}</p>}
+    </div>
+  )
+}
+
+// mapeia nome do estado → UF (fallback quando o Nominatim não traz o code)
+function ufFromState(name) {
+  const M = { 'Acre': 'AC', 'Alagoas': 'AL', 'Amapá': 'AP', 'Amazonas': 'AM', 'Bahia': 'BA', 'Ceará': 'CE', 'Distrito Federal': 'DF', 'Espírito Santo': 'ES', 'Goiás': 'GO', 'Maranhão': 'MA', 'Mato Grosso': 'MT', 'Mato Grosso do Sul': 'MS', 'Minas Gerais': 'MG', 'Pará': 'PA', 'Paraíba': 'PB', 'Paraná': 'PR', 'Pernambuco': 'PE', 'Piauí': 'PI', 'Rio de Janeiro': 'RJ', 'Rio Grande do Norte': 'RN', 'Rio Grande do Sul': 'RS', 'Rondônia': 'RO', 'Roraima': 'RR', 'Santa Catarina': 'SC', 'São Paulo': 'SP', 'Sergipe': 'SE', 'Tocantins': 'TO' }
+  return M[name] || ''
+}
+
+// Helper: extrai o objeto de endereço de um contato (para preencher o form)
+export function addressFromContact(c) {
+  return { cep: c?.cep || '', address: c?.address || '', address_number: c?.address_number || '', neighborhood: c?.neighborhood || '', city: c?.city || '', state: c?.state || '', country: c?.country || 'BR', lat: c?.lat || null, lng: c?.lng || null }
+}
