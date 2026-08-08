@@ -166,13 +166,38 @@ function PostModal({ post, tenantId, createdBy, notify, onClose, onSaved }) {
   )
 }
 
-// ---- Conexões com redes sociais (segredos ficam nos Secrets do Supabase) ----
+// ---- Conexões com redes sociais (credenciais informadas NA TELA, sem Supabase) ----
+// Cada rede tem seus campos de credencial. Ficam em social_connections.config
+// (tabela protegida por RLS: só o próprio tenant lê/escreve). Campos secret: true
+// aparecem mascarados, como no cadastro de canais de mensagem.
 const CONN_NETWORKS = [
-  { key: 'instagram', label: 'Instagram', color: 'rose', provider: 'meta', secret: 'META_IG_ACCESS_TOKEN', accountLabel: '@usuário / conta business', help: 'Conta Instagram Business vinculada a uma Página do Facebook (Meta Graph API).' },
-  { key: 'facebook', label: 'Facebook', color: 'champ', provider: 'meta', secret: 'META_FB_PAGE_TOKEN', accountLabel: 'Página do Facebook', help: 'Token de página da Meta Graph API.' },
-  { key: 'tiktok', label: 'TikTok', color: 'copper', provider: 'tiktok', secret: 'TIKTOK_ACCESS_TOKEN', accountLabel: 'Conta TikTok Business', help: 'TikTok Content Posting API.' },
-  { key: 'linkedin', label: 'LinkedIn', color: 'sage', provider: 'linkedin', secret: 'LINKEDIN_ACCESS_TOKEN', accountLabel: 'Página / perfil', help: 'LinkedIn Marketing API.' },
-  { key: 'pinterest', label: 'Pinterest', color: 'gold', provider: 'pinterest', secret: 'PINTEREST_ACCESS_TOKEN', accountLabel: 'Conta Pinterest Business', help: 'Pinterest API v5.' },
+  { key: 'instagram', label: 'Instagram', color: 'rose', provider: 'meta', help: 'Conta Instagram Business vinculada a uma Página do Facebook (Meta Graph API).',
+    fields: [
+      { key: 'ig_user_id', label: 'Instagram Business Account ID', placeholder: '1784xxxxxxxxxxx' },
+      { key: 'page_id', label: 'Facebook Page ID', placeholder: 'ID da página vinculada' },
+      { key: 'access_token', label: 'Access Token', secret: true, placeholder: 'Token de acesso da Meta' },
+    ] },
+  { key: 'facebook', label: 'Facebook', color: 'champ', provider: 'meta', help: 'Página do Facebook (Meta Graph API).',
+    fields: [
+      { key: 'page_id', label: 'Page ID', placeholder: 'ID da página' },
+      { key: 'page_access_token', label: 'Page Access Token', secret: true, placeholder: 'Token de página' },
+    ] },
+  { key: 'tiktok', label: 'TikTok', color: 'copper', provider: 'tiktok', help: 'TikTok Content Posting API.',
+    fields: [
+      { key: 'open_id', label: 'Open ID / conta', placeholder: 'ID da conta business' },
+      { key: 'access_token', label: 'Access Token', secret: true },
+      { key: 'refresh_token', label: 'Refresh Token', secret: true },
+    ] },
+  { key: 'linkedin', label: 'LinkedIn', color: 'sage', provider: 'linkedin', help: 'LinkedIn Marketing API.',
+    fields: [
+      { key: 'urn', label: 'URN (autor)', placeholder: 'urn:li:organization:xxxx' },
+      { key: 'access_token', label: 'Access Token', secret: true },
+    ] },
+  { key: 'pinterest', label: 'Pinterest', color: 'gold', provider: 'pinterest', help: 'Pinterest API v5.',
+    fields: [
+      { key: 'board_id', label: 'Board ID (padrão)', placeholder: 'ID do board' },
+      { key: 'access_token', label: 'Access Token', secret: true },
+    ] },
 ]
 const CONN_COLOR = {
   rose: { bg: 'bg-admin-rose/10', text: 'text-admin-rose', br: 'border-admin-rose/25' },
@@ -210,10 +235,13 @@ function SocialConnections({ tenantId, notify }) {
     const top = window.screenY + (window.outerHeight - h) / 2
     window.open(url, 'seravie_social_oauth', `width=${w},height=${h},left=${left},top=${top}`)
   }
-  // conexão manual (informa só dados públicos; token via Secrets) — alternativa
-  const connect = async (net, patch) => {
+  // conexão NA TELA: guarda as credenciais em social_connections.config (protegida por RLS).
+  const connect = async (net, { account_name, config }) => {
     const existing = rowFor(net.key)
-    const payload = { status: 'connected', connected_at: new Date().toISOString(), provider: net.provider, secret_ref: net.secret, updated_at: new Date().toISOString(), ...patch }
+    // preserva segredos já salvos quando o campo vier vazio (não sobrescreve com branco)
+    const merged = { ...(existing?.config || {}), ...config }
+    Object.keys(merged).forEach((k) => { if (merged[k] === '' || merged[k] == null) delete merged[k] })
+    const payload = { status: 'connected', connected_at: new Date().toISOString(), provider: net.provider, account_name: account_name || null, config: merged, updated_at: new Date().toISOString() }
     try {
       if (existing) await supabase.from('social_connections').update(payload).eq('id', existing.id)
       else await supabase.from('social_connections').insert({ tenant_id: tenantId, network: net.key, ...payload })
@@ -232,7 +260,7 @@ function SocialConnections({ tenantId, notify }) {
     <div>
       <div className="glass-soft rounded-xl px-4 py-3 mb-5 flex items-start gap-3 bg-admin-champ/[0.04] border border-admin-champ/15">
         <Icon name="link" className="w-4 h-4 text-admin-champ/70 mt-0.5 shrink-0" />
-        <p className="text-admin-muted/60 text-xs leading-relaxed">Conecte suas contas para publicar direto pela Seravie. Aqui você informa apenas dados públicos (conta/página). <span className="text-admin-champ">O token de acesso NUNCA é digitado neste painel</span> — ele é cadastrado com segurança nos Secrets do Supabase, com o nome indicado em cada rede. Assim seus segredos ficam protegidos.</p>
+        <p className="text-admin-muted/60 text-xs leading-relaxed">Conecte suas contas para publicar direto pela Seravie. Informe as credenciais de cada rede aqui na tela — <span className="text-admin-champ">elas ficam guardadas com segurança na sua conta</span> (área protegida, visível só para você) e são usadas pelo servidor no momento de publicar. Prefere o jeito automático? Use “Conectar via OAuth” quando disponível.</p>
       </div>
 
       {loading ? <p className="text-admin-muted/30 text-sm py-10 text-center">Carregando…</p> : (
@@ -255,14 +283,16 @@ function SocialConnections({ tenantId, notify }) {
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-white/[0.05] flex items-center gap-2 flex-wrap">
-                  <span className="text-admin-muted/30 text-[10px] font-mono">Secret: {net.secret}</span>
+                  <span className="text-admin-muted/35 text-[10px]">{net.fields.length} credenciais{connected && r?.config ? ` · ${Object.keys(r.config).length} preenchidas` : ''}</span>
                   {connected
-                    ? <button onClick={() => disconnect(net)} className="ml-auto text-xs text-admin-rose/80 hover:underline">desconectar</button>
+                    ? <>
+                        <button onClick={() => setEditing(net.key)} className="ml-auto text-xs bg-admin-champ/12 text-admin-champ px-3 py-1.5 rounded-lg hover:bg-admin-champ/20 transition-colors flex items-center gap-1.5"><Icon name="gear" className="w-3.5 h-3.5" />Editar credenciais</button>
+                        <button onClick={() => disconnect(net)} className="text-xs text-admin-rose/80 hover:underline px-1">desconectar</button>
+                      </>
                     : <>
-                        <button onClick={() => oauthConnect(net)} className="ml-auto text-xs bg-admin-sage/10 text-admin-sage px-3 py-1.5 rounded-lg hover:bg-admin-sage/20 transition-colors flex items-center gap-1.5"><Icon name="link" className="w-3.5 h-3.5" />Conectar via OAuth</button>
-                        <button onClick={() => setEditing(net.key)} className="text-xs text-admin-muted/60 hover:text-admin-text px-2 py-1.5">manual</button>
+                        <button onClick={() => setEditing(net.key)} className="ml-auto text-xs bg-admin-champ/15 text-admin-champ px-3 py-1.5 rounded-lg hover:bg-admin-champ/25 transition-colors flex items-center gap-1.5"><Icon name="link" className="w-3.5 h-3.5" />Conectar</button>
+                        <button onClick={() => oauthConnect(net)} className="text-xs text-admin-sage/80 hover:underline px-1">via OAuth</button>
                       </>}
-                  {connected && <button onClick={() => setEditing(net.key)} className="text-xs text-admin-champ/70 hover:underline">editar conta</button>}
                 </div>
               </div>
             )
@@ -276,21 +306,37 @@ function SocialConnections({ tenantId, notify }) {
 }
 
 function ConnectModal({ net, row, onClose, onConnect }) {
+  const cfg = row?.config || {}
   const [accountName, setAccountName] = useState(row?.account_name || '')
-  const [accountId, setAccountId] = useState(row?.account_id || '')
+  const [values, setValues] = useState(() => Object.fromEntries(net.fields.map((f) => [f.key, cfg[f.key] || ''])))
+  const [show, setShow] = useState({})
+  const setV = (k, v) => setValues((s) => ({ ...s, [k]: v }))
+  const inp = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="glass-pop rounded-2xl p-7 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Conectar {net.label}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2"><h2 className="font-serif text-2xl text-admin-text">Conectar {net.label}</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
+        <p className="text-admin-muted/50 text-xs mb-5">{net.help}</p>
         <div className="space-y-4">
-          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{net.accountLabel}</label><input value={accountName} onChange={(e) => setAccountName(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="Ex: @minhaloja" /></div>
-          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">ID da conta / página (opcional)</label><input value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none" placeholder="ID público" /></div>
-          <div className="glass-soft rounded-xl px-4 py-3 bg-admin-gold/[0.05] border border-admin-gold/20">
-            <p className="text-admin-gold/90 text-[11px] leading-relaxed">🔒 O token de acesso não é digitado aqui. Cadastre-o nos Secrets do Supabase com o nome <span className="font-mono text-admin-gold">{net.secret}</span>. A publicação usa esse secret com segurança pelo servidor.</p>
+          <div><label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">Nome da conta (exibição)</label><input value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inp} placeholder="Ex: @minhaloja" /></div>
+          {net.fields.map((fld) => {
+            const isSecret = fld.secret && !show[fld.key]
+            return (
+              <div key={fld.key}>
+                <label className="text-[10px] tracking-wider uppercase text-admin-muted/60 block mb-1.5">{fld.label}</label>
+                <div className="relative">
+                  <input type={isSecret ? 'password' : 'text'} value={values[fld.key]} onChange={(e) => setV(fld.key, e.target.value)} className={inp} placeholder={fld.placeholder || ''} autoComplete="off" />
+                  {fld.secret && <button type="button" onClick={() => setShow((s) => ({ ...s, [fld.key]: !s[fld.key] }))} className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-admin-muted/50 hover:text-admin-champ">{show[fld.key] ? 'ocultar' : 'mostrar'}</button>}
+                </div>
+              </div>
+            )
+          })}
+          <div className="glass-soft rounded-xl px-4 py-3 bg-admin-champ/[0.05] border border-admin-champ/15">
+            <p className="text-admin-champ/80 text-[11px] leading-relaxed">🔒 Suas credenciais ficam guardadas com segurança na sua conta (área protegida por permissão) e só são usadas pelo servidor no momento de publicar. Deixe um campo secreto em branco para manter o valor já salvo.</p>
           </div>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={() => onConnect(net, { account_name: accountName || null, account_id: accountId || null })} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Salvar conexão</button>
+          <button onClick={() => onConnect(net, { account_name: accountName || null, config: values })} className="flex-1 bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ py-2.5 rounded-xl text-sm transition-colors">Salvar conexão</button>
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm text-admin-muted">Cancelar</button>
         </div>
       </div>

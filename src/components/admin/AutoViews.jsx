@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useTenant } from '../../hooks/useTenant'
-import { Icon, GlassMonth, GlassSelect, matchPeriod } from './ui'
+import { Icon, GlassMonth, GlassSelect, matchPeriod, AddressAutocomplete, addressFromContact } from './ui'
 import { exportCsv, exportPdf } from '../../lib/export'
 
 // Setores da empresa para compartilhar/atribuir um lead
@@ -187,13 +187,14 @@ export function ContactsView({ segment = 'customers', notify }) {
 
 function LeadEditModal({ lead, notify, onClose, onSaved }) {
   const [f, setF] = useState({ name: lead.name || '', email: lead.email || '', phone: lead.phone || '', status: lead.status || 'active' })
+  const [addr, setAddr] = useState(addressFromContact(lead))
   const [busy, setBusy] = useState(false)
   const set = (p) => setF((s) => ({ ...s, ...p }))
   const save = async () => {
     if (!f.name.trim()) return notify('Nome obrigatório', 'error')
     setBusy(true)
     try {
-      const { error } = await supabase.from('contacts').update({ name: f.name.trim(), email: f.email || null, phone: f.phone || null, status: f.status }).eq('id', lead.id)
+      const { error } = await supabase.from('contacts').update({ name: f.name.trim(), email: f.email || null, phone: f.phone || null, status: f.status, ...addr }).eq('id', lead.id)
       if (error) throw error
       notify('Contato atualizado', 'success'); onSaved()
     } catch (e) { notify('Erro: ' + (e.message || e), 'error') } finally { setBusy(false) }
@@ -202,7 +203,7 @@ function LeadEditModal({ lead, notify, onClose, onSaved }) {
   const inp = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="glass-pop rounded-2xl p-7 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+      <div className="glass-pop rounded-2xl p-7 w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-2xl text-admin-text">Editar contato</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-4">
           <div><L>Nome *</L><input value={f.name} onChange={(e) => set({ name: e.target.value })} className={inp} /></div>
@@ -210,6 +211,7 @@ function LeadEditModal({ lead, notify, onClose, onSaved }) {
             <div><L>E-mail</L><input value={f.email} onChange={(e) => set({ email: e.target.value })} className={inp} /></div>
             <div><L>Telefone</L><input value={f.phone} onChange={(e) => set({ phone: e.target.value })} className={inp} /></div>
           </div>
+          <div><L>Endereço (GPS)</L><AddressAutocomplete value={addr} onChange={setAddr} notify={notify} /></div>
           <div><L>Status</L><GlassSelect value={f.status} onChange={(v) => set({ status: v })} options={[{ value: 'active', label: 'Ativo' }, { value: 'inactive', label: 'Inativo' }, { value: 'blocked', label: 'Bloqueado' }]} /></div>
         </div>
         <div className="flex gap-3 mt-6">

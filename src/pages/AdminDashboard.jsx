@@ -62,6 +62,7 @@ import { OfficialCatalogPanel } from '../components/admin/OfficialCatalogPanel'
 import { SuppliersPanel } from '../components/admin/SuppliersPanel'
 import { SuppliersMarketplace } from '../components/admin/SuppliersMarketplace'
 import { NetworkHubPanel } from '../components/admin/NetworkHubPanel'
+import { SeravieNetwork } from '../components/admin/SeravieNetwork'
 import { LegalPanel } from '../components/admin/LegalPanel'
 import { FlowPanel } from '../components/admin/FlowPanel'
 import { QuoteStudio } from '../components/admin/QuoteStudio'
@@ -80,7 +81,7 @@ import { CORE_SECTIONS, verticalToNav } from '../components/admin/navigation.con
 const FULLSCREEN = ['conversations', 'helpdesk', 'pos']
 // Rotas que usam a largura total da tela (sem o limite max-w-6xl), mas mantendo
 // o respiro das margens — ideal para painéis operacionais largos como o KDS.
-const WIDE = ['kds', 'documents', 'quotes', 'suppliers', 'suppliers_profile']
+const WIDE = ['kds', 'documents', 'quotes', 'suppliers', 'suppliers_profile', 'network_hub', 'network_classic']
 const ROUTE_LABELS = { catalog: 'Catálogo', messages: 'Formulários', franchise: 'Franquias' }
 
 export function AdminDashboard({ onExit }) {
@@ -191,7 +192,8 @@ export function AdminDashboard({ onExit }) {
     certification: <CertificationPanel notify={notify} />,
     suppliers: <SuppliersMarketplace notify={notify} />,
     suppliers_profile: <SuppliersPanel notify={notify} />,
-    network_hub: <NetworkHubPanel notify={notify} />,
+    network_hub: <SeravieNetwork notify={notify} />,
+    network_classic: <NetworkHubPanel notify={notify} />,
     legal: <LegalPanel notify={notify} />,
     flow: <FlowPanel notify={notify} />,
     quotes: <QuoteStudio notify={notify} />,
