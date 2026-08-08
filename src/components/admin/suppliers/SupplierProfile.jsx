@@ -449,7 +449,9 @@ function EditProfileModal({ supplier, onClose, onSave, notify }) {
   const [saving, setSaving] = useState(false)
   const [upLogo, setUpLogo] = useState(false)
   const [upCover, setUpCover] = useState(false)
-  const logoRef = useRef(null); const coverRef = useRef(null)
+  const [upCatalog, setUpCatalog] = useState(false)
+  const [upVideo, setUpVideo] = useState(false)
+  const logoRef = useRef(null); const coverRef = useRef(null); const catalogRef = useRef(null); const videoRef = useRef(null)
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }))
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
@@ -461,6 +463,22 @@ function EditProfileModal({ supplier, onClose, onSave, notify }) {
     setUp(false)
     if (r.error) return notify?.(r.error, 'error')
     set(kind === 'logo' ? 'logo_url' : 'cover_url', r.url)
+  }
+  const uploadCatalog = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setUpCatalog(true)
+    const r = await uploadTo(file, { folder: 'suppliers/catalogo', accept: 'any', maxMB: 25 })
+    setUpCatalog(false); if (catalogRef.current) catalogRef.current.value = ''
+    if (r.error) return notify?.(r.error, 'error')
+    set('catalog_pdf_url', r.url)
+  }
+  const uploadVideo = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setUpVideo(true)
+    const r = await uploadTo(file, { folder: 'suppliers/video-institucional', accept: 'any', maxMB: 100 })
+    setUpVideo(false); if (videoRef.current) videoRef.current.value = ''
+    if (r.error) return notify?.(r.error, 'error')
+    set('video_url', r.url)
   }
   const submit = async () => {
     if (!f.name.trim()) return notify?.('Informe o nome', 'error')
@@ -508,8 +526,34 @@ function EditProfileModal({ supplier, onClose, onSave, notify }) {
           <div><label className={lbl}>Instagram</label><input value={f.instagram} onChange={(e) => set('instagram', e.target.value)} className={cls} placeholder="@sua.marca" /></div>
           <div><label className={lbl}>Site</label><input value={f.website} onChange={(e) => set('website', e.target.value)} className={cls} placeholder="suamarca.com.br" /></div>
           <div><label className={lbl}>E-mail</label><input value={f.email} onChange={(e) => set('email', e.target.value)} className={cls} /></div>
-          <div><label className={lbl}>Catálogo (URL PDF)</label><input value={f.catalog_pdf_url} onChange={(e) => set('catalog_pdf_url', e.target.value)} className={cls} /></div>
-          <div><label className={lbl}>Vídeo institucional (URL)</label><input value={f.video_url} onChange={(e) => set('video_url', e.target.value)} className={cls} /></div>
+          <div>
+            <label className={lbl}>Catálogo (PDF)</label>
+            <input ref={catalogRef} type="file" accept=".pdf,application/pdf" onChange={uploadCatalog} className="hidden" />
+            {f.catalog_pdf_url ? (
+              <div className="flex items-center gap-2 glass-input rounded-xl px-3 py-2.5">
+                <Icon name="book" className="w-4 h-4 text-admin-champ/70 shrink-0" />
+                <a href={f.catalog_pdf_url} target="_blank" rel="noreferrer" className="flex-1 truncate text-xs text-admin-champ/80">Catálogo enviado</a>
+                <button onClick={() => catalogRef.current?.click()} className="text-[10px] text-admin-muted/60 hover:text-admin-champ">trocar</button>
+                <button onClick={() => set('catalog_pdf_url', '')} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="x" className="w-3.5 h-3.5" /></button>
+              </div>
+            ) : (
+              <button onClick={() => catalogRef.current?.click()} disabled={upCatalog} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-muted/60 hover:text-admin-champ flex items-center justify-center gap-2 transition-colors disabled:opacity-50"><Icon name={upCatalog ? 'clock' : 'upload'} className="w-4 h-4" />{upCatalog ? 'Enviando…' : 'Enviar catálogo (PDF)'}</button>
+            )}
+          </div>
+          <div>
+            <label className={lbl}>Vídeo institucional</label>
+            <input ref={videoRef} type="file" accept="video/*" onChange={uploadVideo} className="hidden" />
+            {f.video_url ? (
+              <div className="flex items-center gap-2 glass-input rounded-xl px-3 py-2.5">
+                <Icon name="play" className="w-4 h-4 text-admin-champ/70 shrink-0" />
+                <a href={f.video_url} target="_blank" rel="noreferrer" className="flex-1 truncate text-xs text-admin-champ/80">Vídeo enviado</a>
+                <button onClick={() => videoRef.current?.click()} className="text-[10px] text-admin-muted/60 hover:text-admin-champ">trocar</button>
+                <button onClick={() => set('video_url', '')} className="text-admin-muted/40 hover:text-admin-rose"><Icon name="x" className="w-3.5 h-3.5" /></button>
+              </div>
+            ) : (
+              <button onClick={() => videoRef.current?.click()} disabled={upVideo} className="w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-muted/60 hover:text-admin-champ flex items-center justify-center gap-2 transition-colors disabled:opacity-50"><Icon name={upVideo ? 'clock' : 'upload'} className="w-4 h-4" />{upVideo ? 'Enviando…' : 'Enviar vídeo'}</button>
+            )}
+          </div>
 
           <div><label className={lbl}>Pedido mínimo</label><input value={f.min_order} onChange={(e) => set('min_order', e.target.value)} className={cls} placeholder="Ex.: 5 peças" /></div>
           <div><label className={lbl}>Prazo médio</label><input value={f.lead_time} onChange={(e) => set('lead_time', e.target.value)} className={cls} placeholder="Ex.: 25 dias" /></div>
