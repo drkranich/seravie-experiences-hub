@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, GlassSelect } from '../ui'
+import { Icon, GlassSelect, AddressAutocomplete } from '../ui'
 import { SUPPLIER_CATEGORIES, CATEGORY_ICON, brl } from '../../../lib/suppliersMarket'
 import { usePlatformSettings } from '../../../lib/platformSettings'
 import { OrderReceipt } from './OrderReceipt'
@@ -115,7 +115,8 @@ export function DirectMarket({ onOpenSupplier, notify }) {
 // ─────────────────────────── CHECKOUT ───────────────────────────
 function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose, onDone, notify }) {
   const [step, setStep] = useState(1) // 1 revisar · 2 entrega/pagamento · 3 confirmar
-  const [delivery, setDelivery] = useState({ address: '', city: '', cep: '', name: profile?.full_name || '', contact: '' })
+  const [delivery, setDelivery] = useState({ name: profile?.full_name || '', contact: '' })
+  const [addr, setAddr] = useState({ cep: '', address: '', address_number: '', neighborhood: '', city: '', state: '', country: 'BR', lat: null, lng: null })
   const [payment, setPayment] = useState('pix')
   // frete por fornecedor
   const [freight, setFreight] = useState({}) // supplier_id -> valor
@@ -158,9 +159,14 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
     )
   }
 
+  const fullAddress = [
+    [addr.address, addr.address_number].filter(Boolean).join(', '),
+    addr.neighborhood, [addr.city, addr.state].filter(Boolean).join('/'), addr.cep,
+  ].filter(Boolean).join(' · ')
+
   const confirm = async () => {
     if (!delivery.name.trim()) { setStep(2); return notify?.('Informe o responsável pela compra', 'error') }
-    if (!delivery.address.trim()) { setStep(2); return notify?.('Informe o endereço de entrega', 'error') }
+    if (!addr.address) { setStep(2); return notify?.('Informe o endereço de entrega', 'error') }
     setSaving(true)
     const created = []
     for (const k of groupKeys) {
@@ -172,7 +178,7 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
         tenant_id: tenantId, supplier_id: k === 'sem' ? null : k, supplier_name: sup?.name || 'Fornecedor',
         code, status: 'enviado', items, subtotal: c.subtotal, shipping: c.ship, total: c.total,
         commission_percent: feePct, commission_amount: c.commission, lead_time: sup?.lead_time || null,
-        carrier: null, payment_method: payment, delivery_address: [delivery.address, delivery.city, delivery.cep].filter(Boolean).join(' · '),
+        carrier: null, payment_method: payment, delivery_address: fullAddress || null,
         buyer_name: delivery.name, buyer_contact: delivery.contact || null, supplier_snapshot: snapshot, paid_at: new Date().toISOString(),
       }
       const { data, error } = await supabase.from('buyer_orders').insert(payload).select('*').single()
@@ -236,13 +242,12 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
             <>
               <div className="glass-soft rounded-2xl p-4">
                 <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Dados de entrega</p>
-                <div className="grid sm:grid-cols-2 gap-3">
+                <div className="grid sm:grid-cols-2 gap-3 mb-3">
                   <div><label className={lbl}>Responsável *</label><input value={delivery.name} onChange={(e) => setD('name', e.target.value)} className={cls} /></div>
                   <div><label className={lbl}>Contato (telefone/e-mail)</label><input value={delivery.contact} onChange={(e) => setD('contact', e.target.value)} className={cls} /></div>
-                  <div className="sm:col-span-2"><label className={lbl}>Endereço de entrega *</label><input value={delivery.address} onChange={(e) => setD('address', e.target.value)} placeholder="Rua, número, complemento" className={cls} /></div>
-                  <div><label className={lbl}>Cidade</label><input value={delivery.city} onChange={(e) => setD('city', e.target.value)} className={cls} /></div>
-                  <div><label className={lbl}>CEP</label><input value={delivery.cep} onChange={(e) => setD('cep', e.target.value)} className={cls} /></div>
                 </div>
+                <label className={lbl}>Endereço de entrega * (GPS mundial)</label>
+                <AddressAutocomplete value={addr} onChange={setAddr} notify={notify} />
               </div>
               <div className="glass-soft rounded-2xl p-4">
                 <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-3">Frete por fornecedor</p>
@@ -271,7 +276,8 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
               <div className="glass-soft rounded-2xl p-4">
                 <p className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-2">Entrega</p>
                 <p className="text-admin-text text-sm">{delivery.name}</p>
-                <p className="text-admin-muted/55 text-xs">{[delivery.address, delivery.city, delivery.cep].filter(Boolean).join(' · ')}</p>
+                <p className="text-admin-muted/55 text-xs">{fullAddress || '—'}</p>
+                {addr.lat && addr.lng && <a href={`https://www.google.com/maps?q=${addr.lat},${addr.lng}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-admin-champ/70 hover:underline mt-1"><Icon name="map" className="w-3.5 h-3.5" />Ver no mapa</a>}
                 <p className="text-admin-muted/45 text-xs mt-1">Pagamento: {PAYMENTS.find((p) => p.value === payment)?.label}</p>
               </div>
               {groupKeys.map((k) => { const g = groups[k]; const sup = g.supplier; const c = calc(g, k); return (
