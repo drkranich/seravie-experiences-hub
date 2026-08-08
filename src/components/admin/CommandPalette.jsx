@@ -9,6 +9,8 @@ import { setFocus } from '../../lib/focusTarget'
 // produtos, pedidos, conversas), ações rápidas e ajuda. Teclado 100% funcional.
 
 const GROUP_ORDER = ['Ações', 'Resultados', 'Navegação', 'Ajuda']
+// rótulos dos grupos de dados (vêm das DATA_SOURCES) — ficam logo após "Ações".
+const DATA_GROUPS = new Set(['Clientes', 'Empresas', 'Unidades', 'Pedidos', 'Conversas'])
 
 // Ações rápidas — navegam para a tela certa (a criação em si acontece lá).
 const QUICK_ACTIONS = [
@@ -45,6 +47,8 @@ export function CommandPalette({ open, onClose, sections = [], onNavigate, notif
   const listRef = useRef(null)
 
   const navCmds = useMemo(() => navCommands(sections), [sections])
+  // rotas que a pessoa realmente tem acesso (derivadas das seções filtradas por RBAC)
+  const allowedRoutes = useMemo(() => new Set(navCmds.map((c) => c.route)), [navCmds])
 
   // reset ao abrir
   useEffect(() => {
@@ -60,7 +64,9 @@ export function CommandPalette({ open, onClose, sections = [], onNavigate, notif
     setLoading(true)
     const h = setTimeout(async () => {
       try {
-        const per = await Promise.all(DATA_SOURCES.map(async (src) => {
+        // só busca dados de fontes cuja tela de destino a pessoa pode acessar
+        const sources = DATA_SOURCES.filter((src) => allowedRoutes.has(src.route))
+        const per = await Promise.all(sources.map(async (src) => {
           try {
             let query = supabase.from(src.table).select(src.cols).limit(5)
             if (src.filter) query = src.filter(query)
@@ -89,33 +95,52 @@ export function CommandPalette({ open, onClose, sections = [], onNavigate, notif
       } catch { if (alive) setDataResults([]) } finally { if (alive) setLoading(false) }
     }, 250)
     return () => { alive = false; clearTimeout(h) }
-  }, [q, open])
+  }, [q, open, allowedRoutes])
+
+  // ordem original dos grupos do menu (Núcleo, Frentes, Rede Seravie, Sistema…),
+  // exatamente como o dashboard montou as seções filtradas por RBAC.
+  const menuGroupOrder = useMemo(() => {
+    const seen = []
+    for (const c of navCmds) if (c.group && !seen.includes(c.group)) seen.push(c.group)
+    return seen
+  }, [navCmds])
 
   // monta a lista final agrupada e ranqueada
   const groups = useMemo(() => {
     const term = q.trim()
-    const actions = rankItems(QUICK_ACTIONS.map((a) => ({ ...a, kind: 'action', group: 'Ações' })), term)
+    // só oferece ações cujas telas de destino a pessoa pode acessar
+    const acts = QUICK_ACTIONS.filter((a) => allowedRoutes.has(a.route)).map((a) => ({ ...a, kind: 'action', group: 'Ações' }))
+    const actions = rankItems(acts, term)
     const nav = rankItems(navCmds, term)
     const help = term ? rankItems(HELP_ITEMS, term) : HELP_ITEMS
-    // dados já vêm filtrados do servidor; ranqueia por relevância local
     const data = rankItems(dataResults, term).map((d) => ({ ...d, group: d.group || 'Resultados' }))
 
     const byGroup = {}
     const push = (arr) => arr.forEach((it) => { const g = it.group || 'Navegação'; (byGroup[g] ||= []).push(it) })
-    if (term) { push(actions); push(data); push(nav.slice(0, 20)); push(help) }
-    else {
-      // estado inicial: ações + navegação principal + ajuda
-      push(actions)
-      push(nav.filter((n) => n.group && !n.sublabel).slice(0, 12))
-      push(help)
+
+    // Ações e Resultados no topo; a navegação mantém os grupos REAIS do menu.
+    push(actions)
+    if (term) push(data)
+    // Em repouso mostra itens de topo (menu escaneável); ao digitar busca em TUDO
+    // (inclui todas as subpáginas de todas as frentes e do super admin).
+    push(term ? nav : nav.filter((n) => !n.sublabel))
+    push(help)
+
+    // Ordena: Ações → Resultados → grupos do menu (ordem original) → Ajuda → resto.
+    const rank = (g) => {
+      if (g === 'Ações') return 0
+      if (g === 'Resultados' || DATA_GROUPS.has(g)) return 1
+      const i = menuGroupOrder.indexOf(g)
+      if (i >= 0) return 10 + i
+      if (g === 'Ajuda') return 900
+      return 500
     }
-    // limita cada grupo e ordena os grupos
-    const ordered = Object.keys(byGroup).sort((a, b) => {
-      const ia = GROUP_ORDER.indexOf(a); const ib = GROUP_ORDER.indexOf(b)
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
-    })
-    return ordered.map((g) => ({ group: g, items: byGroup[g].slice(0, g === 'Navegação' ? 12 : 8) }))
-  }, [q, navCmds, dataResults])
+    const ordered = Object.keys(byGroup).sort((a, b) => rank(a) - rank(b))
+    // limite generoso por grupo (evita listas absurdas, mas mostra o menu inteiro)
+    return ordered
+      .map((g) => ({ group: g, items: byGroup[g].slice(0, 40) }))
+      .filter((g) => g.items.length)
+  }, [q, navCmds, dataResults, menuGroupOrder, allowedRoutes])
 
   // lista plana (para navegação por teclado)
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups])
