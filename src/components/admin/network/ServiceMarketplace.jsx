@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
-import { Icon, GlassSelect } from '../ui'
+import { Icon, GlassSelect, GlassDate } from '../ui'
 import { PERSON_TYPES, timeAgo } from '../../../lib/networkSocial'
+import { usePersonTypes } from '../../../lib/personTypes'
 
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const REQ_STATUS = { open: { label: 'Aberto', s: 'bg-admin-champ/15 text-admin-champ' }, in_review: { label: 'Em análise', s: 'bg-admin-gold/15 text-admin-gold' }, awarded: { label: 'Contratado', s: 'bg-admin-sage/15 text-admin-sage' }, closed: { label: 'Encerrado', s: 'bg-white/[0.06] text-admin-muted/50' } }
@@ -12,6 +13,7 @@ const REQ_STATUS = { open: { label: 'Aberto', s: 'bg-admin-champ/15 text-admin-c
 export function ServiceMarketplace({ me, notify }) {
   const { profile } = useTenant()
   const tenantId = profile?.tenant_id
+  const personTypes = usePersonTypes()
   const [reqs, setReqs] = useState([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null)
@@ -65,30 +67,47 @@ export function ServiceMarketplace({ me, notify }) {
               )})}
             </div>}
 
-      {creating && <CreateRequest onClose={() => setCreating(false)} onCreate={create} />}
+      {creating && <CreateRequest onClose={() => setCreating(false)} onCreate={create} personTypes={personTypes} />}
     </div>
   )
 }
 
-function CreateRequest({ onClose, onCreate }) {
-  const [f, setF] = useState({ title: '', role: '', description: '', budget: '', deadline: '', location: '' })
+const MODALITY = [{ value: '', label: 'Modalidade' }, { value: 'presencial', label: 'Presencial' }, { value: 'remoto', label: 'Remoto' }, { value: 'hibrido', label: 'Híbrido' }]
+const URGENCY = [{ value: '', label: 'Urgência' }, { value: 'baixa', label: 'Sem pressa' }, { value: 'media', label: 'Nas próximas semanas' }, { value: 'alta', label: 'Urgente' }]
+
+function CreateRequest({ onClose, onCreate, personTypes }) {
+  const [f, setF] = useState({ title: '', role: '', description: '', budget: '', budget_max: '', deadline: '', location: '', modality: '', urgency: '', quantity: '', requirements: '', references: '' })
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
+  const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
+  const roleOpts = [{ value: '', label: 'Tipo de profissional' }, ...(personTypes || PERSON_TYPES).map((t) => ({ value: t, label: t }))]
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="glass-pop rounded-2xl p-6 w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="glass-pop rounded-2xl p-6 w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5"><h2 className="font-serif text-xl text-admin-text">Publicar briefing</h2><button onClick={onClose} className="text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button></div>
         <div className="space-y-3">
-          <input value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="O que você precisa? *" className={cls} />
-          <GlassSelect value={f.role} onChange={(v) => set('role', v)} options={[{ value: '', label: 'Tipo de profissional' }, ...PERSON_TYPES.map((t) => ({ value: t, label: t }))]} />
-          <textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="Descreva o projeto, escopo, referências…" className={`${cls} resize-none`} />
+          <div><label className={lbl}>O que você precisa? *</label><input value={f.title} onChange={(e) => set('title', e.target.value)} placeholder="Ex.: Projeto de arquitetura para cafeteria" className={cls} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <input type="number" value={f.budget} onChange={(e) => set('budget', e.target.value)} placeholder="Orçamento (R$)" className={cls} />
-            <input type="date" value={f.deadline} onChange={(e) => set('deadline', e.target.value)} className={cls} />
+            <div><label className={lbl}>Tipo de profissional</label><GlassSelect value={f.role} onChange={(v) => set('role', v)} options={roleOpts} /></div>
+            <div><label className={lbl}>Modalidade</label><GlassSelect value={f.modality} onChange={(v) => set('modality', v)} options={MODALITY} /></div>
           </div>
-          <input value={f.location} onChange={(e) => set('location', e.target.value)} placeholder="Localização / remoto" className={cls} />
+          <div><label className={lbl}>Descrição do projeto</label><textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="Escopo, contexto, objetivo…" className={`${cls} resize-none`} /></div>
+          <div><label className={lbl}>Requisitos / qualificações desejadas</label><textarea value={f.requirements} onChange={(e) => set('requirements', e.target.value)} rows={2} placeholder="Ex.: portfólio em hospitalidade, experiência com aprovação em prefeitura…" className={`${cls} resize-none`} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Orçamento mín. (R$)</label><input type="number" value={f.budget} onChange={(e) => set('budget', e.target.value)} placeholder="0" className={cls} /></div>
+            <div><label className={lbl}>Orçamento máx. (R$)</label><input type="number" value={f.budget_max} onChange={(e) => set('budget_max', e.target.value)} placeholder="opcional" className={cls} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Prazo desejado</label><GlassDate value={f.deadline} onChange={(v) => set('deadline', v)} placeholder="dd/mm/aaaa" /></div>
+            <div><label className={lbl}>Urgência</label><GlassSelect value={f.urgency} onChange={(v) => set('urgency', v)} options={URGENCY} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Localização / remoto</label><input value={f.location} onChange={(e) => set('location', e.target.value)} placeholder="Ex.: São Paulo/SP" className={cls} /></div>
+            <div><label className={lbl}>Quantidade / volume</label><input value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="Ex.: 1 projeto, 200 un" className={cls} /></div>
+          </div>
+          <div><label className={lbl}>Links de referência (opcional)</label><input value={f.references} onChange={(e) => set('references', e.target.value)} placeholder="Cole links de inspiração, Pinterest, drive…" className={cls} /></div>
         </div>
-        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.title.trim() && onCreate({ title: f.title, role: f.role || null, description: f.description || null, budget: f.budget ? Number(f.budget) : null, deadline: f.deadline || null, location: f.location || null })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Publicar</button></div>
+        <div className="flex justify-end gap-2 mt-5"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm text-admin-muted hover:text-admin-text">Cancelar</button><button onClick={() => f.title.trim() && onCreate({ title: f.title, role: f.role || null, description: f.description || null, requirements: f.requirements || null, budget: f.budget ? Number(f.budget) : null, budget_max: f.budget_max ? Number(f.budget_max) : null, deadline: f.deadline || null, location: f.location || null, modality: f.modality || null, urgency: f.urgency || null, quantity: f.quantity || null, references: f.references || null })} className="px-4 py-2 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Publicar</button></div>
       </div>
     </div>
   )
@@ -115,10 +134,16 @@ function RequestDetail({ request, tenantId, me, onBack, reload, notify }) {
       <div className="glass rounded-2xl p-6 mb-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="flex items-center gap-2 flex-wrap"><h1 className="font-serif text-2xl text-admin-text">{request.title}</h1>{request.role && <span className="text-[11px] px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/60">{request.role}</span>}</div>
-            {request.description && <p className="text-admin-muted/65 text-sm mt-3 max-w-2xl leading-relaxed">{request.description}</p>}
+            <div className="flex items-center gap-2 flex-wrap"><h1 className="font-serif text-2xl text-admin-text">{request.title}</h1>{request.role && <span className="text-[11px] px-2 py-0.5 rounded-lg bg-white/[0.05] text-admin-muted/60">{request.role}</span>}{request.modality && <span className="text-[11px] px-2 py-0.5 rounded-lg bg-admin-sage/12 text-admin-sage">{MODALITY.find((x) => x.value === request.modality)?.label || request.modality}</span>}{request.urgency && <span className="text-[11px] px-2 py-0.5 rounded-lg bg-admin-gold/12 text-admin-gold">{URGENCY.find((x) => x.value === request.urgency)?.label || request.urgency}</span>}</div>
+            {request.description && <p className="text-admin-muted/65 text-sm mt-3 max-w-2xl leading-relaxed whitespace-pre-wrap">{request.description}</p>}
+            {request.requirements && <div className="mt-3"><p className="text-[10px] uppercase tracking-wider text-admin-champ/60 mb-1">Requisitos</p><p className="text-admin-muted/60 text-sm max-w-2xl leading-relaxed whitespace-pre-wrap">{request.requirements}</p></div>}
+            <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 text-[11px] text-admin-muted/50">
+              {request.location && <span className="flex items-center gap-1"><Icon name="map" className="w-3.5 h-3.5" />{request.location}</span>}
+              {request.quantity && <span className="flex items-center gap-1"><Icon name="box" className="w-3.5 h-3.5" />{request.quantity}</span>}
+              {request.references && <a href={request.references.startsWith('http') ? request.references : `https://${request.references}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-admin-champ/70 hover:underline"><Icon name="link" className="w-3.5 h-3.5" />Referências</a>}
+            </div>
           </div>
-          <div className="text-right shrink-0">{request.budget ? <p className="text-admin-champ text-lg font-serif">{brl(request.budget)}</p> : null}{request.deadline && <p className="text-admin-muted/40 text-xs mt-0.5">Prazo: {new Date(request.deadline).toLocaleDateString('pt-BR')}</p>}</div>
+          <div className="text-right shrink-0">{request.budget ? <p className="text-admin-champ text-lg font-serif">{brl(request.budget)}{request.budget_max ? ` – ${brl(request.budget_max)}` : ''}</p> : null}{request.deadline && <p className="text-admin-muted/40 text-xs mt-0.5">Prazo: {new Date(request.deadline).toLocaleDateString('pt-BR')}</p>}</div>
         </div>
         {!isOwner && request.status === 'open' && (
           <div className="mt-4 pt-4 border-t border-white/[0.06]">

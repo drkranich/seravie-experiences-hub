@@ -4,6 +4,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon } from '../ui'
 import { COMMUNITY_THEMES } from '../../../lib/networkSocial'
+import { useCommunityThemes } from '../../../lib/communityThemes'
 
 // Comunidades — entrar/sair, ver membros. Curadoria inicial semeia temas reais.
 
@@ -14,6 +15,7 @@ export function Communities({ me, notify }) {
   const [communities, setCommunities] = useState([])
   const [myMemberships, setMyMemberships] = useState(new Set())
   const [loading, setLoading] = useState(true)
+  const themes = useCommunityThemes()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -28,9 +30,9 @@ export function Communities({ me, notify }) {
   useEffect(() => { load() }, [load])
 
   const seed = async (theme) => {
-    const { data, error } = await supabase.from('network_communities').insert({ tenant_id: tenantId, name: theme.name, slug: theme.slug, theme: theme.slug, members_count: 0, status: 'active' }).select('*').single()
+    const { data, error } = await supabase.from('network_communities').insert({ tenant_id: tenantId, name: theme.name, slug: theme.slug, theme: theme.slug, description: theme.description || null, members_count: 0, status: 'active' }).select('*').single()
     if (error) return notify?.('Erro: ' + error.message, 'error')
-    setCommunities((c) => [data, ...c])
+    setCommunities((c) => [data, ...c]); notify?.(`Comunidade "${theme.name}" criada`, 'success')
   }
   const toggle = async (c) => {
     const has = myMemberships.has(c.id)
@@ -44,7 +46,10 @@ export function Communities({ me, notify }) {
   }
 
   const existingSlugs = new Set(communities.map((c) => c.slug))
-  const suggestions = COMMUNITY_THEMES.filter((t) => !existingSlugs.has(t.slug))
+  const suggestions = (themes || COMMUNITY_THEMES).filter((t) => !existingSlugs.has(t.slug))
+  // agrupa sugestões por categoria (mantém ordem de aparição)
+  const grouped = suggestions.reduce((acc, t) => { const k = t.category || 'Outras'; (acc[k] = acc[k] || []).push(t); return acc }, {})
+  const groupKeys = Object.keys(grouped)
 
   return (
     <div>
@@ -70,9 +75,16 @@ export function Communities({ me, notify }) {
 
           {suggestions.length > 0 && (
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-admin-champ/60 mb-3">{communities.length ? 'Criar mais comunidades' : 'Comece criando comunidades'}</p>
-              <div className="flex flex-wrap gap-2">
-                {suggestions.map((t) => <button key={t.slug} onClick={() => seed(t)} className="text-xs px-3 py-2 rounded-xl bg-white/[0.04] text-admin-muted/70 hover:text-admin-champ hover:bg-admin-champ/10 transition-colors flex items-center gap-1.5"><Icon name="plus" className="w-3.5 h-3.5" />{t.name}</button>)}
+              <p className="text-[11px] uppercase tracking-wider text-admin-champ/60 mb-4">{communities.length ? 'Criar mais comunidades' : 'Comece criando comunidades'}</p>
+              <div className="space-y-4">
+                {groupKeys.map((g) => (
+                  <div key={g}>
+                    {groupKeys.length > 1 && <p className="text-[10px] uppercase tracking-wider text-admin-muted/40 mb-2">{g}</p>}
+                    <div className="flex flex-wrap gap-2">
+                      {grouped[g].map((t) => <button key={t.slug} onClick={() => seed(t)} title={t.description || ''} className="text-xs px-3 py-2 rounded-xl bg-white/[0.04] text-admin-muted/70 hover:text-admin-champ hover:bg-admin-champ/10 transition-colors flex items-center gap-1.5"><Icon name="plus" className="w-3.5 h-3.5" />{t.name}</button>)}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

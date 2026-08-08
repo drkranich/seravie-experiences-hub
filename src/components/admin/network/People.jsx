@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect } from '../ui'
-import { VERIF, PERSON_TYPES, initials } from '../../../lib/networkSocial'
+import { VERIF, initials } from '../../../lib/networkSocial'
 import { uploadTo } from '../../../lib/storage'
+import { usePersonTypes } from '../../../lib/personTypes'
+import { MemberProfileEdit } from './MemberProfileEdit'
 
 // Pessoas & Empresas — diretório de perfis profissionais + perfil rico.
 
@@ -14,6 +16,7 @@ function Avatar({ name, url, size = 'w-12 h-12', text = 'text-base' }) {
 function Seal({ level }) { const v = VERIF[level] || VERIF.member; return <span className={`text-[10px] px-2 py-0.5 rounded-lg ${v.style}`}>{v.label}</span> }
 
 export function People({ notify, onMessage }) {
+  const PERSON_TYPES = usePersonTypes()
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
@@ -39,7 +42,7 @@ export function People({ notify, onMessage }) {
     })
   }, [members, q, type])
 
-  if (open) return <MemberProfile member={open} onBack={() => setOpen(null)} onMessage={onMessage} />
+  if (open) return <MemberProfile member={open} onBack={() => setOpen(null)} onMessage={onMessage} notify={notify} onUpdated={(data) => { setOpen(data); setMembers((ms) => ms.map((x) => (x.id === data.id ? data : x))) }} />
 
   return (
     <div>
@@ -72,11 +75,13 @@ export function People({ notify, onMessage }) {
   )
 }
 
-function MemberProfile({ member: m, onBack, onMessage }) {
+function MemberProfile({ member, onBack, onMessage, notify, onUpdated }) {
   const { profile } = useTenant()
+  const m = member
   const isMine = m.tenant_id === profile?.tenant_id
   const specialties = Array.isArray(m.specialties) ? m.specialties : []
   const [portfolio, setPortfolio] = useState([])
+  const [editOpen, setEditOpen] = useState(false)
   const pfRef = useRef(null)
 
   useEffect(() => {
@@ -96,7 +101,7 @@ function MemberProfile({ member: m, onBack, onMessage }) {
   return (
     <div>
       <button onClick={onBack} className="flex items-center gap-1.5 text-admin-muted/60 hover:text-admin-text text-sm mb-4 transition-colors"><Icon name="down" className="w-4 h-4 rotate-90" /> Voltar</button>
-      <div className="relative rounded-3xl overflow-hidden h-40 bg-gradient-to-br from-admin-copper/20 to-admin-champ/10 mb-0"><div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" /></div>
+      <div className="relative rounded-3xl overflow-hidden h-40 bg-gradient-to-br from-admin-copper/20 to-admin-champ/10 mb-0">{m.cover_url && <img src={m.cover_url} alt="" className="absolute inset-0 w-full h-full object-cover" />}<div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" /></div>
       <div className="px-6 -mt-10 relative z-10">
         <div className="flex items-end gap-4 flex-wrap">
           <Avatar name={m.name} url={m.avatar_url} size="w-24 h-24 ring-4 ring-admin-side" text="text-2xl" />
@@ -106,8 +111,14 @@ function MemberProfile({ member: m, onBack, onMessage }) {
             {m.company && <p className="text-admin-muted/45 text-xs mt-0.5">{m.company}{m.city ? ` · ${m.city}${m.state ? '/' + m.state : ''}` : ''}</p>}
           </div>
           <div className="flex gap-2 pb-1">
-            <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 transition-colors"><Icon name="plus" className="w-4 h-4" />Conectar</button>
-            <button onClick={() => onMessage?.(m.id)} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Mensagem</button>
+            {isMine ? (
+              <button onClick={() => setEditOpen(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 transition-colors"><Icon name="pen" className="w-4 h-4" />Editar meu perfil</button>
+            ) : (
+              <>
+                <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm bg-admin-champ/15 text-admin-champ hover:bg-admin-champ/25 transition-colors"><Icon name="plus" className="w-4 h-4" />Conectar</button>
+                <button onClick={() => onMessage?.(m.id)} className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm glass-input text-admin-muted/70 hover:text-admin-champ transition-colors"><Icon name="mail" className="w-4 h-4" />Mensagem</button>
+              </>
+            )}
           </div>
         </div>
 
@@ -136,15 +147,24 @@ function MemberProfile({ member: m, onBack, onMessage }) {
                   ))}</div>}
             </div>
           </div>
-          <div className="glass rounded-2xl p-5 space-y-3 h-fit">
-            <h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70">Contato</h3>
-            {m.website && <a href={m.website.startsWith('http') ? m.website : `https://${m.website}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-muted/70 hover:text-admin-text"><Icon name="link" className="w-4 h-4" />Site</a>}
-            {m.linkedin && <a href={m.linkedin} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-sage/80 hover:underline"><Icon name="user" className="w-4 h-4" />LinkedIn</a>}
-            {m.instagram && <a href={m.instagram.startsWith('http') ? m.instagram : `https://instagram.com/${m.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-champ/80 hover:underline"><Icon name="star" className="w-4 h-4" />Instagram</a>}
-            {!m.website && !m.linkedin && !m.instagram && <p className="text-admin-muted/40 text-xs">Sem links públicos.</p>}
+          <div className="space-y-5 h-fit">
+            {m.services && <div className="glass rounded-2xl p-5"><h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70 mb-2">Serviços oferecidos</h3><p className="text-admin-muted/70 text-sm leading-relaxed whitespace-pre-wrap">{m.services}</p></div>}
+            <div className="glass rounded-2xl p-5 space-y-3">
+              <h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70">Contato</h3>
+              {m.whatsapp && <a href={`https://wa.me/${String(m.whatsapp).replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-sage/85 hover:underline"><Icon name="mail" className="w-4 h-4" />WhatsApp</a>}
+              {m.phone && <span className="flex items-center gap-2 text-sm text-admin-muted/70"><Icon name="bell" className="w-4 h-4" />{m.phone}</span>}
+              {m.email && <a href={`mailto:${m.email}`} className="flex items-center gap-2 text-sm text-admin-muted/70 hover:text-admin-text"><Icon name="mail" className="w-4 h-4" />{m.email}</a>}
+              {m.website && <a href={m.website.startsWith('http') ? m.website : `https://${m.website}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-muted/70 hover:text-admin-text"><Icon name="link" className="w-4 h-4" />Site</a>}
+              {m.linkedin && <a href={m.linkedin} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-sage/80 hover:underline"><Icon name="user" className="w-4 h-4" />LinkedIn</a>}
+              {m.instagram && <a href={m.instagram.startsWith('http') ? m.instagram : `https://instagram.com/${m.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-champ/80 hover:underline"><Icon name="star" className="w-4 h-4" />Instagram</a>}
+              {m.portfolio_url && <a href={m.portfolio_url.startsWith('http') ? m.portfolio_url : `https://${m.portfolio_url}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-admin-muted/70 hover:text-admin-text"><Icon name="external" className="w-4 h-4" />Portfólio</a>}
+              {!m.whatsapp && !m.phone && !m.email && !m.website && !m.linkedin && !m.instagram && !m.portfolio_url && <p className="text-admin-muted/40 text-xs">Sem contatos públicos.</p>}
+            </div>
+            {(m.address || m.city) && <div className="glass rounded-2xl p-5 space-y-2"><h3 className="text-[11px] uppercase tracking-wider text-admin-champ/70">Endereço</h3><p className="text-admin-muted/70 text-sm leading-relaxed">{[m.address, m.address_number].filter(Boolean).join(', ')}{m.neighborhood ? ` — ${m.neighborhood}` : ''}<br />{[m.city, m.state].filter(Boolean).join('/')}{m.cep ? ` · ${m.cep}` : ''}</p>{m.lat && m.lng && <a href={`https://www.google.com/maps?q=${m.lat},${m.lng}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs text-admin-champ/80 hover:underline mt-1"><Icon name="map" className="w-3.5 h-3.5" />Ver no mapa</a>}</div>}
           </div>
         </div>
       </div>
+      {editOpen && <MemberProfileEdit member={m} onClose={() => setEditOpen(false)} onSaved={(data) => { setEditOpen(false); onUpdated?.(data) }} notify={notify} />}
     </div>
   )
 }

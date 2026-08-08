@@ -98,6 +98,8 @@ export const CORE_SECTIONS = [
       { key: 'catalogo_oficial', label: 'Catálogo Oficial', icon: 'box', route: 'catalogo_oficial' },
       { key: 'standards', label: 'Experience Standards', icon: 'star', route: 'standards' },
       { key: 'certification', label: 'Certificação', icon: 'check', route: 'certification' },
+      { key: 'network_types', label: 'Tipos de Profissional', icon: 'users', route: 'network_types' },
+      { key: 'network_communities', label: 'Comunidades do Ecossistema', icon: 'grid', route: 'network_communities' },
     ],
   },
   {

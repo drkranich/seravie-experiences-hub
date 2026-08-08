@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useTenant } from '../../hooks/useTenant'
@@ -7,6 +7,7 @@ import { ResourceTabs } from './ResourcePanel'
 import { KanbanBoard } from './Kanban'
 import { LegalGate, useLegalGate } from './LegalGate'
 import { logAudit } from '../../lib/audit'
+import { uploadTo } from '../../lib/storage'
 
 const inputCls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
 const brl = (n) => `R$ ${(Number(n) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -189,6 +190,16 @@ function MyProfile({ notify }) {
   }, [tenantId])
 
   const set = (k, v) => setForm((s) => ({ ...s, [k]: v }))
+  const logoRef = useRef(null); const coverRef = useRef(null)
+  const [upLogo, setUpLogo] = useState(false); const [upCover, setUpCover] = useState(false)
+  const uploadImg = async (file, kind) => {
+    const setU = kind === 'logo' ? setUpLogo : setUpCover
+    setU(true)
+    const r = await uploadTo(file, { folder: `suppliers/${kind}`, accept: 'image', maxMB: 10 })
+    setU(false)
+    if (r.error) return notify(r.error, 'error')
+    set(kind === 'logo' ? 'logo_url' : 'cover_url', r.url)
+  }
   const save = async (publish) => {
     if (!form.name.trim()) return notify('Informe o nome do fornecedor', 'error')
     setSaving(true)
@@ -254,8 +265,26 @@ function MyProfile({ notify }) {
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Instagram</label><input value={form.instagram} onChange={(e) => set('instagram', e.target.value)} className={inputCls} /></div>
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Site</label><input value={form.website} onChange={(e) => set('website', e.target.value)} className={inputCls} /></div>
           <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Catálogo (PDF URL)</label><input value={form.catalog_pdf_url} onChange={(e) => set('catalog_pdf_url', e.target.value)} className={inputCls} /></div>
-          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Logo (URL)</label><input value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} className={inputCls} /></div>
-          <div><label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Capa (URL)</label><input value={form.cover_url} onChange={(e) => set('cover_url', e.target.value)} className={inputCls} /></div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Logo</label>
+            <input ref={logoRef} type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && uploadImg(e.target.files[0], 'logo')} className="hidden" />
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => logoRef.current?.click()} disabled={upLogo} className="w-16 h-16 rounded-xl overflow-hidden glass-input flex items-center justify-center text-admin-muted/60 hover:text-admin-champ transition-colors shrink-0 disabled:opacity-50">
+                {form.logo_url ? <img src={form.logo_url} alt="" className="w-full h-full object-cover" /> : <Icon name={upLogo ? 'clock' : 'image'} className="w-5 h-5" />}
+              </button>
+              <input value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} className={inputCls} placeholder="ou cole uma URL" />
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-admin-muted/60 block mb-1.5">Capa</label>
+            <input ref={coverRef} type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && uploadImg(e.target.files[0], 'cover')} className="hidden" />
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => coverRef.current?.click()} disabled={upCover} className="w-16 h-16 rounded-xl overflow-hidden glass-input flex items-center justify-center text-admin-muted/60 hover:text-admin-champ transition-colors shrink-0 disabled:opacity-50">
+                {form.cover_url ? <img src={form.cover_url} alt="" className="w-full h-full object-cover" /> : <Icon name={upCover ? 'clock' : 'image'} className="w-5 h-5" />}
+              </button>
+              <input value={form.cover_url} onChange={(e) => set('cover_url', e.target.value)} className={inputCls} placeholder="ou cole uma URL" />
+            </div>
+          </div>
           <label className="flex items-center gap-2 text-sm text-admin-muted/70 mt-1"><input type="checkbox" checked={!!form.customization} onChange={(e) => set('customization', e.target.checked)} className="accent-admin-champ" />Faz personalização</label>
           <label className="flex items-center gap-2 text-sm text-admin-muted/70 mt-1"><input type="checkbox" checked={!!form.export} onChange={(e) => set('export', e.target.checked)} className="accent-admin-champ" />Exporta</label>
         </div>

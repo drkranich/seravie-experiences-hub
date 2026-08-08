@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect } from '../ui'
-import { PERSON_TYPES, VERIF, initials } from '../../../lib/networkSocial'
+import { VERIF, initials } from '../../../lib/networkSocial'
+import { usePersonTypes } from '../../../lib/personTypes'
 
 // Banco de Talentos & Oportunidades — profissionais abertos a oportunidades.
 // O membro marca "aberto a oportunidades" no próprio perfil; aqui empresas descobrem.
@@ -13,6 +14,7 @@ function Avatar({ name, url, size = 'w-12 h-12', text = 'text-base' }) {
 }
 
 export function TalentPool({ me, notify, onMessage }) {
+  const PERSON_TYPES = usePersonTypes()
   const { profile } = useTenant()
   const tenantId = profile?.tenant_id
   const [members, setMembers] = useState([])
