@@ -4,7 +4,7 @@ import { useAuth } from '../../../hooks/useAuth'
 import { useTenant } from '../../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from '../ui'
 import { uploadTo } from '../../../lib/storage'
-import { startVideoCall } from '../../../lib/videoCall'
+import { VideoCallButton } from './VideoCallButton'
 import { initials, timeAgo } from '../../../lib/networkSocial'
 
 // Projetos colaborativos — equipe convidada da rede trabalha junto no projeto.
@@ -166,7 +166,7 @@ function ProjectRoom({ project, team, members, tenantId, onBack, reload, notify 
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => startVideoCall('proj-' + project.id)} className="flex items-center gap-2 glass-input text-admin-muted/70 hover:text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors" title="Videochamada da equipe"><Icon name="tv" className="w-4 h-4" />Videochamada</button>
+          <VideoCallButton callKey={'proj-' + project.id} notify={notify} />
           <button onClick={share} className="flex items-center gap-2 glass-input text-admin-muted/70 hover:text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors"><Icon name="share" className="w-4 h-4" />Compartilhar link</button>
         </div>
       </div>

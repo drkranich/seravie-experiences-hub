@@ -5,7 +5,7 @@ import { Icon, GlassSelect } from '../ui'
 import { findBannedWords } from '../../../lib/moderation'
 import { timeAgo, initials } from '../../../lib/networkSocial'
 import { uploadTo } from '../../../lib/storage'
-import { startVideoCall } from '../../../lib/videoCall'
+import { VideoCallButton } from './VideoCallButton'
 
 // Mensagens diretas entre membros do Network (com moderação de termos ofensivos).
 
@@ -112,7 +112,7 @@ export function Messages({ me, notify, startWith }) {
             <>
               <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-3 shrink-0">
                 {(() => { const m = memberByTenant(otherOf(active)); return <><Avatar name={m?.name} url={m?.avatar_url} size="w-8 h-8" /><div className="min-w-0 flex-1"><p className="text-admin-text text-sm truncate">{m?.name || 'Conversa'}</p><p className="text-admin-muted/40 text-[11px] truncate">{m?.headline || m?.role_title || ''}</p></div></> })()}
-                <button onClick={() => startVideoCall('dm-' + active.id)} className="ml-auto w-8 h-8 rounded-lg glass-input text-admin-muted/70 hover:text-admin-champ flex items-center justify-center shrink-0 transition-colors" title="Iniciar videochamada"><Icon name="tv" className="w-4 h-4" /></button>
+                <div className="ml-auto shrink-0"><VideoCallButton callKey={'dm-' + active.id} compact notify={notify} /></div>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
                 {messages.length === 0 ? <p className="text-admin-muted/35 text-xs text-center py-8">Inicie a conversa.</p>
