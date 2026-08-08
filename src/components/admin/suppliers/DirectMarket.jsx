@@ -68,7 +68,7 @@ export function DirectMarket({ onOpenSupplier, notify }) {
         <div className="flex items-center gap-2">
           <div className="w-40"><GlassSelect value={cat} onChange={setCat} options={[{ value: '', label: 'Todas as categorias' }, ...cats.map((c) => ({ value: c, label: SUPPLIER_CATEGORIES[c] || c }))]} /></div>
           <div className="flex items-center gap-2 glass-input rounded-xl px-3 py-2 w-40"><Icon name="search" className="w-4 h-4 text-admin-champ/60" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" className="flex-1 bg-transparent text-sm text-admin-text outline-none" /></div>
-          <button onClick={() => cartCount > 0 && setCheckout(true)} className="relative flex items-center gap-2 bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors shrink-0"><Icon name="cart" className="w-4 h-4" />Carrinho{cartCount > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-admin-champ text-admin-bg text-[10px] flex items-center justify-center">{cartCount}</span>}</button>
+          <button onClick={() => setCheckout(true)} className="relative flex items-center gap-2 bg-admin-champ/12 hover:bg-admin-champ/20 text-admin-champ px-4 py-2 rounded-xl text-sm transition-colors shrink-0"><Icon name="cart" className="w-4 h-4" />Carrinho{cartCount > 0 && <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-admin-champ text-admin-bg text-[10px] flex items-center justify-center">{cartCount}</span>}</button>
         </div>
       </div>
 
@@ -142,6 +142,21 @@ function Checkout({ cart, setCart, suppliers, tenantId, feePct, profile, onClose
 
   const cls = 'w-full glass-input rounded-xl px-4 py-2.5 text-sm text-admin-text outline-none'
   const lbl = 'text-[10px] uppercase tracking-wider text-admin-muted/50 block mb-1.5'
+
+  // carrinho vazio → estado dedicado (o botão sempre abre o checkout)
+  if (groupKeys.length === 0) {
+    return (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+        <div className="glass-pop rounded-2xl p-8 w-full max-w-sm text-center" onClick={(e) => e.stopPropagation()}>
+          <button onClick={onClose} className="absolute top-4 right-4 text-admin-muted hover:text-admin-text"><Icon name="x" className="w-5 h-5" /></button>
+          <Icon name="cart" className="w-12 h-12 text-admin-champ/20 mx-auto mb-4" />
+          <h2 className="font-serif text-xl text-admin-text mb-1">Carrinho vazio</h2>
+          <p className="text-admin-muted/55 text-sm mb-5">Adicione produtos de venda direta clicando em “Adicionar” nos cards.</p>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-sm bg-admin-champ/15 hover:bg-admin-champ/25 text-admin-champ">Ver produtos</button>
+        </div>
+      </div>
+    )
+  }
 
   const confirm = async () => {
     if (!delivery.name.trim()) { setStep(2); return notify?.('Informe o responsável pela compra', 'error') }
