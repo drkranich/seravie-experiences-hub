@@ -60,8 +60,8 @@ function SupplierCard({ s, fav, cmp, onOpen, onFav, onCmp }) {
           ? <img src={s.cover_url} alt={s.name} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
           : <div className="w-full h-full flex items-center justify-center"><Icon name={CATEGORY_ICON[s.category] || 'box'} className="w-10 h-10 text-admin-champ/25" /></div>}
         <div className="absolute top-3 left-3"><VerifSeal level={s.verification_level} /></div>
-        <button onClick={(e) => { e.stopPropagation(); onFav(s) }} className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md transition-colors ${fav ? 'bg-admin-rose/25 text-admin-rose' : 'bg-black/30 text-white/70 hover:text-admin-rose'}`} title="Favoritar">
-          <Icon name="heart" className="w-4 h-4" />
+        <button onClick={(e) => { e.stopPropagation(); onFav(s) }} className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-md ring-1 shadow-lg transition-all duration-200 hover:scale-110 ${fav ? 'bg-admin-rose/90 text-white ring-admin-rose/50' : 'bg-black/25 text-white ring-white/20 hover:bg-black/40'}`} title={fav ? 'Remover dos favoritos' : 'Favoritar'} aria-pressed={fav}>
+          <Icon name="heart" className="w-4 h-4" filled={fav} />
         </button>
       </div>
       <div className="p-4">

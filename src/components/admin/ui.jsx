@@ -52,8 +52,8 @@ function useAnchoredPopover(triggerRef, open, setOpen, { width = 'trigger', idea
   return style
 }
 
-export function Icon({ name, className = 'w-5 h-5' }) {
-  const p = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' }
+export function Icon({ name, className = 'w-5 h-5', filled = false }) {
+  const p = { fill: filled ? 'currentColor' : 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' }
   const s = {
     grid: (
       <>
