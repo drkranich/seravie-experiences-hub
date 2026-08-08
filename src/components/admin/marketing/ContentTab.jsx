@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, SUPABASE_URL } from '../../../lib/supabase'
 import { Icon, GlassSelect, GlassDate } from '../ui'
 import { uploadFile } from '../../../lib/storage'
 
@@ -193,8 +193,24 @@ function SocialConnections({ tenantId, notify }) {
     catch { /* noop */ } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [])
+  // ao voltar do popup de OAuth, recarrega o status
+  useEffect(() => {
+    const onMsg = (e) => { if (e.data?.seravieSocial) { load(); notify('Conta conectada', 'success') } }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [])
   const rowFor = (k) => rows.find((r) => r.network === k)
 
+  // OAuth real: abre popup para a rede; a Edge Function troca o code por token
+  // e grava em social_credentials (protegida). O token nunca vem ao cliente.
+  const oauthConnect = (net) => {
+    const url = `${SUPABASE_URL}/functions/v1/social-oauth?action=start&network=${net.key}&tenant=${encodeURIComponent(tenantId)}&redirect=${encodeURIComponent(window.location.href)}`
+    const w = 620, h = 720
+    const left = window.screenX + (window.outerWidth - w) / 2
+    const top = window.screenY + (window.outerHeight - h) / 2
+    window.open(url, 'seravie_social_oauth', `width=${w},height=${h},left=${left},top=${top}`)
+  }
+  // conexão manual (informa só dados públicos; token via Secrets) — alternativa
   const connect = async (net, patch) => {
     const existing = rowFor(net.key)
     const payload = { status: 'connected', connected_at: new Date().toISOString(), provider: net.provider, secret_ref: net.secret, updated_at: new Date().toISOString(), ...patch }
@@ -205,9 +221,10 @@ function SocialConnections({ tenantId, notify }) {
     } catch (e) { notify('Erro: ' + (e.message || e), 'error') }
   }
   const disconnect = async (net) => {
+    // remove o token via Edge Function (service_role) e marca desconectado
+    try { await supabase.functions.invoke('social-oauth', { body: { action: 'disconnect', tenant: tenantId, network: net.key } }) } catch { /* fallback abaixo */ }
     const existing = rowFor(net.key)
-    if (!existing) return
-    try { await supabase.from('social_connections').update({ status: 'disconnected', connected_at: null, updated_at: new Date().toISOString() }).eq('id', existing.id) } catch { /* noop */ }
+    if (existing) { try { await supabase.from('social_connections').update({ status: 'disconnected', connected_at: null, updated_at: new Date().toISOString() }).eq('id', existing.id) } catch { /* noop */ } }
     notify('Rede desconectada', 'info'); load()
   }
 
@@ -237,11 +254,14 @@ function SocialConnections({ tenantId, notify }) {
                     {connected && r?.account_name && <p className="text-admin-muted/40 text-[11px] mt-1">Conta: {r.account_name}</p>}
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-white/[0.05] flex items-center gap-3">
+                <div className="mt-3 pt-3 border-t border-white/[0.05] flex items-center gap-2 flex-wrap">
                   <span className="text-admin-muted/30 text-[10px] font-mono">Secret: {net.secret}</span>
                   {connected
                     ? <button onClick={() => disconnect(net)} className="ml-auto text-xs text-admin-rose/80 hover:underline">desconectar</button>
-                    : <button onClick={() => setEditing(net.key)} className="ml-auto text-xs bg-admin-sage/10 text-admin-sage px-3 py-1.5 rounded-lg hover:bg-admin-sage/20 transition-colors">Conectar</button>}
+                    : <>
+                        <button onClick={() => oauthConnect(net)} className="ml-auto text-xs bg-admin-sage/10 text-admin-sage px-3 py-1.5 rounded-lg hover:bg-admin-sage/20 transition-colors flex items-center gap-1.5"><Icon name="link" className="w-3.5 h-3.5" />Conectar via OAuth</button>
+                        <button onClick={() => setEditing(net.key)} className="text-xs text-admin-muted/60 hover:text-admin-text px-2 py-1.5">manual</button>
+                      </>}
                   {connected && <button onClick={() => setEditing(net.key)} className="text-xs text-admin-champ/70 hover:underline">editar conta</button>}
                 </div>
               </div>

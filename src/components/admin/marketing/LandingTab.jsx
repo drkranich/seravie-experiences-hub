@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabase } from '../../../lib/supabase'
+import { supabase, SUPABASE_URL } from '../../../lib/supabase'
 import { Icon, GlassSelect } from '../ui'
 import { uploadFile } from '../../../lib/storage'
 
@@ -51,7 +51,8 @@ export function LandingTab({ tenantId, notify }) {
   const remove = async (p) => { try { await supabase.from('landing_pages').delete().eq('id', p.id) } catch { /* noop */ } setConfirmDel(null); notify('Página removida', 'success'); load() }
   const togglePublish = async (p) => { try { await supabase.from('landing_pages').update({ status: p.status === 'published' ? 'draft' : 'published', updated_at: new Date().toISOString() }).eq('id', p.id) } catch { /* noop */ } load() }
 
-  const pageUrl = (p) => `${window.location.origin}/lp/${p.slug || p.id}`
+  // URL pública servida pela Edge Function landing-render
+  const pageUrl = (p) => `${SUPABASE_URL}/functions/v1/landing-render?slug=${encodeURIComponent(p.slug || p.id)}&tenant=${encodeURIComponent(p.tenant_id || tenantId)}`
   const share = async (p) => {
     const url = pageUrl(p)
     if (p.status !== 'published') { notify('Publique a página antes de compartilhar o link', 'info') }
@@ -122,7 +123,10 @@ function LandingBuilder({ page, forms, tenantId, notify, onBack, onSaved }) {
   const save = async () => {
     if (!name.trim()) return notify('Nome obrigatório', 'error')
     setBusy(true)
-    const payload = { name: name.trim(), theme: { accent }, blocks, updated_at: new Date().toISOString() }
+    // slug amigável a partir do nome (único por tenant no banco); sufixo curto evita colisão
+    const baseSlug = name.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    const slug = page.slug || `${baseSlug || 'pagina'}-${Math.random().toString(36).slice(2, 6)}`
+    const payload = { name: name.trim(), slug, theme: { accent }, blocks, updated_at: new Date().toISOString() }
     try {
       let error
       if (page.id) { const r = await supabase.from('landing_pages').update(payload).eq('id', page.id); error = r.error }
