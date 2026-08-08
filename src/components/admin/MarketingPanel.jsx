@@ -4,6 +4,8 @@ import { useTenant } from '../../hooks/useTenant'
 import { Icon, GlassSelect, GlassDate } from './ui'
 import { MarketingDashboard } from './marketing/MarketingDashboard'
 import { JourneysTab } from './marketing/JourneysTab'
+import { AudienceStudio } from './marketing/AudienceStudio'
+import { ChannelsTab, ReferralsTab } from './marketing/CampaignStudio'
 import { MARKETING_EVENTS, EVENT_MAP, eventLabel } from '../../lib/marketingEvents'
 
 // ---- helpers ----
@@ -71,11 +73,11 @@ const STUDIOS = [
   },
   {
     key: 'audience', label: 'Audience Studio', icon: 'user',
-    tabs: [['audience', 'Público', 'user'], ['segments', 'Segmentação', 'search', true], ['loyalty', 'Fidelidade', 'star', true]],
+    tabs: [['audience', 'Público', 'user'], ['segments', 'Segmentação', 'search'], ['loyalty', 'Fidelidade', 'star', true]],
   },
   {
     key: 'campaign', label: 'Campaign Studio', icon: 'mail',
-    tabs: [['coupons', 'Cupons', 'gift'], ['channels', 'Canais', 'chart', true], ['referrals', 'Indicações', 'heart', true]],
+    tabs: [['coupons', 'Cupons', 'gift'], ['channels', 'Canais', 'chart'], ['referrals', 'Indicações', 'heart']],
   },
   {
     key: 'intelligence', label: 'Intelligence', icon: 'chart',
@@ -174,11 +176,13 @@ export function MarketingPanel({ notify }) {
 
           {/* Audience Studio */}
           {studio === 'audience' && tab === 'audience' && <AudienceTab contacts={contacts} />}
-          {studio === 'audience' && ['segments', 'loyalty'].includes(tab) && <ComingSoon tab={tab} />}
+          {studio === 'audience' && tab === 'segments' && <AudienceStudio tenantId={tenantId} notify={notify} />}
+          {studio === 'audience' && tab === 'loyalty' && <ComingSoon tab={tab} />}
 
           {/* Campaign Studio */}
           {studio === 'campaign' && tab === 'coupons' && <CouponsTab coupons={coupons} reload={loadCoupons} />}
-          {studio === 'campaign' && ['channels', 'referrals'].includes(tab) && <ComingSoon tab={tab} />}
+          {studio === 'campaign' && tab === 'channels' && <ChannelsTab tenantId={tenantId} notify={notify} />}
+          {studio === 'campaign' && tab === 'referrals' && <ReferralsTab tenantId={tenantId} contacts={contacts} notify={notify} />}
 
           {/* Intelligence */}
           {studio === 'intelligence' && tab === 'ai' && <GrowthAI contacts={contacts} campaigns={campaigns} notify={notify} onStudio={selectStudio} />}
